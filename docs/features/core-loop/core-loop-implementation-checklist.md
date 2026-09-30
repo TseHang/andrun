@@ -204,4 +204,18 @@ Not applicable:
 - [x] Docker is installed — confirmed by Henry
 
 ## Build Progress
-_(filled by /build-to-run)_
+| # | Unit | Proves | Status |
+|---|---|---|---|
+| 0 | Scaffold + contract (`events.ts`, `types.ts`, `config.ts`), written by the commander as the test contract | S13 | ⏳ pending |
+| 1 | `context.ts`, `diff.ts`, `policy.ts` | S3 (policy), S9 (unit) | ⏳ pending |
+| 2 | `tools.ts` + `eval/local-sandbox.ts` | Edge: patch stderr, traversal, >1 MB, timeout | ⏳ pending |
+| 3 | `model.ts` (SSE, retries, per-mode model) | S7 (client), S8 (OpenAI-format fixture), S11 (request) | ⏳ pending |
+| 4 | `modes.ts`, `prompts.ts`, `agent.ts` | S1, S2, S3, S4, S5, S6, S7, S9, S10, S11, loop edge cases | ⏳ pending |
+| 5 | `eval/` runner, 5 fixtures, cases | S12 | ⏳ pending |
+| 6 | Sandbox 1.0 spike (deploy needs Henry's OK) | Spike edge case | ⏳ pending |
+| — | Real ai& SSE capture + real eval | S8 (real), S14 | ⛔ blocked: waiting for the ai& API key |
+
+Build notes:
+- S12's test drives the runner through its exported `runEval()` API with a `ScriptedModelClient`. The `pnpm eval` CLI is a thin wrapper, verified at runtime.
+- S8 is tested now against an OpenAI-format fixture. The recorded ai& fixture test is `skipIf` absent, and gets activated when the key arrives.
+- S10 uses an in-memory `MemorySandbox` test double, so a checkpoint can snapshot the workspace.

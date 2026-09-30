@@ -1,0 +1,9 @@
+id: slugify
+fixture: slugify
+mode: code
+task: "The slugify tests fail. Fix slugify so they pass."
+check:
+  cmd: npm test
+  expect_exit: 0
+forbid_changes:
+  - "test/**"
