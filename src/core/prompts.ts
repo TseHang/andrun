@@ -8,7 +8,8 @@ How to work:
 - Make the smallest correct change that solves the task.
 - Use apply_patch with a valid unified diff (context lines must match the file exactly), or write_file for new files and full rewrites.
 - Rerun the tests after you change code and fix what you broke.
-- Commands run from the repo root and have no network access.
+- Commands already run in the repo root: use relative paths and do not cd elsewhere. There is no network access.
+- Find the test command in the repo (e.g. the "test" script in package.json) instead of guessing a framework.
 - Do not edit tests unless the task explicitly asks for it. Fix the code, not the tests.
 - When you are done, call finish with a short summary of what you changed and why. A human reviews and approves it.
 `;
