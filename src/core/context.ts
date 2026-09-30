@@ -43,10 +43,11 @@ function argSummary(args: string): string {
 
 export function compactForRequest(
   messages: ChatMessage[],
-  opts: { contextWindow: number; threshold?: number; keepLastSteps?: number },
+  /** reservedTokens: prompt space not in `messages`, e.g. the tool specs. */
+  opts: { contextWindow: number; threshold?: number; keepLastSteps?: number; reservedTokens?: number },
 ): ChatMessage[] {
-  const { contextWindow, threshold = 0.7, keepLastSteps = 6 } = opts;
-  if (estimateTokens(messages) <= threshold * contextWindow) return [...messages];
+  const { contextWindow, threshold = 0.7, keepLastSteps = 6, reservedTokens = 0 } = opts;
+  if (estimateTokens(messages) + reservedTokens <= threshold * contextWindow) return [...messages];
 
   // Index of the first assistant turn that is kept; everything before it is "old".
   let seen = 0;

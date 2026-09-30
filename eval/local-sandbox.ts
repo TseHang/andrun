@@ -134,7 +134,7 @@ export class LocalSandbox implements SandboxAdapter {
   }
 
   async applyPatch(patch: string): Promise<{ ok: boolean; stderr: string }> {
-    const r = await git(this.root, ["apply", "--whitespace=nowarn", "-"], patch);
+    const r = await git(this.root, ["apply", "--recount", "--whitespace=nowarn", "-"], patch);
     return { ok: r.code === 0, stderr: r.stderr };
   }
 

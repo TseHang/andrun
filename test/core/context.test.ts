@@ -70,22 +70,31 @@ describe("S9: context stays inside the window (D17)", () => {
     expect(compactForRequest(small, { contextWindow: 128_000 })).toEqual(small);
   });
 
-  it("usage events report context size and window", async () => {
+  it("counts reserved tokens (tool specs) toward the 70% threshold", () => {
+    const messages = bigConversation(12, 7000);
+    const contextWindow = Math.ceil(estimateTokens(messages) / 0.65); // under 70% on messages alone
+    expect(compactForRequest(messages, { contextWindow })).toEqual(messages);
+    const out = compactForRequest(messages, { contextWindow, reservedTokens: 0.1 * contextWindow });
+    expect(out.filter((m) => m.role === "tool")[0]!.content).toContain("elided");
+  });
+
+  it("usage events report the real prompt size and the window", async () => {
     const events: AgentEvent[] = [];
     const config = { ...defaultConfig, contextWindows: { scripted: 50_000 } };
     const profile = { ...getProfile("code", config), model: "scripted" };
     await runAgent(createSession({ sessionId: "s", mode: "code", task: "t" }, profile), profile, {
-      model: new ScriptedModelClient([call("list_files"), call("finish", { summary: "done" })]),
+      model: new ScriptedModelClient([
+        call("list_files", {}, { in: 875, out: 47 }),
+        call("finish", { summary: "done" }, { in: 1230, out: 30 }),
+      ]),
       sandbox: new MemorySandbox({ "a.js": "x" }),
       emit: (e) => events.push(e),
       config,
     });
     const usage = events.filter((e) => e.type === "usage");
     expect(usage).toHaveLength(2);
-    for (const u of usage) {
-      expect(u.context_window).toBe(50_000);
-      expect(u.context_tokens).toBeGreaterThan(0);
-      expect(u.context_tokens).toBeLessThan(0.7 * 50_000);
-    }
+    for (const u of usage) expect(u.context_window).toBe(50_000);
+    // The meter shows what the provider counted, not our estimate.
+    expect(usage.map((u) => u.context_tokens)).toEqual([875, 1230]);
   });
 });

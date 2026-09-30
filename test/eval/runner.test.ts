@@ -110,4 +110,34 @@ describe("S12: eval runner writes a trajectory and scores honestly", () => {
     expect(summary).toMatch(/1\/3/); // pass count
     expect(lines.join("\n")).toContain("sum-off-by-one");
   });
+
+  it("stops when the max cost is reached", async () => {
+    const [sumCase] = await loadCases(CASES, "sum-off-by-one");
+    const outDir = mkdtempSync(join(tmpdir(), "andrun-eval-"));
+    dirs.push(outDir);
+    const lines: string[] = [];
+    // ¥1 per 1k input tokens; each legit run costs 4 × 100 in = ¥0.4 (+ output ¥0.08).
+    const config = { ...defaultConfig, models: { ...defaultConfig.models, code: "scripted" }, prices: { scripted: { in: 1000, out: 1000 } } };
+
+    const results = await runEval({
+      cases: [sumCase!],
+      runs: 5,
+      makeModel: () => legit(),
+      outDir,
+      fixturesDir: FIXTURES,
+      config,
+      maxCost: 0.8,
+      log: (l) => lines.push(l),
+    });
+
+    // Each step costs ¥0.12. Run 1 spends ¥0.48; run 2 reaches ¥0.84 after step 3 and stops
+    // before finishing; runs 3–5 never start.
+    expect(results).toHaveLength(2);
+    expect(results[0]).toMatchObject({ pass: true });
+    expect(results[0]!.cost).toBeCloseTo(0.48);
+    expect(results[1]).toMatchObject({ pass: false, outcome: "failed", steps: 3 });
+    expect(results[0]!.cost! + results[1]!.cost!).toBeLessThan(0.8 + 0.12); // at most one request over
+    expect(lines.join("\n")).toContain("max cost");
+    expect(readFileSync(join(outDir, "summary.md"), "utf8")).toContain("max cost");
+  });
 });

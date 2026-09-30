@@ -64,6 +64,26 @@ describe("tools", () => {
     expect(await sandbox.readFile("src/sum.js")).toContain("i < values.length;");
   });
 
+  it("tolerates a missing final newline and wrong hunk header (seen from deepseek-v4-flash)", async () => {
+    // Real model output: header starts at line 2 instead of 1, and no trailing newline.
+    const sloppy = [
+      "--- a/src/sum.js",
+      "+++ b/src/sum.js",
+      "@@ -2,7 +2,7 @@",
+      " export function sum(values) {",
+      "   let total = 0;",
+      "-  for (let i = 0; i < values.length - 1; i++) {",
+      "+  for (let i = 0; i < values.length; i++) {",
+      "     total += values[i];",
+      "   }",
+      "   return total;",
+      " }",
+    ].join("\n");
+    const r = await run("apply_patch", { patch: sloppy });
+    expect(r).toMatchObject({ ok: true, changedPaths: ["src/sum.js"] });
+    expect(await sandbox.readFile("src/sum.js")).toContain("i < values.length;");
+  });
+
   it("rejects paths outside workspace", async () => {
     for (const path of ["../../etc/passwd", "/etc/passwd", "src/../../x", "a\0b"]) {
       const r = await run("read_file", { path });

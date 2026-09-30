@@ -183,7 +183,8 @@ async function run(name: ToolName, args: Record<string, unknown>, ctx: ToolConte
       const patch = reqString(args, "patch");
       const paths = pathsInPatch(patch).map((p) => p.path).filter((p) => p !== "" && p !== "/dev/null");
       const changed = paths.map(validatePath);
-      const r = await sandbox.applyPatch(patch);
+      // Models often drop the final newline, which git reports as a corrupt patch.
+      const r = await sandbox.applyPatch(patch.endsWith("\n") ? patch : `${patch}\n`);
       if (!r.ok) return fail(`patch failed to apply: ${r.stderr}`);
       return { ok: true, output: `patched ${[...new Set(changed)].join(", ")}`, changedPaths: [...new Set(changed)] };
     }

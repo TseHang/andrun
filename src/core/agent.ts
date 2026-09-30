@@ -2,7 +2,7 @@
 // Everything a run needs travels in one `RunContext`; there is no module-level state.
 
 import { contextWindowFor } from "./config";
-import { compactForRequest, estimateTokens } from "./context";
+import { compactForRequest } from "./context";
 import { summarizeDiff } from "./diff";
 import type { DiffSummary, EventBody } from "./events";
 import { executeTool, summarizeCall, toolSpecs, type ToolResult } from "./tools";
@@ -135,13 +135,15 @@ async function loop(ctx: RunContext): Promise<RunOutcome> {
     state.step++;
 
     const contextWindow = contextWindowFor(config, profile.model);
-    const requestMessages = compactForRequest(state.messages, { contextWindow });
+    const tools = toolSpecs(profile.tools);
+    const reservedTokens = Math.ceil(JSON.stringify(tools).length / 4);
+    const requestMessages = compactForRequest(state.messages, { contextWindow, reservedTokens });
     const messageId = `m${state.step}`;
 
     let response;
     try {
       response = await deps.model.complete(
-        { model: profile.model, messages: requestMessages, tools: toolSpecs(profile.tools), signal: deps.signal },
+        { model: profile.model, messages: requestMessages, tools, signal: deps.signal },
         (text) => emit(ctx, { type: "message_delta", id: messageId, text }),
       );
     } catch (err) {
@@ -157,7 +159,7 @@ async function loop(ctx: RunContext): Promise<RunOutcome> {
       tokens_in,
       tokens_out,
       latency_ms: response.latency_ms,
-      context_tokens: estimateTokens(requestMessages),
+      context_tokens: tokens_in, // what the provider counted for this request
       context_window: contextWindow,
       ...(price && { cost: (tokens_in * price.in + tokens_out * price.out) / 1e6 }),
     });

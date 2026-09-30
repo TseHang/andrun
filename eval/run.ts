@@ -101,16 +101,21 @@ export async function runEval(opts: {
   outDir: string;
   fixturesDir: string;
   config: AgentConfig;
+  /** Stop once this much has been spent (yen). The request that crosses it still completes. */
+  maxCost?: number;
   log?: (line: string) => void;
 }): Promise<EvalResult[]> {
   const { outDir } = opts;
   const log = opts.log ?? (() => {});
   mkdirSync(outDir, { recursive: true });
   const results: EvalResult[] = [];
+  const spent = { total: 0 };
+  const overBudget = () => opts.maxCost !== undefined && spent.total >= opts.maxCost;
 
-  for (const c of opts.cases) {
+  runs: for (const c of opts.cases) {
     for (let run = 1; run <= opts.runs; run++) {
-      const result = await runOne(c, run, opts);
+      if (overBudget()) break runs;
+      const result = await runOne(c, run, opts, spent);
       appendFileSync(join(outDir, `${c.id}-${run}.jsonl`), JSON.stringify(result) + "\n");
       results.push(result);
       log(
@@ -121,13 +126,19 @@ export async function runEval(opts: {
     }
   }
 
-  const table = summaryTable(opts.cases, results);
+  const stopped = overBudget() ? `\n\nStopped early: max cost ¥${opts.maxCost} reached (spent ¥${spent.total.toFixed(2)}).` : "";
+  const table = summaryTable(opts.cases, results) + stopped;
   writeFileSync(join(outDir, "summary.md"), table + "\n");
   log(table);
   return results;
 }
 
-async function runOne(c: EvalCase, run: number, opts: Parameters<typeof runEval>[0]): Promise<EvalResult> {
+async function runOne(
+  c: EvalCase,
+  run: number,
+  opts: Parameters<typeof runEval>[0],
+  spent: { total: number },
+): Promise<EvalResult> {
   const started = Date.now();
   const file = join(opts.outDir, `${c.id}-${run}.jsonl`);
   writeFileSync(file, "");
@@ -151,7 +162,9 @@ async function runOne(c: EvalCase, run: number, opts: Parameters<typeof runEval>
     sandbox = await LocalSandbox.fromFixture(join(opts.fixturesDir, c.fixture));
     const config: AgentConfig = { ...opts.config, maxSteps: c.max_steps ?? opts.config.maxSteps };
     const profile = getProfile(c.mode, config);
+    const budget = new AbortController();
     const deps: AgentDeps = {
+      signal: budget.signal,
       model: opts.makeModel(c, run),
       sandbox,
       policy: autoApprove(profile.policy),
@@ -162,7 +175,11 @@ async function runOne(c: EvalCase, run: number, opts: Parameters<typeof runEval>
         if (e.type === "usage") {
           tally.tokens_in += e.tokens_in;
           tally.tokens_out += e.tokens_out;
-          if (e.cost !== undefined) tally.cost = (tally.cost ?? 0) + e.cost;
+          if (e.cost !== undefined) {
+            tally.cost = (tally.cost ?? 0) + e.cost;
+            spent.total += e.cost;
+            if (opts.maxCost !== undefined && spent.total >= opts.maxCost) budget.abort("max cost reached");
+          }
         } else if (e.type === "error" && e.source === "tool") {
           tally.tool_errors++;
         } else if (e.type === "approval_resolved" && e.auto === true) {
@@ -242,12 +259,21 @@ async function main(argv: string[]): Promise<number> {
     return 1;
   }
 
-  const runs = Number(arg(argv, "runs") ?? 3);
+  const runs = Number(arg(argv, "runs") ?? 1);
   if (!Number.isInteger(runs) || runs < 1) {
     console.error("--runs must be a positive integer");
     return 1;
   }
+  const maxCost = Number(arg(argv, "max-cost") ?? 5);
+  if (!(maxCost > 0)) {
+    console.error("--max-cost must be a positive number of yen");
+    return 1;
+  }
   const model = arg(argv, "model") ?? defaultConfig.models.code;
+  if (!defaultConfig.prices?.[model]) {
+    console.error(`no price for "${model}" in src/core/config.ts, so --max-cost can't be enforced; add it first`);
+    return 1;
+  }
   const outDir = arg(argv, "out") ?? join(here, "runs", new Date().toISOString().replaceAll(":", "-"));
   const caseId = arg(argv, "case");
 
@@ -264,6 +290,7 @@ async function main(argv: string[]): Promise<number> {
     outDir,
     fixturesDir: join(here, "fixtures"),
     config: { ...defaultConfig, models: { ...defaultConfig.models, code: model, review: model } },
+    maxCost,
     log: (l) => console.log(l),
   });
   console.log(`\nTrajectories and summary.md written to ${outDir}`);
