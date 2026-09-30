@@ -1,6 +1,6 @@
 # &run Core Loop + Eval — Implementation Checklist
 
-**Status**: ✅ Built — Passing (2026-09-30). Two items are pending access: S14 and the S8 real-ai& fixture need the ai& API key; the Sandbox 1.0 spike needs `wrangler login`.
+**Status**: ✅ Built — Passing (2026-09-30), tested against real ai& (S8 recorded, T2 5/5 on deepseek-v4-flash). Open: S14's 3-run form runs before a milestone (T3); the Sandbox 1.0 spike is in progress.
 **Date**: 2026-09-30
 **Architecture**: `docs/architecture/web-codex-architecture-decision.md` → Phase 1 (Day 1, morning)
 
@@ -189,7 +189,7 @@ Data flow and new dependencies: `yaml`, `vitest`, `tsx`, and `eslint`. There is 
 - [x] The model replies with text only and no tool call → the text is emitted as a `message`, and the loop nudges once ("call a tool or finish"). A second text-only reply is treated as `finish`, which goes through the gate. **Test**: `test/core/agent.test.ts` › "text-only turn nudges then gates" ✅
 - [x] A user redirect message is queued mid-run → it is injected at the next step boundary as a user message. **Test**: `test/core/agent.test.ts` › "drained user message injected before next model call" ✅
 - [x] `signal` is aborted → the loop stops after the current step and returns `failed` with `error{source:"sandbox"|"model"}` naming the cause. **Test**: `test/core/agent.test.ts` › "abort stops loop visibly" ✅
-- [~] Spike: the 1.0 container DO clones a fixture via `Files` + tarball, streams `node --test` output, and reports whether one DO class can be both session and container. **Runtime check**: deployed throwaway Worker; findings recorded in `spike-sandbox-1.0.md`, including a go/no-go on the D15 fallback — deferred: blocked on `wrangler login` and Henry's OK to deploy
+- [~] Spike: the 1.0 container DO clones a fixture via `Files` + tarball, streams `node --test` output, and reports whether one DO class can be both session and container. **Runtime check**: deployed throwaway Worker; findings recorded in `spike-sandbox-1.0.md`, including a go/no-go on the D15 fallback — in progress
 
 Not applicable:
 - Auth/PII: no users (spec D3).
@@ -197,10 +197,10 @@ Not applicable:
 - UI states: no UI in this slice.
 
 ## Open Questions
-- [ ] **ai& API access**: base URL, key, and model IDs (Kimi code / K3) and their context windows. This blocks S8 fixture capture and S14. — decide by: Henry (the key comes from Mutsumi/Hara or the free trial)
+- [x] **ai& API access**: key and base URL in `.env`. The default model is `deepseek-ai/deepseek-v4-flash` (Henry, 2026-09-30); prices and context windows for all 11 listed models are in `config.ts`.
 - [x] Tooling defaults: pnpm + Vitest + tsx + eslint — confirmed by Henry
-- [ ] `apply_patch` takes a unified diff applied with `git apply`; `write_file` covers new files and full rewrites. Assumes the model produces valid unified diffs; if S14 shows many patch failures, add a search/replace `edit_file` tool. — decide by: during build (eval data)
-- [ ] Eval cost per full run (5 × 3) is unknown until the ai& pricing and model are known. — decide by: during build
+- [x] `apply_patch` takes a unified diff applied with `git apply`. Real runs showed a missing final newline; that is tolerated now (newline appended, `--recount`). T2 had 0 patch failures, so `edit_file` is not needed for now.
+- [x] Eval cost: T2 (5 × 1) on flash costs ¥1.22, so T3 (5 × 3) is about ¥4. Tiers: T0 free (vitest + fake server), T1 one case, T2 before a PR, T3 only before milestones (Henry, 2026-09-30).
 - [x] Docker is installed — confirmed by Henry
 
 ## Build Progress
@@ -212,13 +212,13 @@ Not applicable:
 | 3 | `model.ts` (SSE, retries, per-mode model) | S7 (client), S8 (OpenAI-format fixture), S11 (request) | ✅ done |
 | 4 | `modes.ts`, `prompts.ts`, `agent.ts` | S1, S2, S3, S4, S5, S6, S7, S9, S10, S11, loop edge cases | ✅ done |
 | 5 | `eval/` runner, 5 fixtures, cases | S12 | ✅ done |
-| 6 | Sandbox 1.0 spike (deploy needs Henry's OK) | Spike edge case | ⛔ blocked: needs `wrangler login` + Henry's OK |
-| — | Real ai& SSE capture + real eval | S8 (real), S14 | ⛔ blocked: waiting for the ai& API key |
+| 6 | Sandbox 1.0 spike (Henry OK'd the deploy; Workers Paid) | Spike edge case | 🔨 in progress |
+| — | Real ai& SSE capture + real eval | S8 (real), S14 | ✅ S8 recorded; S14 run once (T2 5/5); the 3-run form waits for T3 |
 
 Runtime verification (2026-09-30):
 - `pnpm eval --case sum-off-by-one --runs 2` was run against a local fake OpenAI-compatible SSE server. Path: real HTTP + streaming, the real loop, LocalSandbox with real git and `npm test`. Result: 2/2 pass, 5 steps. The trajectory shows test fail (exit 1) → read → patch → test pass (exit 0) → finish (auto-approved) → done; `message_delta` is not persisted.
 - `pnpm eval` without a key exits 1 with a clear message.
-- Suite: 49 passed, 1 skipped (the recorded ai& fixture, which doesn't exist yet). tsc and eslint are clean.
+- Suite: 53 passed (includes the recorded ai& fixture). tsc and eslint are clean.
 
 Build notes:
 - S12's test drives the runner through its exported `runEval()` API with a `ScriptedModelClient`. The `pnpm eval` CLI is a thin wrapper, verified at runtime.
