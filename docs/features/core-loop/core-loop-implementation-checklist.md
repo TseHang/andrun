@@ -209,7 +209,7 @@ Not applicable:
 | 0 | Scaffold + contract (`events.ts`, `types.ts`, `config.ts`), written by the commander as the test contract | S13 | ✅ done |
 | 1 | `context.ts`, `diff.ts`, `policy.ts` | S3 (policy), S9 (unit) | ✅ done |
 | 2 | `tools.ts` + `eval/local-sandbox.ts` | Edge: patch stderr, traversal, >1 MB, timeout | ✅ done |
-| 3 | `model.ts` (SSE, retries, per-mode model) | S7 (client), S8 (OpenAI-format fixture), S11 (request) | ⏳ pending |
+| 3 | `model.ts` (SSE, retries, per-mode model) | S7 (client), S8 (OpenAI-format fixture), S11 (request) | ✅ done (full test file runs after unit 4) |
 | 4 | `modes.ts`, `prompts.ts`, `agent.ts` | S1, S2, S3, S4, S5, S6, S7, S9, S10, S11, loop edge cases | ⏳ pending |
 | 5 | `eval/` runner, 5 fixtures, cases | S12 | ⏳ pending |
 | 6 | Sandbox 1.0 spike (deploy needs Henry's OK) | Spike edge case | ⏳ pending |
