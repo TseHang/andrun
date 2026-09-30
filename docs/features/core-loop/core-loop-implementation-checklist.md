@@ -1,6 +1,6 @@
 # &run Core Loop + Eval — Implementation Checklist
 
-**Status**: ✅ Approved (2026-09-30)
+**Status**: ✅ Built — Passing (2026-09-30). Two items are pending access: S14 and the S8 real-ai& fixture need the ai& API key; the Sandbox 1.0 spike needs `wrangler login`.
 **Date**: 2026-09-30
 **Architecture**: `docs/architecture/web-codex-architecture-decision.md` → Phase 1 (Day 1, morning)
 
@@ -181,15 +181,15 @@ Data flow and new dependencies: `yaml`, `vitest`, `tsx`, and `eslint`. There is 
 **Test**: Runtime — the eval run itself, against the real ai& API. This is the spec §8 acceptance A from the CLI.
 
 ## Edge Cases
-- [ ] `apply_patch` with a patch that doesn't apply → a tool error containing the `git apply` stderr, fed back to the model. **Test**: `test/core/tools.test.ts` › "failed patch returns stderr"
-- [ ] Path traversal (`../../etc/passwd`, absolute paths) in `read_file`/`write_file` → a tool error, and nothing outside the workspace is read. **Test**: `test/core/tools.test.ts` › "rejects paths outside workspace"
-- [ ] `write_file` > 1 MB → a tool error (headroom under the 2 MB DO row limit; see ADR "Cost and limits"). **Test**: `test/core/tools.test.ts` › "rejects files over 1 MB"
-- [ ] `run_command` exceeding 120 s → aborted via `AbortSignal`, and `tool_output` exit is reported as a timeout. **Test**: `test/eval/local-sandbox.test.ts` › "command timeout aborts" (uses a 1 s override)
-- [ ] The model returns malformed JSON tool args → a tool error `"invalid arguments"` is fed back, and it counts toward 3 strikes. **Test**: `test/core/agent.test.ts` › "malformed tool args are fed back"
-- [ ] The model replies with text only and no tool call → the text is emitted as a `message`, and the loop nudges once ("call a tool or finish"). A second text-only reply is treated as `finish`, which goes through the gate. **Test**: `test/core/agent.test.ts` › "text-only turn nudges then gates"
-- [ ] A user redirect message is queued mid-run → it is injected at the next step boundary as a user message. **Test**: `test/core/agent.test.ts` › "drained user message injected before next model call"
-- [ ] `signal` is aborted → the loop stops after the current step and returns `failed` with `error{source:"sandbox"|"model"}` naming the cause. **Test**: `test/core/agent.test.ts` › "abort stops loop visibly"
-- [ ] Spike: the 1.0 container DO clones a fixture via `Files` + tarball, streams `node --test` output, and reports whether one DO class can be both session and container. **Runtime check**: deployed throwaway Worker; findings recorded in `spike-sandbox-1.0.md`, including a go/no-go on the D15 fallback
+- [x] `apply_patch` with a patch that doesn't apply → a tool error containing the `git apply` stderr, fed back to the model. **Test**: `test/core/tools.test.ts` › "failed patch returns stderr" ✅
+- [x] Path traversal (`../../etc/passwd`, absolute paths) in `read_file`/`write_file` → a tool error, and nothing outside the workspace is read. **Test**: `test/core/tools.test.ts` › "rejects paths outside workspace" ✅
+- [x] `write_file` > 1 MB → a tool error (headroom under the 2 MB DO row limit; see ADR "Cost and limits"). **Test**: `test/core/tools.test.ts` › "rejects files over 1 MB" ✅
+- [x] `run_command` exceeding 120 s → aborted via `AbortSignal`, and `tool_output` exit is reported as a timeout. **Test**: `test/eval/local-sandbox.test.ts` › "command timeout aborts" (uses a 1 s override) ✅
+- [x] The model returns malformed JSON tool args → a tool error `"invalid arguments"` is fed back, and it counts toward 3 strikes. **Test**: `test/core/agent.test.ts` › "malformed tool args are fed back" ✅
+- [x] The model replies with text only and no tool call → the text is emitted as a `message`, and the loop nudges once ("call a tool or finish"). A second text-only reply is treated as `finish`, which goes through the gate. **Test**: `test/core/agent.test.ts` › "text-only turn nudges then gates" ✅
+- [x] A user redirect message is queued mid-run → it is injected at the next step boundary as a user message. **Test**: `test/core/agent.test.ts` › "drained user message injected before next model call" ✅
+- [x] `signal` is aborted → the loop stops after the current step and returns `failed` with `error{source:"sandbox"|"model"}` naming the cause. **Test**: `test/core/agent.test.ts` › "abort stops loop visibly" ✅
+- [~] Spike: the 1.0 container DO clones a fixture via `Files` + tarball, streams `node --test` output, and reports whether one DO class can be both session and container. **Runtime check**: deployed throwaway Worker; findings recorded in `spike-sandbox-1.0.md`, including a go/no-go on the D15 fallback — deferred: blocked on `wrangler login` and Henry's OK to deploy
 
 Not applicable:
 - Auth/PII: no users (spec D3).
@@ -212,8 +212,13 @@ Not applicable:
 | 3 | `model.ts` (SSE, retries, per-mode model) | S7 (client), S8 (OpenAI-format fixture), S11 (request) | ✅ done |
 | 4 | `modes.ts`, `prompts.ts`, `agent.ts` | S1, S2, S3, S4, S5, S6, S7, S9, S10, S11, loop edge cases | ✅ done |
 | 5 | `eval/` runner, 5 fixtures, cases | S12 | ✅ done |
-| 6 | Sandbox 1.0 spike (deploy needs Henry's OK) | Spike edge case | ⏳ pending |
+| 6 | Sandbox 1.0 spike (deploy needs Henry's OK) | Spike edge case | ⛔ blocked: needs `wrangler login` + Henry's OK |
 | — | Real ai& SSE capture + real eval | S8 (real), S14 | ⛔ blocked: waiting for the ai& API key |
+
+Runtime verification (2026-09-30):
+- `pnpm eval --case sum-off-by-one --runs 2` was run against a local fake OpenAI-compatible SSE server. Path: real HTTP + streaming, the real loop, LocalSandbox with real git and `npm test`. Result: 2/2 pass, 5 steps. The trajectory shows test fail (exit 1) → read → patch → test pass (exit 0) → finish (auto-approved) → done; `message_delta` is not persisted.
+- `pnpm eval` without a key exits 1 with a clear message.
+- Suite: 49 passed, 1 skipped (the recorded ai& fixture, which doesn't exist yet). tsc and eslint are clean.
 
 Build notes:
 - S12's test drives the runner through its exported `runEval()` API with a `ScriptedModelClient`. The `pnpm eval` CLI is a thin wrapper, verified at runtime.
