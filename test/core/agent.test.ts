@@ -139,6 +139,28 @@ describe("S2: approve and reject resume the same loop", () => {
   });
 });
 
+describe("transcript stays valid for the next turn", () => {
+  const unanswered = (s: AgentState) => {
+    const answered = new Set(s.messages.flatMap((m) => (m.role === "tool" ? [m.tool_call_id] : [])));
+    return s.messages.flatMap((m) => (m.role === "assistant" ? (m.tool_calls ?? []) : [])).filter((c) => !answered.has(c.id));
+  };
+
+  it("every tool_call has a tool message after an approved finish", async () => {
+    const { state: paused } = await runAgent(start(), profile, harness(new ScriptedModelClient([call("finish", { summary: "d" })]), new MemorySandbox()).deps);
+    const { state } = await resume(roundTrip(paused), { approved: true }, profile, harness(new ScriptedModelClient([]), new MemorySandbox()).deps);
+    expect(state.status).toBe("done");
+    expect(unanswered(state)).toEqual([]);
+  });
+
+  it("every tool_call has a tool message when an auto-approved finish ends a multi-call turn", async () => {
+    const turn = { calls: [{ name: "finish", args: { summary: "d" } }, { name: "list_files", args: {} }] };
+    const reviewProfile = getProfile("review", defaultConfig);
+    const { state } = await runAgent(start("review"), reviewProfile, harness(new ScriptedModelClient([turn]), new MemorySandbox()).deps);
+    expect(state.status).toBe("done");
+    expect(unanswered(state)).toEqual([]);
+  });
+});
+
 describe("S3: gated commands", () => {
   it("gated command is not executed before approval", async () => {
     const sandbox = new MemorySandbox({ "src/a.js": "x" });

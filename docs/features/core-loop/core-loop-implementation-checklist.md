@@ -209,8 +209,8 @@ Not applicable:
 | 0 | Scaffold + contract (`events.ts`, `types.ts`, `config.ts`), written by the commander as the test contract | S13 | ✅ done |
 | 1 | `context.ts`, `diff.ts`, `policy.ts` | S3 (policy), S9 (unit) | ✅ done |
 | 2 | `tools.ts` + `eval/local-sandbox.ts` | Edge: patch stderr, traversal, >1 MB, timeout | ✅ done |
-| 3 | `model.ts` (SSE, retries, per-mode model) | S7 (client), S8 (OpenAI-format fixture), S11 (request) | ✅ done (full test file runs after unit 4) |
-| 4 | `modes.ts`, `prompts.ts`, `agent.ts` | S1, S2, S3, S4, S5, S6, S7, S9, S10, S11, loop edge cases | ⏳ pending |
+| 3 | `model.ts` (SSE, retries, per-mode model) | S7 (client), S8 (OpenAI-format fixture), S11 (request) | ✅ done |
+| 4 | `modes.ts`, `prompts.ts`, `agent.ts` | S1, S2, S3, S4, S5, S6, S7, S9, S10, S11, loop edge cases | ✅ done |
 | 5 | `eval/` runner, 5 fixtures, cases | S12 | ⏳ pending |
 | 6 | Sandbox 1.0 spike (deploy needs Henry's OK) | Spike edge case | ⏳ pending |
 | — | Real ai& SSE capture + real eval | S8 (real), S14 | ⛔ blocked: waiting for the ai& API key |
@@ -220,4 +220,5 @@ Build notes:
 - S8 is tested now against an OpenAI-format fixture. The recorded ai& fixture test is `skipIf` absent, and gets activated when the key arrives.
 - Unit 1 review: `find -delete`/`-exec` and `git … --output` could delete or write files through the allowlist. The commander added these cases to `policy.test.ts` (it strengthens S3, so the spec meaning is unchanged) and blocked write-capable flags in `policy.ts`.
 - Unit 2 review: `write_file`/`apply_patch` could write into `.git/` (e.g. `.git/info/exclude`) and hide changes from the approval diff. The commander added a test to `tools.test.ts` (it strengthens the path-traversal edge case) and reserved `.git` in `validatePath`.
+- Unit 4 review: when a run finished, the `finish` tool_call (and any later calls in the same turn) had no tool message. The next turn after `done` (ADR D6) would then send an invalid transcript and get a 400. The commander added "transcript stays valid for the next turn" tests to `agent.test.ts` (a new invariant; no scenario changed meaning), and `done()` now answers those calls.
 - S10 uses an in-memory `MemorySandbox` test double, so a checkpoint can snapshot the workspace.
