@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>&amp;run Architecture</title>
+<style>
+  :root { --bg:#fff; --fg:#1a1a1a; --muted:#666; --line:#999; --box:#f6f6f6; --edge:#333; --accent:#0a58ca; --warn:#b54708; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg:#141414; --fg:#eaeaea; --muted:#9a9a9a; --line:#777; --box:#1f1f1f; --edge:#bbb; --accent:#6ea8fe; --warn:#f0a35e; }
+  }
+  :root[data-theme="dark"] { --bg:#141414; --fg:#eaeaea; --muted:#9a9a9a; --line:#777; --box:#1f1f1f; --edge:#bbb; --accent:#6ea8fe; --warn:#f0a35e; }
+  body { margin:0; padding:24px 16px; background:var(--bg); color:var(--fg); font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  main { max-width:1100px; margin:0 auto; }
+  h1 { font-size:20px; margin:0 0 4px; } h2 { font-size:16px; margin:32px 0 8px; }
+  p { color:var(--muted); margin:0 0 12px; }
+  .wrap { overflow-x:auto; border:1px solid var(--line); border-radius:6px; }
+  svg { display:block; min-width:960px; width:100%; height:auto; }
+  svg text { fill:var(--fg); font:12px system-ui,-apple-system,sans-serif; }
+  svg .t { font-weight:600; font-size:13px; }
+  svg .m { fill:var(--muted); font-size:11px; }
+  svg .box { fill:var(--box); stroke:var(--edge); stroke-width:1; }
+  svg .zone { fill:none; stroke:var(--line); stroke-dasharray:4 4; }
+  svg .core { fill:var(--box); stroke:var(--accent); stroke-width:1.5; }
+  svg .ln { stroke:var(--edge); stroke-width:1.2; fill:none; marker-end:url(#a); }
+  svg .sec { stroke:var(--warn); }
+  svg .lbl { font-size:11px; fill:var(--muted); }
+  svg .wl { fill:var(--warn); font-size:11px; }
+  table { border-collapse:collapse; width:100%; font-size:13px; }
+  td,th { border:1px solid var(--line); padding:6px 8px; text-align:left; vertical-align:top; }
+</style>
+</head>
+<body>
+<main>
+<h1>&amp;run — system flow</h1>
+<p>Browser ↔ Worker ↔ Session Durable Object (one per session) ↔ Sandbox / ai& / GitHub. The agent loop in <code>core/</code> has no Cloudflare imports; the eval runner drives the same loop with LocalSandbox.</p>
+
+<div class="wrap">
+<svg viewBox="0 0 1080 640" role="img" aria-label="Architecture diagram">
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor" style="fill:var(--edge)"/></marker></defs>
+
+  <!-- Browser -->
+  <rect class="box" x="20" y="40" width="190" height="150" rx="6"/>
+  <text class="t" x="34" y="64">Browser (Vite + React SPA)</text>
+  <text x="34" y="86">Sidebar · Timeline · Diff</text>
+  <text x="34" y="104">Composer (Code | Task)</text>
+  <text x="34" y="122">Approval bar · Findings</text>
+  <text class="m" x="34" y="146">state = reduce(events)</text>
+  <text class="m" x="34" y="162">reconnect with lastSeq</text>
+  <text class="m" x="34" y="178">no secrets</text>
+
+  <!-- Cloudflare zone -->
+  <rect class="zone" x="250" y="14" width="560" height="612" rx="8"/>
+  <text class="m" x="264" y="32">Cloudflare account</text>
+
+  <!-- Worker -->
+  <rect class="box" x="270" y="40" width="200" height="150" rx="6"/>
+  <text class="t" x="284" y="64">Worker (entry)</text>
+  <text x="284" y="86">static assets (SPA)</text>
+  <text x="284" y="104">REST: sessions, PRs</text>
+  <text x="284" y="122">WS upgrade → DO</text>
+  <text x="284" y="140">IP rate limit</text>
+  <text class="m" x="284" y="162">secrets: AIAND_KEY,</text>
+  <text class="m" x="284" y="178">GH_APP_KEY (PKCS#8), GH_PAT</text>
+
+  <!-- WorkspaceDO -->
+  <rect class="box" x="500" y="40" width="290" height="110" rx="6"/>
+  <text class="t" x="514" y="64">WorkspaceDO (fixed name "workspace")</text>
+  <text x="514" y="86">SQLite: sessions(id, mode, title,</text>
+  <text x="514" y="104">status, created_at, updated_at)</text>
+  <text class="m" x="514" y="126">sidebar index · cache, SessionDO is truth</text>
+  <line class="ln" x1="470" y1="80" x2="498" y2="80"/>
+  <text class="lbl" x="472" y="72">list</text>
+  <line class="ln" x1="640" y1="218" x2="640" y2="152"/>
+  <text class="lbl" x="646" y="190">status upsert</text>
+
+  <!-- Session DO -->
+  <rect class="box" x="270" y="220" width="520" height="250" rx="6"/>
+  <text class="t" x="284" y="244">SessionDO (one per session) — SQLite</text>
+  <text class="m" x="284" y="262">tables: session · events(seq) · messages · pending_approval · changes</text>
+
+  <!-- core -->
+  <rect class="core" x="290" y="276" width="300" height="180" rx="6"/>
+  <text class="t" x="304" y="298">core/ runAgent(state, profile, deps)</text>
+  <text x="304" y="320">while step &lt; max &amp;&amp; tokens &lt; N:</text>
+  <text x="316" y="338">model.complete(messages, tools)</text>
+  <text x="316" y="356">for call: policy.decide → exec | pause</text>
+  <text x="316" y="374">emit(event) · checkpoint(state)</text>
+  <text x="304" y="396">returns: finished | awaiting_approval</text>
+  <text x="304" y="412">         | failed | budget_exceeded</text>
+  <text class="m" x="304" y="436">ModeProfile: code · review · task (D6)</text>
+
+  <!-- ports -->
+  <rect class="box" x="610" y="286" width="165" height="40" rx="4"/>
+  <text x="620" y="311">ModelClient</text>
+  <rect class="box" x="610" y="336" width="165" height="40" rx="4"/>
+  <text x="620" y="361">SandboxAdapter</text>
+  <rect class="box" x="610" y="386" width="165" height="40" rx="4"/>
+  <text x="620" y="411">ApprovalPolicy</text>
+  <line class="ln" x1="590" y1="306" x2="608" y2="306"/>
+  <line class="ln" x1="590" y1="356" x2="608" y2="356"/>
+  <line class="ln" x1="590" y1="406" x2="608" y2="406"/>
+
+  <!-- GitHub client in Worker/DO -->
+  <rect class="box" x="270" y="500" width="250" height="110" rx="6"/>
+  <text class="t" x="284" y="524">github/ (Worker-side only)</text>
+  <text x="284" y="546">App JWT → installation token</text>
+  <text x="284" y="564">Git Data API: blobs → tree → commit</text>
+  <text x="284" y="582">→ ref → PR   (bot identity)</text>
+  <text x="284" y="600">PAT: POST review   (Henry)</text>
+
+  <!-- Sandbox container -->
+  <rect class="box" x="560" y="500" width="230" height="110" rx="6"/>
+  <text class="t" x="574" y="524">Sandbox (Container)</text>
+  <text x="574" y="546">repo tarball @ SHA (via Worker)</text>
+  <text x="574" y="564">exec (streamed) · Files r/w</text>
+  <text x="574" y="582">untrusted repo code runs here</text>
+  <text class="wl" x="574" y="600">egress off · no tokens · idle destroy</text>
+
+  <!-- External -->
+  <rect class="box" x="860" y="220" width="200" height="80" rx="6"/>
+  <text class="t" x="874" y="244">ai& Inference</text>
+  <text x="874" y="266">OpenAI-compatible</text>
+  <text x="874" y="284">SSE + tool calls</text>
+
+  <rect class="box" x="860" y="500" width="200" height="110" rx="6"/>
+  <text class="t" x="874" y="524">GitHub</text>
+  <text x="874" y="546">repo (public, Henry)</text>
+  <text x="874" y="564">PRs by App bot</text>
+  <text x="874" y="582">reviews by Henry (PAT)</text>
+
+  <rect class="zone" x="860" y="340" width="200" height="120" rx="6"/>
+  <text class="t" x="874" y="364">Eval runner (Node, local)</text>
+  <text x="874" y="386">cases/*.yaml</text>
+  <text x="874" y="404">same runAgent +</text>
+  <text x="874" y="422">LocalSandbox (tmp dir)</text>
+  <text x="874" y="440">→ runs/*.jsonl</text>
+
+  <!-- edges -->
+  <line class="ln" x1="210" y1="100" x2="268" y2="100"/>
+  <text class="lbl" x="214" y="92">HTTPS</text>
+  <path class="ln" d="M210,160 C240,160 240,300 268,300"/>
+  <text class="lbl" x="214" y="210">WebSocket</text>
+  <text class="lbl" x="214" y="224">events ↓ / cmds ↑</text>
+  <line class="ln" x1="370" y1="190" x2="370" y2="218"/>
+  <text class="lbl" x="376" y="208">stub.fetch / WS</text>
+
+  <line class="ln" x1="775" y1="306" x2="858" y2="262"/>
+  <text class="lbl" x="786" y="274">fetch + key</text>
+  <line class="ln" x1="700" y1="376" x2="680" y2="498"/>
+  <text class="lbl" x="694" y="470">SDK (DO→container)</text>
+  <line class="ln" x1="520" y1="555" x2="558" y2="555" />
+  <text class="lbl" x="522" y="548">readFile / diff</text>
+  <line class="ln sec" x1="520" y1="590" x2="858" y2="590"/>
+  <text class="wl" x="600" y="632">tokens only on this edge (Worker → GitHub)</text>
+  <line class="ln" x1="400" y1="470" x2="400" y2="498"/>
+  <text class="lbl" x="406" y="490">on Approve / Post review</text>
+  <path class="ln" d="M860,400 C830,400 820,380 777,380" />
+  <text class="lbl" x="800" y="332">imports core/</text>
+</svg>
+</div>
+
+<h2>Session state machine (SessionDO)</h2>
+<div class="wrap">
+<svg viewBox="0 0 1080 260" role="img" aria-label="State machine">
+  <defs><marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--edge)"/></marker></defs>
+  <style>.s{fill:var(--box);stroke:var(--edge)} .e{stroke:var(--edge);stroke-width:1.2;fill:none;marker-end:url(#b)}</style>
+  <rect class="s" x="20"  y="100" width="110" height="44" rx="22"/><text x="55"  y="127">idle</text>
+  <rect class="s" x="200" y="100" width="120" height="44" rx="22"/><text x="228" y="127">running</text>
+  <rect class="s" x="420" y="100" width="200" height="44" rx="22"/><text x="448" y="127">awaiting_approval</text>
+  <rect class="s" x="740" y="20"  width="110" height="44" rx="22"/><text x="777" y="47">done</text>
+  <rect class="s" x="740" y="100" width="110" height="44" rx="22"/><text x="774" y="127">failed</text>
+  <rect class="s" x="740" y="180" width="170" height="44" rx="22"/><text x="760" y="207">budget_exceeded</text>
+
+  <line class="e" x1="130" y1="122" x2="198" y2="122"/><text class="lbl" x="134" y="114">start / message</text>
+  <path class="e" d="M320,112 C360,90 390,90 418,112"/><text class="lbl" x="330" y="84">policy = ask (finish, cmd, delete)</text>
+  <path class="e" d="M418,134 C390,160 360,160 320,134"/><text class="lbl" x="316" y="176">approve (tool) / reject + comment</text>
+  <path class="e" d="M620,112 C680,60 700,45 738,42"/><text class="lbl" x="628" y="62">approve finish → PR</text>
+  <line class="e" x1="320" y1="122" x2="418" y2="122" style="display:none"/>
+  <path class="e" d="M300,144 C360,230 600,230 738,122"/><text class="lbl" x="440" y="236">model/sandbox error, 3× same-tool fail</text>
+  <path class="e" d="M300,100 C340,20 700,200 738,200" style="display:none"/>
+  <path class="e" d="M320,140 C420,250 650,250 738,210"/><text class="lbl" x="560" y="258">step or token cap</text>
+  <path class="e" d="M795,64 C700,10 200,10 150,100"/><text class="lbl" x="380" y="16">user message (new turn)</text>
+</svg>
+</div>
+
+<h2>Where each concern lives</h2>
+<table>
+<tr><th>Concern</th><th>Location</th><th>Cloudflare imports?</th></tr>
+<tr><td>Agent loop, budgets, retries, event emission</td><td><code>src/core/agent.ts</code></td><td>No</td></tr>
+<tr><td>Event contract (§5)</td><td><code>src/core/events.ts</code> (shared with web)</td><td>No</td></tr>
+<tr><td>Mode profiles (prompt, tools, policy, sandbox setup)</td><td><code>src/core/modes.ts</code></td><td>No</td></tr>
+<tr><td>ai& client (SSE, tool-call assembly)</td><td><code>src/core/model.ts</code></td><td>No (plain fetch)</td></tr>
+<tr><td>Session index for sidebar (D16)</td><td><code>src/worker/workspace-do.ts</code></td><td>Yes</td></tr>
+<tr><td>Session state, WS fan-out, persistence</td><td><code>src/worker/session-do.ts</code></td><td>Yes</td></tr>
+<tr><td>Cloudflare Sandbox adapter</td><td><code>src/worker/cf-sandbox.ts</code></td><td>Yes</td></tr>
+<tr><td>GitHub (App + PAT)</td><td><code>src/worker/github.ts</code></td><td>No (WebCrypto + fetch)</td></tr>
+<tr><td>Eval runner, LocalSandbox</td><td><code>eval/</code></td><td>No (Node)</td></tr>
+</table>
+</main>
+</body>
+</html>
