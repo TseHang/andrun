@@ -1,6 +1,6 @@
 # &run Core Loop + Eval — Implementation Checklist
 
-**Status**: ✅ Built — Passing (2026-09-30), tested against real ai& (S8 recorded, T2 5/5 on deepseek-v4-flash). Open: S14's 3-run form runs before a milestone (T3); the Sandbox 1.0 spike is in progress.
+**Status**: ✅ Built — Passing (2026-09-30), tested against real ai& (S8 recorded, T2 5/5 on deepseek-v4-flash). Sandbox 1.0 spike: ✅ Go. Open: S14's 3-run form runs before a milestone (T3).
 **Date**: 2026-09-30
 **Architecture**: `docs/architecture/web-codex-architecture-decision.md` → Phase 1 (Day 1, morning)
 
@@ -189,7 +189,7 @@ Data flow and new dependencies: `yaml`, `vitest`, `tsx`, and `eslint`. There is 
 - [x] The model replies with text only and no tool call → the text is emitted as a `message`, and the loop nudges once ("call a tool or finish"). A second text-only reply is treated as `finish`, which goes through the gate. **Test**: `test/core/agent.test.ts` › "text-only turn nudges then gates" ✅
 - [x] A user redirect message is queued mid-run → it is injected at the next step boundary as a user message. **Test**: `test/core/agent.test.ts` › "drained user message injected before next model call" ✅
 - [x] `signal` is aborted → the loop stops after the current step and returns `failed` with `error{source:"sandbox"|"model"}` naming the cause. **Test**: `test/core/agent.test.ts` › "abort stops loop visibly" ✅
-- [~] Spike: the 1.0 container DO clones a fixture via `Files` + tarball, streams `node --test` output, and reports whether one DO class can be both session and container. **Runtime check**: deployed throwaway Worker; findings recorded in `spike-sandbox-1.0.md`, including a go/no-go on the D15 fallback — in progress
+- [x] Spike: the 1.0 container DO clones a fixture via `Files` + tarball, streams `node --test` output, and reports whether one DO class can be both session and container. **Runtime check**: deployed throwaway Worker; findings recorded in `spike-sandbox-1.0.md`, including a go/no-go on the D15 fallback ✅ Go, one DO class (local + deployed, 2026-09-30; the Worker, image and container app were deleted afterwards)
 
 Not applicable:
 - Auth/PII: no users (spec D3).
@@ -212,7 +212,7 @@ Not applicable:
 | 3 | `model.ts` (SSE, retries, per-mode model) | S7 (client), S8 (OpenAI-format fixture), S11 (request) | ✅ done |
 | 4 | `modes.ts`, `prompts.ts`, `agent.ts` | S1, S2, S3, S4, S5, S6, S7, S9, S10, S11, loop edge cases | ✅ done |
 | 5 | `eval/` runner, 5 fixtures, cases | S12 | ✅ done |
-| 6 | Sandbox 1.0 spike (Henry OK'd the deploy; Workers Paid) | Spike edge case | 🔨 in progress |
+| 6 | Sandbox 1.0 spike (Henry OK'd the deploy; Workers Paid) | Spike edge case | ✅ done: Go, see `spike-sandbox-1.0.md` |
 | — | Real ai& SSE capture + real eval | S8 (real), S14 | ✅ S8 recorded; S14 run once (T2 5/5); the 3-run form waits for T3 |
 
 Runtime verification (2026-09-30):
