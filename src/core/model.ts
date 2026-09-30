@@ -122,9 +122,11 @@ export class OpenAICompatModelClient implements ModelClient {
         onDelta?.(delta.content);
       }
       for (const tc of delta.tool_calls ?? []) {
-        // Without an index, a new id starts the next call; fragments without an id continue the last one.
-        const prevId = calls.get(lastKey)?.id;
-        const key = tc.index ?? (tc.id && prevId && tc.id !== prevId ? lastKey + 1 : lastKey);
+        // A fragment continues the call at its index (or the last call if there is none), unless it
+        // carries a different id: some servers omit index or reuse 0, so a new id starts a new call.
+        let key = tc.index ?? lastKey;
+        const slotId = calls.get(key)?.id;
+        if (tc.id && slotId && tc.id !== slotId) key = Math.max(...calls.keys()) + 1;
         lastKey = key;
         let acc = calls.get(key);
         if (!acc) {

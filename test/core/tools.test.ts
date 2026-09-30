@@ -99,7 +99,7 @@ describe("tools", () => {
   });
 
   it("rejects writes into .git so the approval diff can't be tampered with", async () => {
-    for (const path of [".git/info/exclude", "./.git/hooks/pre-commit", "src/../.git/config", ".GIT/config", ".Git/hooks/pre-commit"]) {
+    for (const path of [".git/info/exclude", "./.git/hooks/pre-commit", "src/../.git/config", ".GIT/config", ".Git/hooks/pre-commit", "sub/.git/HEAD", "sub/.GIT/config"]) {
       const w = await run("write_file", { path, content: "x" });
       expect(w.ok, path).toBe(false);
       expect(!w.ok && w.error, path).toContain(".git");
@@ -135,6 +135,7 @@ describe("tools", () => {
     const r = await executeTool({ name: "list_files", rawArgs: "{}" }, { sandbox: stub, allowed: CODE_TOOLS, timeoutMs: 1000 });
     expect(r.ok && r.output.length).toBeLessThanOrEqual(8192);
     expect(r.ok && r.output).toContain("elided");
+    expect(r.ok && r.output).toContain("narrower path");
   });
 
   it("rejects files over 1 MB", async () => {

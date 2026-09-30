@@ -1,6 +1,6 @@
 // Tool specs and execution for the agent loop. Platform-free (ADR D1): all I/O goes through SandboxAdapter.
 
-import { capToolOutput } from "./context";
+import { TOOL_OUTPUT_CAP, capToolOutput } from "./context";
 import { pathsInPatch } from "./diff";
 import type { Finding, SandboxAdapter, ToolName, ToolSpec } from "./types";
 
@@ -109,7 +109,7 @@ export function validatePath(path: string): string {
     } else out.push(seg);
   }
   // The baseline repo lives in .git; writing there could hide changes from the approval diff.
-  if (out[0]?.toLowerCase() === ".git") throw new Error(`reserved path: ${path} (.git is managed by the sandbox)`);
+  if (out.some((seg) => seg.toLowerCase() === ".git")) throw new Error(`reserved path: ${path} (.git is managed by the sandbox)`);
   return out.length ? out.join("/") : ".";
 }
 
@@ -165,7 +165,10 @@ async function run(name: ToolName, args: Record<string, unknown>, ctx: ToolConte
       if (raw !== undefined && typeof raw !== "string") throw new InvalidArgs(`"path" must be a string`);
       const dir = raw === undefined ? "." : validatePath(raw);
       const files = await sandbox.listFiles(dir === "." ? undefined : dir);
-      return { ok: true, output: capToolOutput(files.join("\n")) };
+      const list = files.join("\n");
+      if (list.length <= TOOL_OUTPUT_CAP) return { ok: true, output: list };
+      const hint = "\n(list truncated: pass a narrower path to see more)";
+      return { ok: true, output: capToolOutput(list, TOOL_OUTPUT_CAP - hint.length) + hint };
     }
     case "read_file": {
       const path = validatePath(reqString(args, "path"));

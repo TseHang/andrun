@@ -50,6 +50,13 @@ describe("LocalSandbox", () => {
     expect(one).not.toContain("src/sum.js");
   });
 
+  it("diff is against the baseline even after the agent commits", async () => {
+    await sandbox.writeFile("src/sum.js", "x\n");
+    await sandbox.exec("git add -A && git -c user.email=a@b -c user.name=a commit -qm hide");
+    expect(await sandbox.diff()).toContain("src/sum.js");
+    expect(sandbox.baseline).toMatch(/^[0-9a-f]{40}$/);
+  });
+
   it("lists files without .git", async () => {
     const files = await sandbox.listFiles();
     expect(files).toEqual(expect.arrayContaining(["package.json", "src/sum.js", "test/sum.test.js"]));

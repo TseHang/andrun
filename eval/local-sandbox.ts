@@ -29,7 +29,11 @@ function git(cwd: string, args: string[], stdin?: string): Promise<GitResult> {
 }
 
 export class LocalSandbox implements SandboxAdapter {
-  private constructor(readonly root: string) {}
+  /** @param baseline the fixture commit; diffs are taken against it, since the agent may move HEAD. */
+  private constructor(
+    readonly root: string,
+    readonly baseline: string,
+  ) {}
 
   static async fromFixture(fixtureDir: string): Promise<LocalSandbox> {
     const root = await mkdtemp(join(tmpdir(), "andrun-eval-"));
@@ -39,11 +43,14 @@ export class LocalSandbox implements SandboxAdapter {
         const r = await git(root, args);
         if (r.code !== 0) throw new Error(`git ${args[0]} failed: ${r.stderr}`);
       }
+      const head = await git(root, ["rev-parse", "HEAD"]);
+      const baseline = head.stdout.trim();
+      if (head.code !== 0 || !/^[0-9a-f]{40}$/.test(baseline)) throw new Error(`git rev-parse failed: ${head.stderr}`);
+      return new LocalSandbox(root, baseline);
     } catch (e) {
       await rm(root, { recursive: true, force: true });
       throw e;
     }
-    return new LocalSandbox(root);
   }
 
   private resolvePath(path: string): string {
@@ -140,7 +147,7 @@ export class LocalSandbox implements SandboxAdapter {
 
   async diff(path?: string): Promise<string> {
     await git(this.root, ["add", "-A"]);
-    const args = ["diff", "--cached", "HEAD"];
+    const args = ["diff", "--cached", this.baseline];
     if (path) args.push("--", path);
     return (await git(this.root, args)).stdout;
   }

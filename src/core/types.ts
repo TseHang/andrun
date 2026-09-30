@@ -82,7 +82,7 @@ export interface SandboxAdapter {
   listFiles(dir?: string): Promise<string[]>;
   /** Applies leniently: `git apply --recount`, since models get hunk line counts wrong. */
   applyPatch(patch: string): Promise<{ ok: boolean; stderr: string }>;
-  /** Unified diff of the workspace against its baseline, optionally for one path. Includes new files. */
+  /** Unified diff of the workspace against its baseline commit (recorded at setup, not HEAD: the agent may commit), optionally for one path. Includes new files. */
   diff(path?: string): Promise<string>;
 }
 

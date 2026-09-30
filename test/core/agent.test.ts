@@ -173,6 +173,20 @@ describe("transcript stays valid for the next turn", () => {
     expect(events).toContainEqual(expect.objectContaining({ type: "error", source: "sandbox", message: expect.stringContaining("sandbox gone") }));
     expect(events.at(-1)).toMatchObject({ type: "status", status: "failed" });
     expect(unanswered(state)).toEqual([]);
+    expect(state.pending).toBeNull();
+  });
+
+  it("a sandbox failure while pausing does not leave a pending approval", async () => {
+    class BrokenDiff extends MemorySandbox {
+      override async diff(): Promise<string> {
+        throw new Error("sandbox gone");
+      }
+    }
+    const { deps } = harness(new ScriptedModelClient([call("finish", { summary: "d" })]), new BrokenDiff());
+    const { state, outcome } = await runAgent(start(), profile, deps);
+    expect(outcome.kind).toBe("failed");
+    expect(state.pending).toBeNull();
+    expect(unanswered(state)).toEqual([]);
   });
 });
 

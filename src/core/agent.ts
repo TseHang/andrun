@@ -87,6 +87,7 @@ async function guarded(ctx: RunContext, run: () => Promise<RunOutcome>): Promise
   try {
     return await run();
   } catch (err) {
+    ctx.state.pending = null;
     const answered = new Set(ctx.state.messages.flatMap((m) => (m.role === "tool" ? [m.tool_call_id] : [])));
     for (const m of ctx.state.messages) {
       if (m.role !== "assistant") continue;

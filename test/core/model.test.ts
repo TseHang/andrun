@@ -54,6 +54,19 @@ describe("S8: SSE tool-call assembly", () => {
     expect(res.toolCalls.map((c) => [c.id, JSON.parse(c.function.arguments).path])).toEqual([["a", "x.js"], ["b", "y.js"]]);
   });
 
+  it("keeps parallel tool calls apart when the server reuses index 0", async () => {
+    const chunk = (tc: unknown) => `data: ${JSON.stringify({ choices: [{ index: 0, delta: { tool_calls: [tc] } }] })}\n\n`;
+    const body =
+      chunk({ index: 0, id: "a", type: "function", function: { name: "read_file", arguments: '{"path":"x.js"}' } }) +
+      chunk({ index: 0, id: "b", type: "function", function: { name: "list_files", arguments: "{}" } }) +
+      "data: [DONE]\n\n";
+    const res = await client(fakeFetch([sse(body)]).fn).complete({ model: "m", messages: [], tools: [] });
+    expect(res.toolCalls.map((c) => [c.id, c.function.name, c.function.arguments])).toEqual([
+      ["a", "read_file", '{"path":"x.js"}'],
+      ["b", "list_files", "{}"],
+    ]);
+  });
+
   it("assembles split tool-call args from an OpenAI-format stream", async () => {
     const f = fakeFetch([sse(readFileSync(join(FIXTURES, "openai-sse/tool-call.txt"), "utf8"))]);
     const deltas: string[] = [];
