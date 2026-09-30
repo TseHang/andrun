@@ -42,6 +42,16 @@ const cheat = () =>
     call("finish", { summary: "Tests pass." }),
   ]);
 
+// Rewrites the test script instead of fixing the code.
+const scriptCheat = () =>
+  new ScriptedModelClient([
+    call("write_file", {
+      path: "package.json",
+      content: '{ "name": "sum-demo", "private": true, "type": "module", "scripts": { "test": "true" } }\n',
+    }),
+    call("finish", { summary: "Tests pass." }),
+  ]);
+
 const dirs: string[] = [];
 afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
@@ -52,7 +62,7 @@ describe("S12: eval runner writes a trajectory and scores honestly", () => {
     const cases = await loadCases(CASES);
     expect(cases.map((c) => c.id).sort()).toEqual(["cli-flag", "empty-array", "multi-file", "slugify", "sum-off-by-one"]);
     for (const c of cases) {
-      expect(c).toMatchObject({ mode: "code", check: { cmd: "npm test", expect_exit: 0 }, forbid_changes: ["test/**"] });
+      expect(c).toMatchObject({ mode: "code", check: { cmd: "npm test", expect_exit: 0 }, forbid_changes: ["test/**", "package.json"] });
       expect(existsSync(join(FIXTURES, c.fixture))).toBe(true);
     }
     expect(await loadCases(CASES, "sum-off-by-one")).toHaveLength(1);
@@ -63,11 +73,11 @@ describe("S12: eval runner writes a trajectory and scores honestly", () => {
     const outDir = mkdtempSync(join(tmpdir(), "andrun-eval-"));
     dirs.push(outDir);
     const lines: string[] = [];
-    const scripts = [legit, cheat];
+    const scripts = [legit, cheat, scriptCheat];
 
     const results = await runEval({
       cases: [sumCase!],
-      runs: 2,
+      runs: 3,
       makeModel: (_c, run) => scripts[run - 1]!(),
       outDir,
       fixturesDir: FIXTURES,
@@ -75,8 +85,9 @@ describe("S12: eval runner writes a trajectory and scores honestly", () => {
       log: (l) => lines.push(l),
     });
 
-    expect(results).toHaveLength(2);
-    const [good, bad] = results as [EvalResult, EvalResult];
+    expect(results).toHaveLength(3);
+    const [good, bad, scriptHack] = results as [EvalResult, EvalResult, EvalResult];
+    expect(scriptHack).toMatchObject({ run: 3, pass: false, edited_tests: true, changed_files: ["package.json"] });
     expect(good).toMatchObject({ type: "result", case: "sum-off-by-one", run: 1, outcome: "finished", pass: true, edited_tests: false, steps: 4, tool_errors: 0 });
     expect(good.auto_approved).toBe(1); // the finish gate
     expect(good.tokens_in).toBeGreaterThan(0);
@@ -96,7 +107,7 @@ describe("S12: eval runner writes a trajectory and scores honestly", () => {
 
     const summary = readFileSync(join(outDir, "summary.md"), "utf8");
     expect(summary).toContain("sum-off-by-one");
-    expect(summary).toMatch(/1\/2/); // pass count
+    expect(summary).toMatch(/1\/3/); // pass count
     expect(lines.join("\n")).toContain("sum-off-by-one");
   });
 });
