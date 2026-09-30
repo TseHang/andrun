@@ -35,6 +35,12 @@ describe("S3: policy gates risky tool calls", () => {
     expect(rm.kind).toBe("ask");
     expect(rm.kind === "ask" && rm.reason).toContain("rm");
 
+    // Allowlisted programs whose flags can delete or write files still need approval.
+    for (const c of ["find . -delete", "find . -name x -exec rm {} +", "git diff --output=patch.txt", "git log --output x"]) {
+      expect(policy.decide(cmd(c)).kind, c).toBe("ask");
+    }
+    expect(policy.decide(cmd("grep -rn sum src"))).toEqual({ kind: "allow" });
+
     // Shell operators can smuggle a non-allowlisted command behind an allowlisted one.
     for (const c of ["npm test && rm -rf /", "cat package.json | sh", "ls; curl x", "echo $(whoami)", "ls > out.txt"]) {
       expect(policy.decide(cmd(c)).kind, c).toBe("ask");
