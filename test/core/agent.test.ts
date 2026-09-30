@@ -159,6 +159,21 @@ describe("transcript stays valid for the next turn", () => {
     expect(state.status).toBe("done");
     expect(unanswered(state)).toEqual([]);
   });
+
+  it("a sandbox failure mid-turn fails the run visibly and leaves no call unanswered", async () => {
+    class BrokenDiff extends MemorySandbox {
+      override async diff(): Promise<string> {
+        throw new Error("sandbox gone");
+      }
+    }
+    const turn = { calls: [{ name: "write_file", args: { path: "a.js", content: "x" } }, { name: "list_files", args: {} }] };
+    const { events, deps } = harness(new ScriptedModelClient([turn]), new BrokenDiff());
+    const { state, outcome } = await runAgent(start(), profile, deps);
+    expect(outcome).toMatchObject({ kind: "failed" });
+    expect(events).toContainEqual(expect.objectContaining({ type: "error", source: "sandbox", message: expect.stringContaining("sandbox gone") }));
+    expect(events.at(-1)).toMatchObject({ type: "status", status: "failed" });
+    expect(unanswered(state)).toEqual([]);
+  });
 });
 
 describe("S3: gated commands", () => {

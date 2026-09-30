@@ -107,6 +107,7 @@ export class OpenAICompatModelClient implements ModelClient {
     let model: string | undefined;
     const usage = { tokens_in: 0, tokens_out: 0 };
     const calls = new Map<number, { id?: string; name: string; arguments: string }>();
+    let lastKey = 0;
 
     const handle = (chunk: Chunk) => {
       if (chunk.model) model = chunk.model;
@@ -121,11 +122,14 @@ export class OpenAICompatModelClient implements ModelClient {
         onDelta?.(delta.content);
       }
       for (const tc of delta.tool_calls ?? []) {
-        const index = tc.index ?? 0;
-        let acc = calls.get(index);
+        // Without an index, a new id starts the next call; fragments without an id continue the last one.
+        const prevId = calls.get(lastKey)?.id;
+        const key = tc.index ?? (tc.id && prevId && tc.id !== prevId ? lastKey + 1 : lastKey);
+        lastKey = key;
+        let acc = calls.get(key);
         if (!acc) {
           acc = { name: "", arguments: "" };
-          calls.set(index, acc);
+          calls.set(key, acc);
         }
         if (tc.id) acc.id = tc.id;
         // Some OpenAI-compatible servers repeat the name on every fragment; keep the first.

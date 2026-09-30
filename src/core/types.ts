@@ -1,5 +1,6 @@
 // Ports and state for the agent loop (ADR D1–D4). No platform imports in src/core.
 
+import type { AgentConfig } from "./config";
 import type { AgentEvent, DiffSummary, Severity, Status } from "./events";
 
 // ---------- Model (OpenAI-compatible chat format) ----------
@@ -79,7 +80,6 @@ export interface SandboxAdapter {
   writeFile(path: string, content: string): Promise<void>;
   /** Recursive file list, excluding `.git` and ignored files. */
   listFiles(dir?: string): Promise<string[]>;
-  /** Applies a unified diff (`git apply`). */
   /** Applies leniently: `git apply --recount`, since models get hunk line counts wrong. */
   applyPatch(patch: string): Promise<{ ok: boolean; stderr: string }>;
   /** Unified diff of the workspace against its baseline, optionally for one path. Includes new files. */
@@ -175,7 +175,7 @@ export interface AgentDeps {
   /** Redirect messages the user typed while the agent was running (injected before the next model call). */
   drainUserMessages?: () => string[];
   signal?: AbortSignal;
-  config: import("./config").AgentConfig;
+  config: AgentConfig;
 }
 
 export interface Finding {

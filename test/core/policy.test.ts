@@ -42,7 +42,7 @@ describe("S3: policy gates risky tool calls", () => {
     expect(policy.decide(cmd("grep -rn sum src"))).toEqual({ kind: "allow" });
 
     // Shell operators can smuggle a non-allowlisted command behind an allowlisted one.
-    for (const c of ["npm test && rm -rf /", "cat package.json | sh", "ls; curl x", "echo $(whoami)", "ls > out.txt"]) {
+    for (const c of ["npm test && rm -rf /", "cat package.json | sh", "ls; curl x", "echo $(whoami)", "ls > out.txt", "ls & rm -rf src", "cat ${HOME}/.ssh/id_rsa", "cat $HOME/x"]) {
       expect(policy.decide(cmd(c)).kind, c).toBe("ask");
     }
 
@@ -56,6 +56,7 @@ describe("S3: policy gates risky tool calls", () => {
   it("review mode denies commands outside the allowlist and lets finish through", () => {
     expect(policy.decide(cmd("npm test", "review"))).toEqual({ kind: "allow" });
     expect(policy.decide(cmd("rm -rf src", "review")).kind).toBe("deny");
+    expect(policy.decide(cmd("ls & rm -rf src", "review")).kind).toBe("deny");
     expect(policy.decide({ mode: "review", tool: "finish", args: { summary: "3 findings" } })).toEqual({ kind: "allow" });
   });
 

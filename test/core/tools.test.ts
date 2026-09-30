@@ -99,7 +99,7 @@ describe("tools", () => {
   });
 
   it("rejects writes into .git so the approval diff can't be tampered with", async () => {
-    for (const path of [".git/info/exclude", "./.git/hooks/pre-commit", "src/../.git/config"]) {
+    for (const path of [".git/info/exclude", "./.git/hooks/pre-commit", "src/../.git/config", ".GIT/config", ".Git/hooks/pre-commit"]) {
       const w = await run("write_file", { path, content: "x" });
       expect(w.ok, path).toBe(false);
       expect(!w.ok && w.error, path).toContain(".git");
@@ -108,6 +108,33 @@ describe("tools", () => {
     expect(!p.ok && p.error).toContain(".git");
     const near = await run("read_file", { path: ".gitignore-like.txt" });
     expect(!near.ok && near.error).toMatch(/^ENOENT/); // a name starting with ".git" is not reserved
+  });
+
+  it("a miscounted hunk cannot smuggle a second file's deletion past the parser", async () => {
+    // The first hunk claims 3 lines but has 2, so the next file header would sit inside it.
+    const smuggle = [
+      "--- a/src/sum.js",
+      "+++ b/src/sum.js",
+      "@@ -1,3 +1,3 @@",
+      "-export function sum(values) {",
+      "+export function sum(values) { // x",
+      "--- a/package.json",
+      "+++ /dev/null",
+      "@@ -1 +0,0 @@",
+      "-{",
+      "",
+    ].join("\n");
+    const r = await run("apply_patch", { patch: smuggle });
+    expect(r.ok).toBe(false); // git (with --recount) reads the header as hunk lines, just like our parser
+    expect(await sandbox.readFile("package.json")).toContain("node --test");
+  });
+
+  it("caps list_files output", async () => {
+    const many = Array.from({ length: 20_000 }, (_, i) => `vendor/pkg-${i}/index.js`);
+    const stub = { listFiles: async () => many } as unknown as LocalSandbox;
+    const r = await executeTool({ name: "list_files", rawArgs: "{}" }, { sandbox: stub, allowed: CODE_TOOLS, timeoutMs: 1000 });
+    expect(r.ok && r.output.length).toBeLessThanOrEqual(8192);
+    expect(r.ok && r.output).toContain("elided");
   });
 
   it("rejects files over 1 MB", async () => {

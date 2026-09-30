@@ -55,7 +55,7 @@ export function createSession(input: { sessionId: string; mode: ModeName; task: 
 export async function runAgent(state: AgentState, profile: ModeProfile, deps: AgentDeps): Promise<RunResult> {
   const ctx: RunContext = { state: structuredClone(state), profile, deps };
   if (ctx.state.status !== "running") setStatus(ctx, "running");
-  const outcome = await loop(ctx);
+  const outcome = await guarded(ctx, () => loop(ctx));
   return { state: ctx.state, outcome };
 }
 
@@ -78,8 +78,24 @@ export async function resume(
   ctx.state.pending = null;
   setStatus(ctx, "running");
 
-  const outcome = (await applyDecision(ctx, pending, decision)) ?? (await loop(ctx));
+  const outcome = await guarded(ctx, async () => (await applyDecision(ctx, pending, decision)) ?? (await loop(ctx)));
   return { state: ctx.state, outcome };
+}
+
+/** A thrown sandbox call (e.g. diff) ends the run as `failed`, with every open tool_call answered. */
+async function guarded(ctx: RunContext, run: () => Promise<RunOutcome>): Promise<RunOutcome> {
+  try {
+    return await run();
+  } catch (err) {
+    const answered = new Set(ctx.state.messages.flatMap((m) => (m.role === "tool" ? [m.tool_call_id] : [])));
+    for (const m of ctx.state.messages) {
+      if (m.role !== "assistant") continue;
+      for (const call of m.tool_calls ?? []) {
+        if (!answered.has(call.id)) toolMessage(ctx, call, JSON.stringify({ error: "the run failed" }));
+      }
+    }
+    return fail(ctx, "sandbox", err instanceof Error ? err.message : String(err));
+  }
 }
 
 /** Applies the human's decision to what was pending. Returns an outcome if the run ends here, else null. */

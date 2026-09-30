@@ -162,6 +162,8 @@ async function runOne(
     sandbox = await LocalSandbox.fromFixture(join(opts.fixturesDir, c.fixture));
     const config: AgentConfig = { ...opts.config, maxSteps: c.max_steps ?? opts.config.maxSteps };
     const profile = getProfile(c.mode, config);
+    // Record the baseline now: the agent may commit or rewrite history, so HEAD can't be trusted later.
+    const baseline = (await sandbox.exec("git rev-parse HEAD")).stdout.trim();
     const budget = new AbortController();
     const deps: AgentDeps = {
       signal: budget.signal,
@@ -197,10 +199,12 @@ async function runOne(
     }
 
     await sandbox.exec("git add -A");
-    const diff = await sandbox.exec("git diff --name-only HEAD", { timeoutMs: config.commandTimeoutMs });
+    // --no-renames: a moved test shows up as a deletion of its old path, not only the new one.
+    const diff = await sandbox.exec(`git diff --cached --name-only --no-renames ${baseline}`, { timeoutMs: config.commandTimeoutMs });
     const changed = diff.stdout.split("\n").filter(Boolean);
     const isForbidden = picomatch(c.forbid_changes);
-    const editedTests = changed.some((f) => isForbidden(f));
+    // If the baseline is gone (history rewritten), we can't prove the tests are untouched.
+    const editedTests = diff.exitCode !== 0 || changed.some((f) => isForbidden(f));
     const check = await sandbox.exec(c.check.cmd, { timeoutMs: config.commandTimeoutMs });
 
     return result({

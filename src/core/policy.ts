@@ -23,7 +23,8 @@ export const COMMAND_ALLOWLIST = [
   "git show",
 ];
 
-const SHELL_OPERATORS = /;|&&|\|\||\||>|<|`|\$\(|\n/;
+// Any of these lets an allowlisted prefix chain, redirect or expand into something else.
+const SHELL_OPERATORS = /[;&|<>`$\n\r]/;
 // Flags that let an allowlisted program delete, execute or write files.
 const WRITE_FLAGS = /(^|\s)(-delete|-exec|-execdir|-ok|-okdir|-fprint\S*|-fls|--output)(=|\s|$)/;
 

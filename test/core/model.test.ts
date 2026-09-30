@@ -43,6 +43,17 @@ const client = (fetchFn: typeof fetch) =>
   new OpenAICompatModelClient({ baseUrl: "https://api.example.test/v1", apiKey: "test-key", fetch: fetchFn, backoffMs: 0 });
 
 describe("S8: SSE tool-call assembly", () => {
+  it("keeps parallel tool calls apart when the server omits index", async () => {
+    const chunk = (tc: unknown) => `data: ${JSON.stringify({ choices: [{ index: 0, delta: { tool_calls: [tc] } }] })}\n\n`;
+    const body =
+      chunk({ id: "a", type: "function", function: { name: "read_file", arguments: '{"path":' } }) +
+      chunk({ function: { arguments: '"x.js"}' } }) +
+      chunk({ id: "b", type: "function", function: { name: "read_file", arguments: '{"path":"y.js"}' } }) +
+      "data: [DONE]\n\n";
+    const res = await client(fakeFetch([sse(body)]).fn).complete({ model: "m", messages: [], tools: [] });
+    expect(res.toolCalls.map((c) => [c.id, JSON.parse(c.function.arguments).path])).toEqual([["a", "x.js"], ["b", "y.js"]]);
+  });
+
   it("assembles split tool-call args from an OpenAI-format stream", async () => {
     const f = fakeFetch([sse(readFileSync(join(FIXTURES, "openai-sse/tool-call.txt"), "utf8"))]);
     const deltas: string[] = [];

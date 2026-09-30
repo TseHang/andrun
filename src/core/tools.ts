@@ -109,7 +109,7 @@ export function validatePath(path: string): string {
     } else out.push(seg);
   }
   // The baseline repo lives in .git; writing there could hide changes from the approval diff.
-  if (out[0] === ".git") throw new Error(`reserved path: ${path} (.git is managed by the sandbox)`);
+  if (out[0]?.toLowerCase() === ".git") throw new Error(`reserved path: ${path} (.git is managed by the sandbox)`);
   return out.length ? out.join("/") : ".";
 }
 
@@ -165,7 +165,7 @@ async function run(name: ToolName, args: Record<string, unknown>, ctx: ToolConte
       if (raw !== undefined && typeof raw !== "string") throw new InvalidArgs(`"path" must be a string`);
       const dir = raw === undefined ? "." : validatePath(raw);
       const files = await sandbox.listFiles(dir === "." ? undefined : dir);
-      return { ok: true, output: files.join("\n") };
+      return { ok: true, output: capToolOutput(files.join("\n")) };
     }
     case "read_file": {
       const path = validatePath(reqString(args, "path"));
