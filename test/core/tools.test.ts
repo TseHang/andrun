@@ -78,6 +78,18 @@ describe("tools", () => {
     expect((await run("read_file", { path: "./src/../src/sum.js" })).ok).toBe(true);
   });
 
+  it("rejects writes into .git so the approval diff can't be tampered with", async () => {
+    for (const path of [".git/info/exclude", "./.git/hooks/pre-commit", "src/../.git/config"]) {
+      const w = await run("write_file", { path, content: "x" });
+      expect(w.ok, path).toBe(false);
+      expect(!w.ok && w.error, path).toContain(".git");
+    }
+    const p = await run("apply_patch", { patch: "--- a/.git/config\n+++ b/.git/config\n@@ -1 +1 @@\n-a\n+b\n" });
+    expect(!p.ok && p.error).toContain(".git");
+    const near = await run("read_file", { path: ".gitignore-like.txt" });
+    expect(!near.ok && near.error).toMatch(/^ENOENT/); // a name starting with ".git" is not reserved
+  });
+
   it("rejects files over 1 MB", async () => {
     const r = await run("write_file", { path: "big.txt", content: "x".repeat(MAX_FILE_BYTES + 1) });
     expect(r.ok).toBe(false);
