@@ -211,7 +211,7 @@ function summaryTable(cases: EvalCase[], results: EvalResult[]): string {
     const n = rs.length || 1;
     const sum = (f: (r: EvalResult) => number) => rs.reduce((a, r) => a + f(r), 0);
     const costs = rs.map((r) => r.cost).filter((x): x is number => x !== null);
-    const cost = costs.length ? `$${costs.reduce((a, b) => a + b, 0).toFixed(4)}` : "—";
+    const cost = costs.length ? `¥${costs.reduce((a, b) => a + b, 0).toFixed(2)}` : "—";
     return (
       `| ${name} | ${rs.filter((r) => r.pass).length}/${rs.length} | ${(sum((r) => r.steps) / n).toFixed(1)} | ` +
       `${Math.round(sum((r) => r.tokens_in + r.tokens_out) / n)} | ${cost} | ${sum((r) => r.tool_errors)} | ` +
