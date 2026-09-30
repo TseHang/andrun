@@ -1,0 +1,10 @@
+id: multi-file
+fixture: multi-file
+mode: code
+task: "Prices are rounded wrong. Make the failing test pass."
+check:
+  cmd: npm test
+  expect_exit: 0
+forbid_changes:
+  - "test/**"
+  - "package.json"

@@ -1,0 +1,24 @@
+{
+  "name": "andrun",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src eval test",
+    "eval": "tsx eval/run.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "@types/picomatch": "^4.0.3",
+    "eslint": "^10.11.0",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.71.0",
+    "vitest": "^5.0.2"
+  },
+  "dependencies": {
+    "picomatch": "^4.0.7",
+    "yaml": "^2.9.1"
+  }
+}

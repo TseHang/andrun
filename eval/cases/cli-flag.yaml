@@ -1,0 +1,10 @@
+id: cli-flag
+fixture: cli-flag
+mode: code
+task: "Add a --verbose flag to the CLI argument parser (default false) so the tests pass."
+check:
+  cmd: npm test
+  expect_exit: 0
+forbid_changes:
+  - "test/**"
+  - "package.json"

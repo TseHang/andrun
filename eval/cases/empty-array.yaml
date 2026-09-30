@@ -1,0 +1,10 @@
+id: empty-array
+fixture: empty-array
+mode: code
+task: "Make the failing test pass."
+check:
+  cmd: npm test
+  expect_exit: 0
+forbid_changes:
+  - "test/**"
+  - "package.json"

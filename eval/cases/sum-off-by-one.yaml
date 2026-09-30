@@ -1,0 +1,10 @@
+id: sum-off-by-one
+fixture: sum-off-by-one
+mode: code
+task: "Make the failing test pass."
+check:
+  cmd: npm test
+  expect_exit: 0
+forbid_changes:
+  - "test/**"
+  - "package.json"

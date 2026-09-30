@@ -1,0 +1,28 @@
+data: {"id":"chatcmpl-f8234c54-b085-406c-b46d-3854d3b7ebf3","object":"chat.completion.chunk","created":1790774977,"model":"deepseek-ai/DeepSeek-V4-Flash","choices":[{"index":0,"delta":{"role":"assistant","content":""},"logprobs":null,"finish_reason":null}],"prompt_token_ids":null,"prompt_text":null}
+
+data: {"id":"chatcmpl-f8234c54-b085-406c-b46d-3854d3b7ebf3","object":"chat.completion.chunk","created":1790774977,"model":"deepseek-ai/DeepSeek-V4-Flash","choices":[{"index":0,"delta":{"reasoning":"Let"},"logprobs":null,"finish_reason":null,"token_ids":null}]}
+
+data: {"id":"chatcmpl-f8234c54-b085-406c-b46d-3854d3b7ebf3","object":"chat.completion.chunk","created":1790774977,"model":"deepseek-ai/DeepSeek-V4-Flash","choices":[{"index":0,"delta":{"reasoning":" me read both files simultaneously"},"logprobs":null,"finish_reason":null,"token_ids":null}]}
+
+data: {"id":"chatcmpl-f8234c54-b085-406c-b46d-3854d3b7ebf3","object":"chat.completion.chunk","created":1790774977,"model":"deepseek-ai/DeepSeek-V4-Flash","choices":[{"index":0,"delta":{"reasoning":"."},"logprobs":null,"finish_reason":null,"token_ids":null}]}
+
+data: {"id":"chatcmpl-f8234c54-b085-406c-b46d-3854d3b7ebf3","object":"chat.completion.chunk","created":1790774977,"model":"deepseek-ai/DeepSeek-V4-Flash","choices":[{"index":0,"delta":{"tool_calls":[{"id":"chatcmpl-tool-895b99a5371676ca","type":"function","index":0,"function":{"name":"read_file"}}]},"logprobs":null,"finish_reason":null,"token_ids":null}]}
+
+data: {"id":"chatcmpl-f8234c54-b085-406c-b46d-3854d3b7ebf3","object":"chat.completion.chunk","created":1790774977,"model":"deepseek-ai/DeepSeek-V4-Flash","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"path\": \""}}]},"logprobs":null,"finish_reason":null,"token_ids":null}]}
+
+data: {"id":"chatcmpl-f8234c54-b085-406c-b46d-3854d3b7ebf3","object":"chat.completion.chunk","created":1790774977,"model":"deepseek-ai/DeepSeek-V4-Flash","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"src/sum.js\"}"}}]},"logprobs":null,"finish_reason":null,"token_ids":null}]}
+
+data: {"id":"chatcmpl-f8234c54-b085-406c-b46d-3854d3b7ebf3","object":"chat.completion.chunk","created":1790774977,"model":"deepseek-ai/DeepSeek-V4-Flash","choices":[{"index":0,"delta":{"tool_calls":[{"id":"chatcmpl-tool-b8efbac91225cf40","type":"function","index":1,"function":{"name":"read_file"}}]},"logprobs":null,"finish_reason":null,"token_ids":null}]}
+
+data: {"id":"chatcmpl-f8234c54-b085-406c-b46d-3854d3b7ebf3","object":"chat.completion.chunk","created":1790774977,"model":"deepseek-ai/DeepSeek-V4-Flash","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"{\"path\": \""}}]},"logprobs":null,"finish_reason":null,"token_ids":null}]}
+
+data: {"id":"chatcmpl-f8234c54-b085-406c-b46d-3854d3b7ebf3","object":"chat.completion.chunk","created":1790774977,"model":"deepseek-ai/DeepSeek-V4-Flash","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"test/sum.test.js"}}]},"logprobs":null,"finish_reason":null,"token_ids":null}]}
+
+data: {"id":"chatcmpl-f8234c54-b085-406c-b46d-3854d3b7ebf3","object":"chat.completion.chunk","created":1790774977,"model":"deepseek-ai/DeepSeek-V4-Flash","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"\"}"}}]},"logprobs":null,"finish_reason":null,"token_ids":null}]}
+
+data: {"id":"chatcmpl-f8234c54-b085-406c-b46d-3854d3b7ebf3","object":"chat.completion.chunk","created":1790774977,"model":"deepseek-ai/DeepSeek-V4-Flash","choices":[{"index":0,"delta":{},"logprobs":null,"finish_reason":"tool_calls","stop_reason":null,"token_ids":null}]}
+
+data: {"id":"chatcmpl-f8234c54-b085-406c-b46d-3854d3b7ebf3","object":"chat.completion.chunk","created":1790774977,"model":"deepseek-ai/DeepSeek-V4-Flash","choices":[],"usage":{"prompt_tokens":291,"total_tokens":380,"completion_tokens":89,"prompt_tokens_details":{"cached_tokens":0,"created_cache_tokens":0},"completion_tokens_details":{"reasoning_tokens":7}},"system_fingerprint":"vllm-0.1.1.dev50+geed1f3d0c-tp4-523cf2f0"}
+
+data: [DONE]
+

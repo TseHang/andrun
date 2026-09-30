@@ -1,6 +1,6 @@
 # &run Core Loop + Eval — Implementation Checklist
 
-**Status**: ✅ Approved (2026-09-30)
+**Status**: ✅ Built — Passing (2026-09-30), tested against real ai& (S8 recorded, T2 5/5 on deepseek-v4-flash). Sandbox 1.0 spike: ✅ Go. Open: S14's 3-run form runs before a milestone (T3).
 **Date**: 2026-09-30
 **Architecture**: `docs/architecture/web-codex-architecture-decision.md` → Phase 1 (Day 1, morning)
 
@@ -181,15 +181,15 @@ Data flow and new dependencies: `yaml`, `vitest`, `tsx`, and `eslint`. There is 
 **Test**: Runtime — the eval run itself, against the real ai& API. This is the spec §8 acceptance A from the CLI.
 
 ## Edge Cases
-- [ ] `apply_patch` with a patch that doesn't apply → a tool error containing the `git apply` stderr, fed back to the model. **Test**: `test/core/tools.test.ts` › "failed patch returns stderr"
-- [ ] Path traversal (`../../etc/passwd`, absolute paths) in `read_file`/`write_file` → a tool error, and nothing outside the workspace is read. **Test**: `test/core/tools.test.ts` › "rejects paths outside workspace"
-- [ ] `write_file` > 1 MB → a tool error (headroom under the 2 MB DO row limit; see ADR "Cost and limits"). **Test**: `test/core/tools.test.ts` › "rejects files over 1 MB"
-- [ ] `run_command` exceeding 120 s → aborted via `AbortSignal`, and `tool_output` exit is reported as a timeout. **Test**: `test/eval/local-sandbox.test.ts` › "command timeout aborts" (uses a 1 s override)
-- [ ] The model returns malformed JSON tool args → a tool error `"invalid arguments"` is fed back, and it counts toward 3 strikes. **Test**: `test/core/agent.test.ts` › "malformed tool args are fed back"
-- [ ] The model replies with text only and no tool call → the text is emitted as a `message`, and the loop nudges once ("call a tool or finish"). A second text-only reply is treated as `finish`, which goes through the gate. **Test**: `test/core/agent.test.ts` › "text-only turn nudges then gates"
-- [ ] A user redirect message is queued mid-run → it is injected at the next step boundary as a user message. **Test**: `test/core/agent.test.ts` › "drained user message injected before next model call"
-- [ ] `signal` is aborted → the loop stops after the current step and returns `failed` with `error{source:"sandbox"|"model"}` naming the cause. **Test**: `test/core/agent.test.ts` › "abort stops loop visibly"
-- [ ] Spike: the 1.0 container DO clones a fixture via `Files` + tarball, streams `node --test` output, and reports whether one DO class can be both session and container. **Runtime check**: deployed throwaway Worker; findings recorded in `spike-sandbox-1.0.md`, including a go/no-go on the D15 fallback
+- [x] `apply_patch` with a patch that doesn't apply → a tool error containing the `git apply` stderr, fed back to the model. **Test**: `test/core/tools.test.ts` › "failed patch returns stderr" ✅
+- [x] Path traversal (`../../etc/passwd`, absolute paths) in `read_file`/`write_file` → a tool error, and nothing outside the workspace is read. **Test**: `test/core/tools.test.ts` › "rejects paths outside workspace" ✅
+- [x] `write_file` > 1 MB → a tool error (headroom under the 2 MB DO row limit; see ADR "Cost and limits"). **Test**: `test/core/tools.test.ts` › "rejects files over 1 MB" ✅
+- [x] `run_command` exceeding 120 s → aborted via `AbortSignal`, and `tool_output` exit is reported as a timeout. **Test**: `test/eval/local-sandbox.test.ts` › "command timeout aborts" (uses a 1 s override) ✅
+- [x] The model returns malformed JSON tool args → a tool error `"invalid arguments"` is fed back, and it counts toward 3 strikes. **Test**: `test/core/agent.test.ts` › "malformed tool args are fed back" ✅
+- [x] The model replies with text only and no tool call → the text is emitted as a `message`, and the loop nudges once ("call a tool or finish"). A second text-only reply is treated as `finish`, which goes through the gate. **Test**: `test/core/agent.test.ts` › "text-only turn nudges then gates" ✅
+- [x] A user redirect message is queued mid-run → it is injected at the next step boundary as a user message. **Test**: `test/core/agent.test.ts` › "drained user message injected before next model call" ✅
+- [x] `signal` is aborted → the loop stops after the current step and returns `failed` with `error{source:"sandbox"|"model"}` naming the cause. **Test**: `test/core/agent.test.ts` › "abort stops loop visibly" ✅
+- [x] Spike: the 1.0 container DO clones a fixture via `Files` + tarball, streams `node --test` output, and reports whether one DO class can be both session and container. **Runtime check**: deployed throwaway Worker; findings recorded in `spike-sandbox-1.0.md`, including a go/no-go on the D15 fallback ✅ Go, one DO class (local + deployed, 2026-09-30; the Worker, image and container app were deleted afterwards)
 
 Not applicable:
 - Auth/PII: no users (spec D3).
@@ -197,11 +197,38 @@ Not applicable:
 - UI states: no UI in this slice.
 
 ## Open Questions
-- [ ] **ai& API access**: base URL, key, and model IDs (Kimi code / K3) and their context windows. This blocks S8 fixture capture and S14. — decide by: Henry (the key comes from Mutsumi/Hara or the free trial)
+- [x] **ai& API access**: key and base URL in `.env`. The default model is `deepseek-ai/deepseek-v4-flash` (Henry, 2026-09-30); prices and context windows for all 11 listed models are in `config.ts`.
 - [x] Tooling defaults: pnpm + Vitest + tsx + eslint — confirmed by Henry
-- [ ] `apply_patch` takes a unified diff applied with `git apply`; `write_file` covers new files and full rewrites. Assumes the model produces valid unified diffs; if S14 shows many patch failures, add a search/replace `edit_file` tool. — decide by: during build (eval data)
-- [ ] Eval cost per full run (5 × 3) is unknown until the ai& pricing and model are known. — decide by: during build
+- [x] `apply_patch` takes a unified diff applied with `git apply`. Real runs showed a missing final newline; that is tolerated now (newline appended, `--recount`). T2 had 0 patch failures, so `edit_file` is not needed for now.
+- [x] Eval cost: T2 (5 × 1) on flash costs ¥1.22, so T3 (5 × 3) is about ¥4. Tiers: T0 free (vitest + fake server), T1 one case, T2 before a PR, T3 only before milestones (Henry, 2026-09-30).
 - [x] Docker is installed — confirmed by Henry
 
 ## Build Progress
-_(filled by /build-to-run)_
+| # | Unit | Proves | Status |
+|---|---|---|---|
+| 0 | Scaffold + contract (`events.ts`, `types.ts`, `config.ts`), written by the commander as the test contract | S13 | ✅ done |
+| 1 | `context.ts`, `diff.ts`, `policy.ts` | S3 (policy), S9 (unit) | ✅ done |
+| 2 | `tools.ts` + `eval/local-sandbox.ts` | Edge: patch stderr, traversal, >1 MB, timeout | ✅ done |
+| 3 | `model.ts` (SSE, retries, per-mode model) | S7 (client), S8 (OpenAI-format fixture), S11 (request) | ✅ done |
+| 4 | `modes.ts`, `prompts.ts`, `agent.ts` | S1, S2, S3, S4, S5, S6, S7, S9, S10, S11, loop edge cases | ✅ done |
+| 5 | `eval/` runner, 5 fixtures, cases | S12 | ✅ done |
+| 6 | Sandbox 1.0 spike (Henry OK'd the deploy; Workers Paid) | Spike edge case | ✅ done: Go, see `spike-sandbox-1.0.md` |
+| — | Real ai& SSE capture + real eval | S8 (real), S14 | ✅ S8 recorded; S14 run once (T2 5/5); the 3-run form waits for T3 |
+
+Runtime verification (2026-09-30):
+- `pnpm eval --case sum-off-by-one --runs 2` was run against a local fake OpenAI-compatible SSE server. Path: real HTTP + streaming, the real loop, LocalSandbox with real git and `npm test`. Result: 2/2 pass, 5 steps. The trajectory shows test fail (exit 1) → read → patch → test pass (exit 0) → finish (auto-approved) → done; `message_delta` is not persisted.
+- `pnpm eval` without a key exits 1 with a clear message.
+- Suite: 53 passed (includes the recorded ai& fixture). tsc and eslint are clean.
+
+Build notes:
+- S12's test drives the runner through its exported `runEval()` API with a `ScriptedModelClient`. The `pnpm eval` CLI is a thin wrapper, verified at runtime.
+- S8 is tested now against an OpenAI-format fixture. The recorded ai& fixture test is `skipIf` absent, and gets activated when the key arrives.
+- Unit 1 review: `find -delete`/`-exec` and `git … --output` could delete or write files through the allowlist. The commander added these cases to `policy.test.ts` (it strengthens S3, so the spec meaning is unchanged) and blocked write-capable flags in `policy.ts`.
+- Unit 2 review: `write_file`/`apply_patch` could write into `.git/` (e.g. `.git/info/exclude`) and hide changes from the approval diff. The commander added a test to `tools.test.ts` (it strengthens the path-traversal edge case) and reserved `.git` in `validatePath`.
+- Unit 4 review: when a run finished, the `finish` tool_call (and any later calls in the same turn) had no tool message. The next turn after `done` (ADR D6) would then send an invalid transcript and get a 400. The commander added "transcript stays valid for the next turn" tests to `agent.test.ts` (a new invariant; no scenario changed meaning), and `done()` now answers those calls.
+- Unit 5 review: the check runs in the agent-modified workspace, so rewriting the `package.json` test script to `true` would "pass" without touching `test/`. The commander added `package.json` to every case's `forbid_changes` and a script-cheat run to `runner.test.ts`. This strengthens S12's "no cheating", and `edited_tests` now means "edited a protected file".
+- S10 uses an in-memory `MemorySandbox` test double, so a checkpoint can snapshot the workspace.
+- First real run (deepseek-v4-flash, sum-off-by-one, 2026-09-30): passed in 7 steps for ¥0.27, but `apply_patch` failed once. The model dropped the final newline, and git reported a corrupt patch. `executeTool` now appends the missing newline, and adapters apply with `git apply --recount`. The test replays that exact patch. The same run showed the context meter at 704 tokens against a real 1,812 (tool specs were not counted). Usage events now report the provider's `tokens_in`, and compaction reserves space for the tool specs.
+- Eval cost guard: `pnpm eval` defaults to `--runs 1 --max-cost 5` (yen). It stops once the cap is reached; the request that crosses the cap still completes. It refuses to run a model with no price in `config.prices`. Verified against the fake server: a tiny cap with 3 runs stopped after the first request.
+- S8 (real): one recorded ai& stream (`test/fixtures/aiand-sse/tool-call.txt`, deepseek-v4-flash, two parallel tool calls with split arguments) passes. The usage block includes `cached_tokens`, which a future exact-cost calculation can use.
+- T2 (5 cases × 1, deepseek-v4-flash, after the patch and prompt fixes): 5/5 pass, 5.6 steps on average, 0 tool errors, no protected files edited, total ¥1.22. sum-off-by-one went from 8 steps / ¥0.39 to 5 steps / ¥0.18. S14 (3 runs each, ≥2/3) is still open; it runs only before a milestone (T3, `--runs 3 --max-cost <raised>`).

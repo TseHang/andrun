@@ -1,0 +1,6 @@
+{
+  "name": "sum-off-by-one",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test" }
+}
