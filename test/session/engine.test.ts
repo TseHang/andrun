@@ -132,7 +132,7 @@ async function atGate(extra: ScriptStep[] = [], opts: Parameters<typeof world>[0
   await engine.idle();
   const snapshot = engine.snapshot();
   if (!snapshot?.pending) throw new Error(`expected a pending approval, got ${JSON.stringify(snapshot)}`);
-  return { ...w, model, engine, approvalId: snapshot.pending.approvalId };
+  return { ...w, makeEngine: w.engine, model, engine, approvalId: snapshot.pending.approvalId };
 }
 
 const types = (events: AgentEvent[]) => events.map((e) => e.type);
@@ -257,7 +257,8 @@ describe("S2: a reconnecting client gets exactly the events it missed", () => {
     const last = all.at(-1)!.seq;
     await send(engine, { type: "approve", approvalId });
     const next = engine.replay(last)!;
-    expect(types(next)).toEqual(["approval_resolved", "status"]);
+    expect(types(next)).toEqual(["approval_resolved", "status", "status"]);
+    expect(statuses(next)).toEqual(["running", "done"]);
     expect(next.every((e) => e.seq > last)).toBe(true);
   });
 
@@ -277,6 +278,7 @@ describe("S3: approve and reject work over the socket", () => {
       const added = events().slice(before);
       expect(added).toMatchObject([
         { type: "approval_resolved", approvalId, approved: true },
+        { type: "status", status: "running" },
         { type: "status", status: "done" },
       ]);
       expect(engine.snapshot()).toMatchObject({ status: "done", pending: null });
@@ -349,7 +351,7 @@ describe("S4: the pause survives an evicted Durable Object", () => {
     const w = await atGate();
     const before = w.events();
 
-    const woken = w.engine(new ScriptedModelClient([])); // new object, same SQLite, same container
+    const woken = w.makeEngine(new ScriptedModelClient([])); // new object, same SQLite, same container
     expect(woken.snapshot()).toMatchObject({ status: "awaiting_approval", pending: { approvalId: w.approvalId } });
     expect(woken.replay(0)).toEqual(before);
 
@@ -358,6 +360,7 @@ describe("S4: the pause survives an evicted Durable Object", () => {
     expect(after.slice(0, before.length)).toEqual(before);
     expect(after.slice(before.length)).toMatchObject([
       { type: "approval_resolved", approved: true },
+      { type: "status", status: "running" },
       { type: "status", status: "done" },
     ]);
     expectIncreasingSeq(after);
@@ -609,7 +612,7 @@ describe("S10: a sandbox lost between runs is rebuilt (D11)", () => {
   it("approving finish does not rebuild a sandbox it no longer needs", async () => {
     const w = await atGate();
     await w.container.destroy();
-    await send(w.engine(new ScriptedModelClient([])), { type: "approve", approvalId: w.approvalId });
+    await send(w.makeEngine(new ScriptedModelClient([])), { type: "approve", approvalId: w.approvalId });
     expect(w.tarballRequests).toHaveLength(1);
     expect(statuses(w.events()).at(-1)).toBe("done");
   });
@@ -736,7 +739,7 @@ describe("S13: delete frees everything, and a deleted session is 404 (D18)", () 
     expect(w.container.running).toBe(false);
     expect(w.db.tables()).toEqual([]);
 
-    for (const engine of [w.engine, w.engine(new ScriptedModelClient([]))]) {
+    for (const engine of [w.engine, w.makeEngine(new ScriptedModelClient([]))]) {
       expect(engine.snapshot()).toBeNull();
       expect(engine.replay(0)).toBeNull();
       expect(await engine.remove()).toBe(false);

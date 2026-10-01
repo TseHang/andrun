@@ -263,7 +263,7 @@ Not applicable:
 | 0 | Scaffold + contract, by the commander: packages, `protocol.ts`, `ports.ts`, `sandbox/container.ts`, `worker/types.ts`, test doubles (`node-sql`, `fake-container`, `tarball`), all acceptance tests | — | ✅ done |
 | 1 | Core `SandboxLostError`, `session/coalesce.ts`, `session/frames.ts`, `session/store.ts`, lint rule | S5, S15 (frames), store edge cases, S9 (tool layer), boundary | ✅ done |
 | 2 | `sandbox/cloudflare-sandbox.ts` | S7, S8, start timeout, loss detection | ✅ done |
-| 3 | `session/engine.ts`, `session/workspace.ts` | S1–S4, S6, S9–S13 (engine), tarball failure, oversized changes | ⏳ pending |
+| 3 | `session/engine.ts`, `session/workspace.ts` | S1–S4, S6, S9–S13 (engine), tarball failure, oversized changes | ✅ done |
 | 4 | `worker/router.ts` | S13 (API), S14, S15 (HTTP), unknown routes | ⏳ pending |
 | 5 | DO shells, `worker/index.ts`, `worker/repo.ts`, `wrangler.jsonc`, `Dockerfile`, debug page, fake SSE server | Local runtime (`wrangler dev` + Docker + fake SSE) | ⏳ pending |
 | 6 | Deploy + runtime checks on the public URL (asks Henry first) | S16, S17, spike items 1–2 | ⏳ pending |
@@ -272,3 +272,5 @@ Build notes:
 - The edge case "two tabs" is tested as "every persisted event is broadcast once, in order" (inside S1's test). The engine has one `broadcast` port; fanning out to several sockets is the Durable Object shell, which only runs in workerd, so two tabs are a runtime check.
 - S6, `budget_exceeded`: the budget is per session (spec §6), so a message after `budget_exceeded` is accepted and shown, but the new turn stops again at once without a model call. The test asserts this instead of "the next model request ends with that message".
 - Client-frame parsing lives in `src/session/frames.ts`, so `protocol.ts` stays types and constants only for the web app to import.
+- Unit 3 review, two mistakes in the commander's own tests, fixed with no change to the spec's meaning: (1) the `atGate()` helper overwrote the engine factory with the engine instance, so three tests could not run; (2) S2, S3 and S4 expected Approve to produce `approval_resolved` → `status(done)`, but the core's `resume()` always passes through `running` first (D6: `awaiting_approval → running → done`). The implementer had made the engine drop that event to satisfy the tests; the commander removed that and corrected the tests to expect `approval_resolved`, `status(running)`, `status(done)`.
+- Unit 3: a message that arrives in the short window after a pause was checkpointed and before the run segment finished cleaning up is answered with `rejected` ("the previous run is still finishing, try again"). Messages queued but never drained are injected at the first step of the next run.
