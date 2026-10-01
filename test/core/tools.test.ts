@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { LocalSandbox } from "../../eval/local-sandbox";
 import { MAX_FILE_BYTES, executeTool, summarizeCall, toolSpecs } from "../../src/core/tools";
-import type { ToolName } from "../../src/core/types";
+import { SandboxLostError, type SandboxAdapter, type ToolName } from "../../src/core/types";
 
 const FIXTURE = join(import.meta.dirname, "../../eval/fixtures/sum-off-by-one");
 const CODE_TOOLS: ToolName[] = ["list_files", "read_file", "write_file", "apply_patch", "run_command", "finish"];
@@ -160,5 +160,24 @@ describe("tools", () => {
     for (const s of specs) expect(s.parameters).toMatchObject({ type: "object" });
     expect(summarizeCall("read_file", { path: "src/sum.js" })).toBe("Read src/sum.js");
     expect(summarizeCall("run_command", { command: "npm test" })).toBe("Run npm test");
+  });
+
+  it("SandboxLostError is rethrown, not fed back", async () => {
+    const lost: SandboxAdapter = {
+      exec: () => Promise.reject(new SandboxLostError("the sandbox was lost while running the command")),
+      readFile: () => Promise.reject(new SandboxLostError()),
+      writeFile: (path, content) => sandbox.writeFile(path, content),
+      listFiles: (dir) => sandbox.listFiles(dir),
+      applyPatch: (patch) => sandbox.applyPatch(patch),
+      diff: (path) => sandbox.diff(path),
+    };
+    const ctx = { sandbox: lost, allowed: CODE_TOOLS, timeoutMs: 30_000 };
+
+    await expect(executeTool({ name: "run_command", rawArgs: JSON.stringify({ command: "npm test" }) }, ctx)).rejects.toBeInstanceOf(
+      SandboxLostError,
+    );
+    await expect(executeTool({ name: "read_file", rawArgs: JSON.stringify({ path: "src/sum.js" }) }, ctx)).rejects.toThrow(/sandbox/i);
+    // Ordinary failures are still tool results the model can react to.
+    expect(await run("read_file", { path: "missing.js" })).toMatchObject({ ok: false });
   });
 });

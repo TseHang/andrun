@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const CORE = join(import.meta.dirname, "../../src/core");
+const SESSION = join(import.meta.dirname, "../../src/session");
 const NODE_BUILTINS = ["fs", "path", "child_process", "os", "crypto", "http", "https", "stream", "url", "util"];
 
 function coreFiles(dir = CORE): string[] {
@@ -12,8 +13,11 @@ function coreFiles(dir = CORE): string[] {
 }
 
 describe("S13: core is platform-free (D1)", () => {
-  it("src/core has no platform imports", () => {
-    const files = coreFiles();
+  it.each([
+    ["src/core", CORE],
+    ["src/session", SESSION],
+  ])("%s has no platform imports", (_name, dir) => {
+    const files = coreFiles(dir);
     expect(files.length).toBeGreaterThan(0);
     const offenders: string[] = [];
     for (const file of files) {

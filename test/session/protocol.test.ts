@@ -1,0 +1,49 @@
+import { describe, expect, it } from "vitest";
+import { MAX_TASK_CHARS } from "../../src/session/protocol";
+import { parseClientFrame, titleOf } from "../../src/session/frames";
+
+const parse = (v: unknown) => parseClientFrame(typeof v === "string" ? v : JSON.stringify(v));
+
+describe("S15: client frames are validated", () => {
+  it("parses client frames and rejects the rest", () => {
+    expect(parse({ type: "approve", approvalId: "a1" })).toEqual({ ok: true, frame: { type: "approve", approvalId: "a1" } });
+    expect(parse({ type: "reject", approvalId: "a1", comment: "add a test" })).toEqual({
+      ok: true,
+      frame: { type: "reject", approvalId: "a1", comment: "add a test" },
+    });
+    expect(parse({ type: "message", text: "also rename the helper" })).toEqual({
+      ok: true,
+      frame: { type: "message", text: "also rename the helper" },
+    });
+    // Unknown fields are dropped, not passed on.
+    expect(parse({ type: "approve", approvalId: "a1", admin: true })).toEqual({ ok: true, frame: { type: "approve", approvalId: "a1" } });
+
+    const bad: unknown[] = [
+      "not json",
+      "[]",
+      "null",
+      { type: "nope" },
+      { type: "approve" },
+      { type: "approve", approvalId: 7 },
+      { type: "reject", approvalId: "a1" },
+      { type: "reject", approvalId: "a1", comment: "   " },
+      { type: "message" },
+      { type: "message", text: "" },
+      { type: "message", text: "x".repeat(MAX_TASK_CHARS + 1) },
+    ];
+    for (const v of bad) {
+      const r = parse(v);
+      expect(r.ok, JSON.stringify(v)).toBe(false);
+      if (!r.ok) expect(r.reason.length).toBeGreaterThan(0);
+    }
+    expect(parseClientFrame(new ArrayBuffer(4)).ok).toBe(false);
+    expect(parse({ type: "message", text: "x".repeat(MAX_TASK_CHARS) }).ok).toBe(true);
+  });
+
+  it("titles are the first 80 characters of the task on one line", () => {
+    expect(titleOf("make the failing test pass")).toBe("make the failing test pass");
+    expect(titleOf("  fix\nthe   bug  ")).toBe("fix the bug");
+    const long = "a".repeat(100);
+    expect(titleOf(long)).toBe("a".repeat(80));
+  });
+});
