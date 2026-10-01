@@ -262,7 +262,7 @@ Not applicable:
 |---|---|---|---|
 | 0 | Scaffold + contract, by the commander: packages, `protocol.ts`, `ports.ts`, `sandbox/container.ts`, `worker/types.ts`, test doubles (`node-sql`, `fake-container`, `tarball`), all acceptance tests | — | ✅ done |
 | 1 | Core `SandboxLostError`, `session/coalesce.ts`, `session/frames.ts`, `session/store.ts`, lint rule | S5, S15 (frames), store edge cases, S9 (tool layer), boundary | ✅ done |
-| 2 | `sandbox/cloudflare-sandbox.ts` | S7, S8, start timeout, loss detection | ⏳ pending |
+| 2 | `sandbox/cloudflare-sandbox.ts` | S7, S8, start timeout, loss detection | ✅ done |
 | 3 | `session/engine.ts`, `session/workspace.ts` | S1–S4, S6, S9–S13 (engine), tarball failure, oversized changes | ⏳ pending |
 | 4 | `worker/router.ts` | S13 (API), S14, S15 (HTTP), unknown routes | ⏳ pending |
 | 5 | DO shells, `worker/index.ts`, `worker/repo.ts`, `wrangler.jsonc`, `Dockerfile`, debug page, fake SSE server | Local runtime (`wrangler dev` + Docker + fake SSE) | ⏳ pending |
