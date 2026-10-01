@@ -1,0 +1,4 @@
+# Copy to .dev.vars (git-ignored). Used by `pnpm dev` (wrangler dev).
+# For a zero-cost local run, start `pnpm fake-model` and use the two lines below as they are.
+AIAND_API_KEY=fake
+AIAND_BASE_URL=http://localhost:8788

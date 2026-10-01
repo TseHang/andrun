@@ -264,8 +264,8 @@ Not applicable:
 | 1 | Core `SandboxLostError`, `session/coalesce.ts`, `session/frames.ts`, `session/store.ts`, lint rule | S5, S15 (frames), store edge cases, S9 (tool layer), boundary | ✅ done |
 | 2 | `sandbox/cloudflare-sandbox.ts` | S7, S8, start timeout, loss detection | ✅ done |
 | 3 | `session/engine.ts`, `session/workspace.ts` | S1–S4, S6, S9–S13 (engine), tarball failure, oversized changes | ✅ done |
-| 4 | `worker/router.ts` | S13 (API), S14, S15 (HTTP), unknown routes | ⏳ pending |
-| 5 | DO shells, `worker/index.ts`, `worker/repo.ts`, `wrangler.jsonc`, `Dockerfile`, debug page, fake SSE server | Local runtime (`wrangler dev` + Docker + fake SSE) | ⏳ pending |
+| 4 | `worker/router.ts` | S13 (API), S14, S15 (HTTP), unknown routes | ✅ done |
+| 5 | DO shells, `worker/index.ts`, `worker/repo.ts`, `wrangler.jsonc`, `Dockerfile`, debug page, fake SSE server | Local runtime (`wrangler dev` + Docker + fake SSE) | 🔨 in progress: `wrangler.jsonc`, `Dockerfile`, `.dev.vars.example`, fake SSE server written; DO shells, `index.ts`, `repo.ts`, debug page, worker tsconfig still to do |
 | 6 | Deploy + runtime checks on the public URL (asks Henry first) | S16, S17, spike items 1–2 | ⏳ pending |
 
 Build notes:
