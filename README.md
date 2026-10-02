@@ -4,7 +4,8 @@ A Codex-style coding workspace on Cloudflare. You give it a task and a repo. An 
 
 **Status**:
 - Phase 1 (the agent loop, plus an eval against real models) is done.
-- Phase 2 (Durable Objects, the Cloudflare Sandbox, the deployed URL) is next.
+- Phase 2 (Durable Objects, the Cloudflare Sandbox, a debug page over the event stream) is deployed: https://andrun.mengtse-hang.workers.dev
+- Phase 3 (the workspace UI) is next.
 
 ## Quick start
 
@@ -34,10 +35,50 @@ pnpm eval --runs 3 --max-cost 10           # the full acceptance run
 
 Baseline on 2026-09-30 (flash, 5 cases × 1): **5/5 pass, 5.6 steps on average, ¥1.22 total.**
 
+### Run the Worker locally
+
+Needs Docker running (the sandbox is a container). No ai& key and no cost: a fake model server plays a fixed script.
+
+```sh
+cp .dev.vars.example .dev.vars
+pnpm fake-model                      # terminal 1: fake OpenAI-compatible SSE server on :8788
+pnpm dev                             # terminal 2: wrangler dev on :8787, open it for the debug page
+pnpm smoke                           # terminal 3: create → gate → replay → reject → approve → delete
+pnpm smoke --flow kill               # kill the sandbox mid-run → failed → message → rebuilt
+```
+
+To use the real model locally, put your ai& key and base URL in `.dev.vars` instead.
+
+### Deploy
+
+```sh
+pnpm exec wrangler secret put AIAND_API_KEY
+pnpm run deploy
+pnpm smoke https://<your-worker>.workers.dev      # one real session: costs tokens
+```
+
+The repo the agent works on is set by `DEMO_REPO` and `DEMO_SHA` in `wrangler.jsonc`. `KILL_SWITCH="1"` stops new sessions.
+
+## Known limits: what a rebuilt sandbox does and does not bring back
+
+A sandbox container is stopped after 15 idle minutes, on `done` and on `failed`. It is not rebuilt when the session wakes up; it is rebuilt the next time the agent needs it (for example after a Reject or a new message). Approving a finish needs no sandbox, so it never rebuilds one.
+
+A rebuild starts from the repo at the pinned commit and writes the saved changes back. The limits:
+
+- **Only file contents come back.** Background processes, `/tmp`, and anything git ignores (such as `node_modules`) start empty.
+- **Files over 1 MB and binary files are not saved.** After a rebuild they are missing, and the restore note in the timeline names them.
+- **Changes are saved when the agent edits a file** (`write_file`, `apply_patch`) **and when a run pauses or ends.** A file changed only by a command is saved at the next of those points. If the sandbox dies before that, the change is lost and the run ends as `failed`.
+
+The UI must not suggest more than this: a restored workspace is "your file changes on a fresh checkout", not "the same machine". The full list of limits and open items is in [docs/limits.md](docs/limits.md).
+
 ## Layout
 
 ```
 src/core/     the agent: loop, tools, modes, policy, model client, events (no platform imports)
+src/session/  session state machine, SQLite store, wire protocol (no platform imports)
+src/sandbox/  the sandbox adapter over a Cloudflare container
+src/worker/   Worker router and the two Durable Objects (thin shells over src/session)
+public/       the debug page (Phase 2)
 eval/         eval runner, local sandbox, YAML cases, fixture repos
 test/         Vitest suites and test doubles
 spike/        throwaway Sandbox SDK 1.0 spike (not part of the app)
@@ -50,6 +91,7 @@ docs/         architecture decision, flow diagram, per-phase checklists
 - [System flow diagram](docs/architecture/web-codex-flow.html)
 - [Sandbox 1.0 spike findings](docs/architecture/spike-sandbox-1.0.md)
 - [Phase 1 checklist](docs/features/core-loop/core-loop-implementation-checklist.md)
+- [Phase 2 checklist](docs/features/session-do/session-do-implementation-checklist.md)
 
 ## Why a loop, not a graph
 

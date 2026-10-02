@@ -37,6 +37,10 @@
 5. **An aborted exec reports exit 137.** The adapter should map an abort to `timedOut: true`, not to a normal non-zero exit.
 6. **`wrangler containers delete` rejects the ID that `wrangler containers list` prints** for DO-scheduled apps. `cf containers applications delete <id> --force` works. The delete-session flow (D18) uses `container.destroy()` in code, so it is not affected.
 
-## Still open (Phase 2 will show)
-- Whether the DO can hibernate (WebSocket hibernation) while its container is running, and how `setInactivityTimeout(15 min)` interacts with that. The spike called it without error but didn't wait 15 minutes.
-- Cold-start time after a long idle period, as opposed to after a deploy.
+## Answered in Phase 2 (deployed, 2026-10-02)
+- **The DO can hibernate while its container is running.** A session at the approval gate with one WebSocket open was left idle for 5.5 minutes: the Durable Object was evicted and rebuilt (`bootId` changed), the socket stayed open, the container kept running, and a later frame was answered. The inactivity timeout belongs to the object instance, so the constructor sets it again when it finds the container running.
+- **The 15 minute inactivity timeout stops the container** also after an eviction (checked 16.5 minutes after the last request).
+- **Cold start after a long idle period is short.** About 50 minutes after the container was reclaimed, a rebuild (start, tarball, saved changes) took 1.7 s, with the container ready in 0.6 s. The ~11 s cold start is the first start after a deploy.
+- **Image `ENV` does not reach processes started with `exec`**: `env` inside the sandbox prints only `HOME`, `PATH` and `PWD`. Settings a tool needs go into its own config file in the image.
+- **`start()` can be accepted and still never run a container.** `exec` then fails with "cannot be called on a container that is not running" until a timeout. Only `monitor()` reports why, at the price of keeping the Durable Object in memory for up to 15 minutes. Seen once on one session; a retry after the next deploy worked.
+- `wrangler containers info` instance counts lag behind the real state.

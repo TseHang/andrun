@@ -3,8 +3,13 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "lib": ["ES2022", "DOM"],
-    "types": ["node"],
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
+    "types": [
+      "node"
+    ],
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "skipLibCheck": true,
@@ -12,5 +17,16 @@
     "resolveJsonModule": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["src", "eval", "test", "*.config.ts"]
+  "include": [
+    "src",
+    "eval",
+    "test",
+    "*.config.ts"
+  ],
+  "exclude": [
+    "src/worker/index.ts",
+    "src/worker/env.ts",
+    "src/worker/session-do.ts",
+    "src/worker/workspace-do.ts"
+  ]
 }

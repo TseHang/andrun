@@ -4,20 +4,27 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.worker.json",
     "lint": "eslint src eval test",
-    "eval": "tsx eval/run.ts"
+    "eval": "tsx eval/run.ts",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "fake-model": "tsx test/support/fake-sse-server.ts",
+    "smoke": "tsx test/support/smoke.ts"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261001.1",
     "@types/node": "^26.6.3",
     "@types/picomatch": "^4.0.3",
     "eslint": "^10.11.0",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.71.0",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.2",
+    "wrangler": "4.144.0"
   },
   "dependencies": {
+    "@cloudflare/sandbox": "1.0.0",
     "picomatch": "^4.0.7",
     "yaml": "^2.9.1"
   }

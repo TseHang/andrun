@@ -55,6 +55,14 @@ export class ModelError extends Error {
 
 // ---------- Sandbox ----------
 
+/** The sandbox is gone (container stopped or destroyed). Ends the run as `failed` instead of going back to the model. */
+export class SandboxLostError extends Error {
+  constructor(message = "the sandbox was lost") {
+    super(message);
+    this.name = "SandboxLostError";
+  }
+}
+
 export interface ExecOptions {
   onOutput?: (stream: "stdout" | "stderr", chunk: string) => void;
   timeoutMs?: number;

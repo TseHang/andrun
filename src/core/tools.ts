@@ -2,7 +2,7 @@
 
 import { TOOL_OUTPUT_CAP, capToolOutput } from "./context";
 import { pathsInPatch } from "./diff";
-import type { Finding, SandboxAdapter, ToolName, ToolSpec } from "./types";
+import { SandboxLostError, type Finding, type SandboxAdapter, type ToolName, type ToolSpec } from "./types";
 
 export const MAX_FILE_BYTES = 1_000_000;
 
@@ -152,6 +152,7 @@ export async function executeTool(call: { name: string; rawArgs: string }, ctx: 
   try {
     return await run(name, args, ctx);
   } catch (e) {
+    if (e instanceof SandboxLostError) throw e;
     if (e instanceof InvalidArgs) return fail(`invalid arguments: ${e.message}`);
     return fail(message(e));
   }

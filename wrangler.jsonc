@@ -1,0 +1,49 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "andrun",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-09-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  // The page (Phase 2: a debug page; Phase 3: the SPA). Requests that match no file reach the Worker.
+  "assets": { "directory": "./public" },
+
+  "durable_objects": {
+    "bindings": [
+      { "name": "SESSION", "class_name": "SessionDO" },
+      { "name": "WORKSPACE", "class_name": "WorkspaceDO" }
+    ]
+  },
+  "exports": {
+    "SessionDO": { "type": "durable-object", "storage": "sqlite" },
+    "WorkspaceDO": { "type": "durable-object", "storage": "sqlite" }
+  },
+
+  // One container per SessionDO (ADR D5). `max_instances` is not allowed with this policy, so the
+  // cap on containers is the rate limit on session create plus KILL_SWITCH (spike finding 2).
+  // The policy cannot be rolled back for a class once deployed.
+  "containers": [
+    {
+      "class_name": "SessionDO",
+      "scheduling_policy": "durable_object",
+      "images": { "sandbox": { "dockerfile": "./Dockerfile" } }
+    }
+  ],
+
+  // Per IP (ADR D14).
+  "ratelimits": [
+    { "name": "CREATE_LIMITER", "namespace_id": "1001", "simple": { "limit": 5, "period": 60 } },
+    { "name": "DELETE_LIMITER", "namespace_id": "1002", "simple": { "limit": 10, "period": 60 } }
+  ],
+
+  // Not secret. AIAND_API_KEY is a Worker secret (`wrangler secret put`). For local dev the
+  // git-ignored .dev.vars sets the key and overrides AIAND_BASE_URL.
+  "vars": {
+    "AIAND_BASE_URL": "https://api.aiand.com/v1",
+    "DEBUG_ENDPOINTS": "1",
+    "DEMO_REPO": "TseHang/andrun-demo",
+    "DEMO_SHA": "0df6f53ec8a51785899d574c43db212513347537",
+    "KILL_SWITCH": "0"
+  },
+}

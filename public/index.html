@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>&amp;run — debug</title>
+    <link rel="icon" href="data:," />
+    <style>
+      body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; color: #111; }
+      h1 { font-size: 16px; margin: 0 0 12px; }
+      .row { display: flex; gap: 8px; margin: 8px 0; flex-wrap: wrap; align-items: center; }
+      input[type="text"] { flex: 1; min-width: 240px; padding: 4px 6px; font: inherit; }
+      button { font: inherit; padding: 4px 10px; }
+      #sessions { margin: 8px 0; padding: 0; list-style: none; }
+      #sessions li { display: flex; gap: 8px; align-items: center; padding: 2px 0; }
+      #sessions a { cursor: pointer; text-decoration: underline; }
+      #state { font-weight: 600; }
+      #log { background: #f4f4f4; border: 1px solid #ccc; padding: 8px; height: 55vh; overflow: auto;
+             font: 12px/1.4 ui-monospace, monospace; white-space: pre-wrap; word-break: break-all; }
+      .error { color: #b00020; }
+      .muted { color: #666; }
+    </style>
+  </head>
+  <body>
+    <h1>&amp;run — debug page (Phase 2). Raw event stream of one session.</h1>
+
+    <div class="row">
+      <input id="task" type="text" value="make the failing test pass" maxlength="4000" />
+      <button id="create">Create session</button>
+      <button id="refresh">Refresh list</button>
+    </div>
+    <ul id="sessions"></ul>
+
+    <div class="row">
+      <span>Session: <code id="sid">none</code></span>
+      <span>Status: <span id="state">—</span></span>
+      <span>Socket: <span id="socket">closed</span></span>
+      <span class="muted">lastSeq <span id="seq">0</span></span>
+    </div>
+    <div class="row">
+      <button id="approve" disabled>Approve</button>
+      <input id="text" type="text" placeholder="reject comment, or a message to the agent" maxlength="4000" />
+      <button id="reject" disabled>Reject</button>
+      <button id="send">Send message</button>
+      <button id="kill">Kill sandbox</button>
+    </div>
+    <div id="log"></div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      let ws = null;
+      let sessionId = null;
+      let lastSeq = 0;
+      let pendingId = null;
+      let deltaLine = null;
+
+      function line(text, cls) {
+        const el = document.createElement("div");
+        if (cls) el.className = cls;
+        el.textContent = text;
+        $("log").appendChild(el);
+        $("log").scrollTop = $("log").scrollHeight;
+        return el;
+      }
+
+      function setPending(id) {
+        pendingId = id;
+        $("approve").disabled = $("reject").disabled = !id;
+      }
+
+      // The page keeps no state of its own: everything shown is reduced from the event stream.
+      function onFrame(frame) {
+        if (frame.type === "message_delta") {
+          if (!deltaLine) deltaLine = line("… ", "muted");
+          deltaLine.textContent += frame.text;
+          return;
+        }
+        deltaLine = null;
+        if (frame.type === "rejected") return void line("rejected: " + frame.reason, "error");
+        if (typeof frame.seq === "number") {
+          lastSeq = Math.max(lastSeq, frame.seq);
+          $("seq").textContent = String(lastSeq);
+        }
+        if (frame.type === "status") $("state").textContent = frame.status;
+        if (frame.type === "approval_required") setPending(frame.approvalId);
+        if (frame.type === "approval_resolved") setPending(null);
+        line(JSON.stringify(frame), frame.type === "error" ? "error" : "");
+      }
+
+      function connect() {
+        if (!sessionId) return;
+        const proto = location.protocol === "https:" ? "wss:" : "ws:";
+        const socket = new WebSocket(`${proto}//${location.host}/sessions/${sessionId}/ws?lastSeq=${lastSeq}`);
+        ws = socket;
+        socket.onopen = () => ($("socket").textContent = "open");
+        socket.onmessage = (e) => onFrame(JSON.parse(e.data));
+        socket.onclose = (e) => {
+          if (ws !== socket) return;
+          $("socket").textContent = `closed (${e.code})`;
+          // 1000 = the session was deleted; anything else: reconnect and replay from lastSeq.
+          if (e.code !== 1000) setTimeout(connect, 1000);
+        };
+      }
+
+      function open(id) {
+        if (ws) { const old = ws; ws = null; old.close(); }
+        sessionId = id;
+        lastSeq = 0;
+        deltaLine = null;
+        setPending(null);
+        $("log").textContent = "";
+        $("sid").textContent = id;
+        $("state").textContent = "—";
+        $("seq").textContent = "0";
+        location.hash = id;
+        connect();
+      }
+
+      async function api(method, path, body) {
+        const res = await fetch(path, {
+          method,
+          headers: body ? { "content-type": "application/json" } : {},
+          body: body ? JSON.stringify(body) : undefined,
+        });
+        const data = res.status === 204 ? null : await res.json().catch(() => null);
+        if (!res.ok) line(`${method} ${path} → ${res.status} ${data && data.error ? data.error : ""}`, "error");
+        return res.ok ? data : null;
+      }
+
+      async function refresh() {
+        const rows = (await api("GET", "/sessions")) || [];
+        $("sessions").textContent = "";
+        for (const row of rows) {
+          const li = document.createElement("li");
+          const a = document.createElement("a");
+          a.textContent = `${row.title} [${row.status}]`;
+          a.onclick = () => open(row.id);
+          const del = document.createElement("button");
+          del.textContent = "Delete";
+          del.onclick = async () => {
+            if (!confirm("Delete this session?")) return;
+            await api("DELETE", `/sessions/${row.id}`);
+            refresh();
+          };
+          li.append(a, del);
+          $("sessions").appendChild(li);
+        }
+      }
+
+      const send = (frame) => {
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(frame));
+        else line("socket is not open", "error");
+      };
+
+      $("create").onclick = async () => {
+        const created = await api("POST", "/sessions", { mode: "code", task: $("task").value });
+        if (created) { open(created.id); refresh(); }
+      };
+      $("refresh").onclick = refresh;
+      $("approve").onclick = () => send({ type: "approve", approvalId: pendingId });
+      $("reject").onclick = () => send({ type: "reject", approvalId: pendingId, comment: $("text").value });
+      $("send").onclick = () => send({ type: "message", text: $("text").value });
+      $("kill").onclick = () => sessionId && api("POST", `/sessions/${sessionId}/debug/kill-sandbox`);
+
+      refresh();
+      if (location.hash.length > 1) open(location.hash.slice(1));
+    </script>
+  </body>
+</html>
