@@ -36,6 +36,10 @@ export class SessionEngine {
   private controller: AbortController | null = null;
   private queued: string[] = [];
   private deleted = false;
+  /** Frames waiting for a segment that is winding down. */
+  private deferred = 0;
+  /** The status last emitted in this object's lifetime; the core's reaches SQLite only at its next checkpoint. */
+  private liveStatus: AgentState["status"] | null = null;
   private reconcileChain: Promise<void> = Promise.resolve();
   private readonly upserts = new Set<Promise<void>>();
 
@@ -91,10 +95,20 @@ export class SessionEngine {
     if (!state) return reply({ type: "rejected", reason: "no such session" });
     const { frame } = parsed;
 
+    // The gate (or the end of a run) is broadcast while its segment is still saving changes; a frame
+    // that arrives in that window waits for the segment instead of being refused.
+    if (this.inflight && (this.liveStatus ?? state.status) !== "running") {
+      this.deferred++;
+      void this.inflight.then(() => {
+        this.deferred--;
+        this.handleFrame(raw, reply);
+      });
+      return;
+    }
+
     if (frame.type === "message") {
       if (this.inflight) {
-        if (state.status === "running") this.queued.push(frame.text);
-        else reply({ type: "rejected", reason: "the previous run is still finishing, try again" });
+        this.queued.push(frame.text);
         return;
       }
       if (state.status !== "awaiting_approval") return this.newTurn(state, frame.text);
@@ -139,8 +153,9 @@ export class SessionEngine {
   }
 
   async idle(): Promise<void> {
-    while (this.inflight || this.upserts.size > 0) {
+    while (this.inflight || this.upserts.size > 0 || this.deferred > 0) {
       await Promise.all([this.inflight, ...this.upserts]);
+      if (this.deferred > 0) await Promise.resolve();
     }
   }
 
@@ -201,6 +216,7 @@ export class SessionEngine {
     const state = this.store.loadState();
     if (!state) return;
     state.status = status;
+    this.liveStatus = status;
     this.emitFor(state, { type: "status", status });
     this.store.saveState(state, this.now());
     this.upsertIndex(status);
@@ -225,6 +241,7 @@ export class SessionEngine {
 
   /** What the core emits. Its status changes reach the index here; its file changes trigger a reconcile. */
   private onCoreEvent(event: AgentEvent): void {
+    if (event.type === "status") this.liveStatus = event.status;
     this.coalescer.push(event);
     if (event.type === "status") this.upsertIndex(event.status);
     if (event.type === "file_changed") void this.queueReconcile();

@@ -333,6 +333,33 @@ describe("S3: approve and reject work over the socket", () => {
     }
   });
 
+  it("a decision sent the instant the gate appears is applied, not refused", async () => {
+    // Found at runtime: the gate is broadcast while the run segment is still saving changes.
+    const w = world();
+    const replies: ServerFrame[] = [];
+    const ref: { engine?: SessionEngine } = {};
+    let approvalId = "";
+    const engine = (ref.engine = w.engine(new ScriptedModelClient(HAPPY()), {
+      broadcast: (frame) => {
+        w.frames.push(frame);
+        if (frame.type === "approval_required") approvalId = frame.approvalId;
+        if (frame.type === "status" && frame.status === "awaiting_approval") {
+          const approve = JSON.stringify({ type: "approve", approvalId });
+          ref.engine!.handleFrame(approve, (r) => replies.push(r));
+          ref.engine!.handleFrame(approve, (r) => replies.push(r)); // a double click in the same instant
+        }
+      },
+    }));
+    engine.create({ id: ID, mode: "code", task: TASK });
+    await engine.idle();
+
+    expect(engine.snapshot()).toMatchObject({ status: "done", pending: null });
+    expect(ofType(w.events(), "approval_resolved")).toHaveLength(1);
+    expect(replies).toEqual([{ type: "rejected", reason: "no such pending approval" }]);
+    // The changes were still saved before the decision was applied.
+    expect(w.store().changes().map((c) => c.path)).toEqual(["src/sum.js"]);
+  });
+
   it("refuses frames it cannot parse and keeps going", async () => {
     const { engine, events } = await atGate();
     const before = events();

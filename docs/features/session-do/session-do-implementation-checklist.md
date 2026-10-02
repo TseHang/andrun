@@ -225,7 +225,7 @@ Secrets: `AIAND_API_KEY` (Worker secret / `.dev.vars`). `AIAND_BASE_URL` is a va
 ### S17: Test D on the deployed URL
 **Given** a deployed session whose agent is in the middle of `run_command`
 **When** `POST /sessions/:id/debug/kill-sandbox` is called (it calls `container.destroy()`)
-**Then** within 5 s the debug page shows `error{source:"sandbox"}` and `status: failed`. `GET /sessions` shows `failed`. Sending a message afterwards rebuilds the sandbox and continues.
+**Then** the debug page shows `error{source:"sandbox"}` and `status: failed`: within 5 s when a command was running, otherwise as soon as the agent next touches the sandbox (see Build notes). `GET /sessions` shows `failed`. Sending a message afterwards rebuilds the sandbox and continues.
 **Test**: Runtime — deployed URL, with the fake SSE flow repeated locally first.
 
 ## Edge Cases
@@ -265,7 +265,7 @@ Not applicable:
 | 2 | `sandbox/cloudflare-sandbox.ts` | S7, S8, start timeout, loss detection | ✅ done |
 | 3 | `session/engine.ts`, `session/workspace.ts` | S1–S4, S6, S9–S13 (engine), tarball failure, oversized changes | ✅ done |
 | 4 | `worker/router.ts` | S13 (API), S14, S15 (HTTP), unknown routes | ✅ done |
-| 5 | DO shells, `worker/index.ts`, `worker/repo.ts`, `wrangler.jsonc`, `Dockerfile`, debug page, fake SSE server | Local runtime (`wrangler dev` + Docker + fake SSE) | 🔨 in progress: `wrangler.jsonc`, `Dockerfile`, `.dev.vars.example`, fake SSE server written; DO shells, `index.ts`, `repo.ts`, debug page, worker tsconfig still to do |
+| 5 | DO shells, `worker/index.ts`, `worker/repo.ts`, `wrangler.jsonc`, `Dockerfile`, debug page, fake SSE server, `pnpm smoke` (taken over by the commander: it needs `wrangler dev` iterations) | Local runtime (`wrangler dev` + Docker + fake SSE) | ✅ done |
 | 6 | Deploy + runtime checks on the public URL (asks Henry first) | S16, S17, spike items 1–2 | ⏳ pending |
 
 Build notes:
@@ -274,3 +274,11 @@ Build notes:
 - Client-frame parsing lives in `src/session/frames.ts`, so `protocol.ts` stays types and constants only for the web app to import.
 - Unit 3 review, two mistakes in the commander's own tests, fixed with no change to the spec's meaning: (1) the `atGate()` helper overwrote the engine factory with the engine instance, so three tests could not run; (2) S2, S3 and S4 expected Approve to produce `approval_resolved` → `status(done)`, but the core's `resume()` always passes through `running` first (D6: `awaiting_approval → running → done`). The implementer had made the engine drop that event to satisfy the tests; the commander removed that and corrected the tests to expect `approval_resolved`, `status(running)`, `status(done)`.
 - Unit 3: a message that arrives in the short window after a pause was checkpointed and before the run segment finished cleaning up is answered with `rejected` ("the previous run is still finishing, try again"). Messages queued but never drained are injected at the first step of the next run.
+- Unit 5 runtime bug, fixed with a regression test first ("a decision sent the instant the gate appears is applied, not refused"): the gate is broadcast while its run segment is still saving `changes`, so an Approve sent at once was refused. Frames that arrive in that window now wait for the segment. This replaces the earlier "still finishing, try again" refusal.
+- `AIAND_BASE_URL` is a Worker secret, not a var as the Technical Notes say: `.env.example` leaves it blank on purpose, so it is kept out of the public `wrangler.jsonc`.
+- S17 timing, measured locally: when the sandbox is killed while a command runs, `failed` shows within about 0.1 s. When it is killed while the model is answering, `failed` shows when the agent next touches the sandbox (8 s with the fake model's `[slow]` delay), not within 5 s. Detecting it sooner needs `container.monitor()`, which keeps the Durable Object in memory and would block hibernation at the gate, so it is left out.
+
+Runtime verification, local (2026-10-02, `wrangler dev` 4.144.0 + Docker + `pnpm fake-model`, no cost):
+- `pnpm smoke` (happy flow): create → "Starting sandbox…" step → streamed deltas → `file_changed` → gate with diff summary → replay from `lastSeq=0` equals the live history (29 events, no deltas) → partial replay → stale approval refused → reject + comment → second gate → approve → `done` on two sockets → index shows `done` → container destroyed → delete `204`, then `404`, socket closed with 1000. All checks passed. Sandbox ready in 0.6 s locally.
+- `pnpm smoke --flow kill`: kill mid-run → `error{source:"sandbox"}` + `failed` 75 ms later → index shows `failed` → message → sandbox rebuilt (second `sandbox_setup`) → gate. All checks passed.
+- Browser (Playwright) on the debug page: Create → gate → page reload → same history and `lastSeq` (67), Approve enabled → Approve → `done`. No console errors except a missing favicon, since fixed.
