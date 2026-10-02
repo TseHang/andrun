@@ -195,7 +195,7 @@ export class CloudflareSandboxAdapter implements SandboxHost {
         const image = typeof this.image === "function" ? this.image() : this.image;
         this.container.start({ ...(image !== undefined ? { image } : {}), enableInternet: false });
       }
-      await this.waitUntilReady(t0);
+      await this.waitUntilReady(t0, started);
       const readyMs = Date.now() - t0;
       // Set once the container answers: right after start() the platform may not know it yet.
       if (started) await this.guard("set idle timeout", () => this.container.setInactivityTimeout(this.inactivityMs));
@@ -218,10 +218,19 @@ export class CloudflareSandboxAdapter implements SandboxHost {
     });
   }
 
-  private async waitUntilReady(t0: number): Promise<void> {
+  private async waitUntilReady(t0: number, started: boolean): Promise<void> {
     const deadline = t0 + this.startTimeoutMs;
     let last = "the readiness probe failed";
+    // start() returns before the container runs; only monitor() says why one never did.
+    let startError: string | undefined;
+    if (started) {
+      this.container.monitor?.().then(
+        () => {},
+        (e: unknown) => (startError = e instanceof Error ? e.message : String(e)),
+      );
+    }
     for (;;) {
+      if (startError !== undefined) throw new SandboxLostError(`the sandbox did not start: ${startError}`);
       try {
         const proc = await this.container.exec(["true"], { stdout: "ignore", stderr: "ignore" });
         const code = await proc.exitCode;

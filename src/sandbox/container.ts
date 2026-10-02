@@ -22,6 +22,8 @@ export interface ContainerLike {
   start(options: { image?: string; enableInternet: boolean }): void;
   destroy(): Promise<void>;
   setInactivityTimeout(durationMs: number): Promise<void>;
+  /** Resolves when the container exits, rejects if it errors or fails to start. */
+  monitor?(): Promise<void>;
   /** Throws when the container is not running or not ready yet. */
   exec(cmd: string[], options?: ExecOptionsLike): Promise<ExecProcessLike>;
 }

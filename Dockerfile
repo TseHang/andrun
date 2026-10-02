@@ -7,7 +7,8 @@ FROM node:22-bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY --from=sandbox-tools /usr/local/bin/sandbox-shim /usr/local/bin/sandbox-shim
 RUN mkdir -p /workspace
-# The sandbox has no network. Without this, npm's update check waits about 10 s for DNS to time out
-# at the end of every `npm test` (seen on the deployed Worker; spike finding 4).
-ENV NPM_CONFIG_UPDATE_NOTIFIER=false NPM_CONFIG_FUND=false NPM_CONFIG_AUDIT=false
+# The sandbox has no network. On the deployed Worker every `npm test` ended about 10 s after its last
+# output, the DNS timeout of spike finding 4, which points at npm's update check. Set in npm's global
+# config rather than ENV: processes started with exec do not get the image's environment.
+RUN npm config set --global update-notifier false && npm config set --global fund false && npm config set --global audit false
 CMD ["sleep", "infinity"]

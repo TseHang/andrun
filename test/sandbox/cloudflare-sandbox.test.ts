@@ -282,6 +282,20 @@ describe("sandbox loss is a SandboxLostError (P2-d)", () => {
     await expect(setup()).rejects.toThrow(/did not become ready within .*: container is not ready/);
   });
 
+  it("a container that fails to start is reported at once, with the platform's reason", async () => {
+    container.failStart = "there is no capacity to start this container";
+    const started = Date.now();
+    const failed = setup();
+    await expect(failed).rejects.toBeInstanceOf(SandboxLostError);
+    await expect(failed).rejects.toThrow(/did not start: there is no capacity to start this container/);
+    expect(Date.now() - started).toBeLessThan(3000); // not the 60 s readiness timeout
+
+    // The next attempt starts from scratch and works.
+    container.failStart = null;
+    await setup();
+    expect(await sandbox.listFiles()).toEqual(FILES);
+  });
+
   it("start timeout throws SandboxLostError", async () => {
     container.neverReady = true;
     sandbox = adapter({ startTimeoutMs: 400 });

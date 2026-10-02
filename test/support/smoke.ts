@@ -96,7 +96,8 @@ async function happy(): Promise<void> {
   await client.status("awaiting_approval");
   const ready = client.events.find((e) => e.type === "tool_output" && e.stream === "result" && e.chunk.startsWith("ready in"));
   log(`sandbox: ${ready && ready.type === "tool_output" ? ready.chunk : "?"}`);
-  check(client.frames.some((f) => f.type === "message_delta"), "assistant text streamed as message_delta");
+  // A real model may answer with tool calls only, so streamed text is reported, not required.
+  log(`note: ${client.frames.filter((f) => f.type === "message_delta").length} message_delta frames`);
   check(client.events.some((e) => e.type === "file_changed"), "a file_changed event carried the diff");
   const gate = client.events.find((e) => e.type === "approval_required");
   log(`gate: ${JSON.stringify(gate && gate.type === "approval_required" ? { summary: gate.summary, diff: gate.diffSummary } : null)}`);

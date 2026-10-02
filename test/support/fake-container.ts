@@ -42,14 +42,20 @@ export class FakeContainer implements ContainerLike {
   startDelayMs = 0;
   /** exec never succeeds after start(). */
   neverReady = false;
+  /** start() is accepted but the container never runs; monitor() rejects with this (seen on the deployed Worker). */
+  failStart: string | null = null;
   /** The most execs that were ever running at once. */
   maxConcurrent = 0;
 
   private readyAt = 0;
+  private exit: Promise<void> = Promise.resolve();
+  private exited: () => void = () => {};
   private readonly children = new Set<ChildProcess>();
 
   start(options: { image?: string; enableInternet: boolean }): void {
     this.starts.push(options);
+    this.exit = new Promise<void>((resolve) => (this.exited = resolve));
+    if (this.failStart !== null) return; // accepted, but it never runs
     this.running = true;
     this.readyAt = Date.now() + this.startDelayMs;
     mkdirSync(this.tmpDir, { recursive: true });
@@ -58,8 +64,16 @@ export class FakeContainer implements ContainerLike {
   async destroy(): Promise<void> {
     this.destroyed++;
     this.running = false;
+    this.exited();
     for (const child of this.children) kill(child);
     for (const entry of readdirSync(this.root)) rmSync(join(this.root, entry), { recursive: true, force: true });
+  }
+
+  /** Resolves when the container exits; rejects when it failed to start. */
+  monitor(): Promise<void> {
+    this.log.push("monitor");
+    if (this.failStart !== null) return Promise.reject(new Error(this.failStart));
+    return this.exit;
   }
 
   async setInactivityTimeout(durationMs: number): Promise<void> {
