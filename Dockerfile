@@ -7,4 +7,7 @@ FROM node:22-bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY --from=sandbox-tools /usr/local/bin/sandbox-shim /usr/local/bin/sandbox-shim
 RUN mkdir -p /workspace
+# The sandbox has no network. Without this, npm's update check waits about 10 s for DNS to time out
+# at the end of every `npm test` (seen on the deployed Worker; spike finding 4).
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false NPM_CONFIG_FUND=false NPM_CONFIG_AUDIT=false
 CMD ["sleep", "infinity"]

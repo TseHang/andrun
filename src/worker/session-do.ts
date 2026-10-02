@@ -76,10 +76,11 @@ export class SessionDO extends DurableObject<Env> {
     this.ctx.waitUntil(this.engine.idle());
   }
 
-  async snapshot(): Promise<(SessionSnapshot & { debug: { bootId: string; containerRunning: boolean } }) | null> {
+  async snapshot(): Promise<(SessionSnapshot & { debug: { bootId: string; containerRunning: boolean; sockets: number } }) | null> {
     const snapshot = this.engine.snapshot();
     if (!snapshot) return null;
-    return { ...snapshot, debug: { bootId: this.bootId, containerRunning: this.ctx.container?.running ?? false } };
+    const debug = { bootId: this.bootId, containerRunning: this.ctx.container?.running ?? false, sockets: this.ctx.getWebSockets().length };
+    return { ...snapshot, debug };
   }
 
   async remove(): Promise<boolean> {
