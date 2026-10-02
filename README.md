@@ -66,10 +66,10 @@ A sandbox container is stopped after 15 idle minutes, on `done` and on `failed`.
 A rebuild starts from the repo at the pinned commit and writes the saved changes back. The limits:
 
 - **Only file contents come back.** Background processes, `/tmp`, and anything git ignores (such as `node_modules`) start empty.
-- **Files over 1 MB are not saved.** After a rebuild they are missing, and the restore note in the timeline names them.
+- **Files over 1 MB and binary files are not saved.** After a rebuild they are missing, and the restore note in the timeline names them.
 - **Changes are saved when the agent edits a file** (`write_file`, `apply_patch`) **and when a run pauses or ends.** A file changed only by a command is saved at the next of those points. If the sandbox dies before that, the change is lost and the run ends as `failed`.
 
-The UI must not suggest more than this: a restored workspace is "your file changes on a fresh checkout", not "the same machine".
+The UI must not suggest more than this: a restored workspace is "your file changes on a fresh checkout", not "the same machine". The full list of limits and open items is in [docs/limits.md](docs/limits.md).
 
 ## Layout
 

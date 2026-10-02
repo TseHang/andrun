@@ -88,6 +88,19 @@ describe("S5: command output is coalesced and stays in order", () => {
     ]);
   });
 
+  it("never builds a row near the 2 MB limit: a full buffer is flushed before it grows further", () => {
+    const { sunk, coalescer } = setup();
+    for (let i = 0; i < 25; i++) coalescer.push(out("x".repeat(20_000))); // the adapter sends chunks of at most 32 KB
+    coalescer.flush();
+    const chunks = sunk.map((e) => (e.type === "tool_output" ? e.chunk : ""));
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(Math.max(...chunks.map((c) => c.length))).toBeLessThanOrEqual(64_000);
+    expect(chunks.join("")).toBe("x".repeat(500_000));
+    const seqs = sunk.map((e) => e.seq);
+    expect(seqs).toEqual([...seqs].sort((a, b) => a - b));
+    expect(seqs.at(-1)).toBe(25);
+  });
+
   it("flush with nothing buffered does nothing, and no timer fires afterwards", () => {
     const { sunk, coalescer } = setup();
     coalescer.push(out("a"));

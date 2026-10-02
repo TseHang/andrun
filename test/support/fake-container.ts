@@ -98,7 +98,8 @@ export class FakeContainer implements ContainerLike {
 
     const exitCode = new Promise<number>((resolve) => {
       child.on("error", () => resolve(127));
-      child.on("close", (code, signal) => {
+      // On exit, not on close: a background child may keep the pipes open after the command is done.
+      child.on("exit", (code, signal) => {
         this.children.delete(child);
         resolve(signal ? 137 : (code ?? 1));
       });

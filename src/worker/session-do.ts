@@ -27,7 +27,8 @@ export class SessionDO extends DurableObject<Env> {
     const container = ctx.container;
     if (!container) throw new Error("SessionDO has no container binding");
     // The timeout belongs to this object instance; a woken object must set it again.
-    if (container.running) void ctx.blockConcurrencyWhile(() => container.setInactivityTimeout(INACTIVITY_MS));
+    // A throw inside blockConcurrencyWhile resets the object, so a container that is just stopping is ignored.
+    if (container.running) void ctx.blockConcurrencyWhile(() => container.setInactivityTimeout(INACTIVITY_MS).catch(() => {}));
 
     const sql: SqlStore = {
       exec: <T>(query: string, ...bindings: SqlValue[]) => ctx.storage.sql.exec(query, ...bindings).toArray() as T[],

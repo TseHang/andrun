@@ -703,6 +703,109 @@ describe("S10: a sandbox lost between runs is rebuilt (D11)", () => {
   });
 });
 
+describe("review: a failed session can always be continued", () => {
+  it("a sandbox that cannot be rebuilt at the gate leaves a transcript the next turn can use", async () => {
+    const w = await atGate();
+    await w.container.destroy();
+    let tarballWorks = false;
+    const model = new ScriptedModelClient([call("finish", { summary: "Recovered." })]);
+    const engine = w.makeEngine(model, {
+      fetchTarball: async () => {
+        if (!tarballWorks) throw new Error("could not download TseHang/andrun-demo: HTTP 503");
+        return streamOf(TARBALL);
+      },
+    });
+
+    // Reject needs the sandbox; rebuilding it fails while the finish call is still unanswered.
+    await send(engine, { type: "reject", approvalId: w.approvalId, comment: "one more check" });
+    expect(engine.snapshot()).toMatchObject({ status: "failed", pending: null });
+
+    tarballWorks = true;
+    await send(engine, { type: "message", text: "please continue" });
+    expectValidTranscript(model.requests[0]!.messages);
+    expect(model.requests[0]!.messages.at(-1)).toEqual({ role: "user", content: "please continue" });
+    expect(engine.snapshot()!.status).toBe("awaiting_approval");
+  });
+
+  it("a message typed during the agent's last step is applied when the run pauses, not lost", async () => {
+    const w = world();
+    const ref: { engine?: SessionEngine } = {};
+    const replies: ServerFrame[] = [];
+    const model = new ScriptedModelClient([
+      () => {
+        // Too late to be injected: the model is already answering with finish.
+        ref.engine!.handleFrame(JSON.stringify({ type: "message", text: COMMENT }), (r) => replies.push(r));
+        return call("finish", { summary: "Done without the extra test." });
+      },
+      ...AFTER_REJECT(),
+    ]);
+    const engine = (ref.engine = w.engine(model));
+    engine.create({ id: ID, mode: "code", task: TASK });
+    await engine.idle();
+
+    expect(replies).toEqual([]);
+    // At the gate a message is a Reject + comment, so the agent goes on with it.
+    expect(ofType(w.events(), "approval_resolved")).toMatchObject([{ approved: false, comment: COMMENT }]);
+    expect(model.requests[1]!.messages.at(-1)!.content).toContain(COMMENT);
+    expect(engine.snapshot()).toMatchObject({ status: "awaiting_approval", pending: { summary: "Added the empty array test." } });
+  });
+
+  it("a message sent while the sandbox is being rebuilt after an approval is queued for the run", async () => {
+    const tarball = fixtureTarball(FIXTURE, { "junk.txt": "junk\n" });
+    const w = world({ tarball });
+    const deletePatch = ["--- a/junk.txt", "+++ /dev/null", "@@ -1 +0,0 @@", "-junk", ""].join("\n");
+    const model = new ScriptedModelClient([
+      call("apply_patch", { patch: deletePatch }),
+      call("list_files", {}),
+      call("finish", { summary: "Removed junk.txt." }),
+    ]);
+    const replies: ServerFrame[] = [];
+    const ref: { engine?: SessionEngine } = {};
+    const engine = (ref.engine = w.engine(model, {
+      fetchTarball: async () => {
+        // The second download is the rebuild after the approval: the user types during it.
+        if (w.tarballRequests.push({ repo: "", sha: "" }) === 2) {
+          ref.engine!.handleFrame(JSON.stringify({ type: "message", text: "also rename the helper" }), (r) => replies.push(r));
+        }
+        return streamOf(tarball);
+      },
+    }));
+    engine.create({ id: ID, mode: "code", task: "remove junk.txt" });
+    await engine.idle();
+    await w.container.destroy();
+
+    await send(engine, { type: "approve", approvalId: engine.snapshot()!.pending!.approvalId });
+    expect(replies).toEqual([]);
+    // Injected as a redirect at the next step, not replayed later as a rejection of the finish gate.
+    expect(model.requests[1]!.messages.at(-1)).toEqual({ role: "user", content: "also rename the helper" });
+    expect(ofType(w.events(), "approval_resolved").map((e) => e.approved)).toEqual([true]);
+    expect(engine.snapshot()).toMatchObject({ status: "awaiting_approval", pending: { tool: "finish" } });
+  });
+
+  it("multi-byte and binary files are judged by bytes and never stored corrupted", async () => {
+    const cjk = "測".repeat(400_000); // 400k characters, 1.2 MB in UTF-8
+    const tarball = fixtureTarball(FIXTURE, {
+      "package.json": JSON.stringify({
+        name: "bytes",
+        private: true,
+        type: "module",
+        scripts: { test: `node -e "const fs=require('fs');fs.writeFileSync('cjk.txt','測'.repeat(400000));fs.writeFileSync('img.bin',Buffer.from([0xff,0xfe,0x00,0x80,0xc3,0x28]));fs.writeFileSync('ok.txt','fine')"` },
+      }),
+    });
+    const w = world({ tarball });
+    const engine = w.engine(new ScriptedModelClient([call("run_command", { command: "npm test" }), call("finish", { summary: "x" })]));
+    engine.create({ id: ID, mode: "code", task: "write files" });
+    await engine.idle();
+
+    expect(cjk.length).toBeLessThan(1_000_000);
+    expect(w.store().changes()).toMatchObject([
+      { path: "cjk.txt", skipped: true, content: null },
+      { path: "img.bin", skipped: true, content: null },
+      { path: "ok.txt", skipped: false, content: "fine" },
+    ]);
+  });
+});
+
 describe("S11: an interrupted run is reported, not left spinning", () => {
   it("watchdog fails a running session that has no loop", async () => {
     const w = world();

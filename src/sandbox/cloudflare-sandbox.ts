@@ -9,6 +9,13 @@ const GIT_IDENTITY = ["-c", "user.email=agent@andrun.local", "-c", "user.name=an
 const ZERO_SHA = /^0+$/;
 const READY_POLL_MS = 250;
 const DRAIN_GRACE_MS = 1000;
+/** After a normal exit: long enough for late output, short enough that a background child holding the pipes does not stall the agent. */
+const DRAIN_MS = 2000;
+/** Per stream, for the agent's own commands: a flooding command must not exhaust memory or storage. */
+const MAX_OUTPUT_CHARS = 1_000_000;
+const TRUNCATED = "\n[… output truncated]\n";
+/** Each streamed chunk becomes one event row. */
+const MAX_CHUNK_CHARS = 32_000;
 
 interface RunResult extends ExecResult {
   /** True when this adapter aborted the process (timeout or caller abort). */
@@ -76,6 +83,7 @@ export class CloudflareSandboxAdapter implements SandboxHost {
     argv: string[],
     what: string,
     opts: ExecOptions = {},
+    maxOutput = Infinity,
   ): Promise<RunResult> {
     this.assertRunning(what);
     const controller = new AbortController();
@@ -108,15 +116,25 @@ export class CloudflareSandboxAdapter implements SandboxHost {
 
       let stdout = "";
       let stderr = "";
+      let finished = false;
+      const readers: ReadableStreamDefaultReader<Uint8Array>[] = [];
       const pump = async (stream: ReadableStream<Uint8Array> | null, name: "stdout" | "stderr") => {
         if (!stream) return;
         const reader = stream.getReader();
+        readers.push(reader);
         const decoder = new TextDecoder();
-        const emit = (text: string) => {
-          if (!text) return;
+        let kept = 0;
+        const keep = (text: string) => {
           if (name === "stdout") stdout += text;
           else stderr += text;
           opts.onOutput?.(name, text);
+        };
+        const emit = (text: string) => {
+          if (!text || finished || kept > maxOutput) return; // past the cap the stream is only drained
+          const room = maxOutput - kept;
+          kept += text.length;
+          const part = text.length > room ? text.slice(0, room) + TRUNCATED : text;
+          for (let i = 0; i < part.length; i += MAX_CHUNK_CHARS) keep(part.slice(i, i + MAX_CHUNK_CHARS));
         };
         try {
           for (;;) {
@@ -139,7 +157,9 @@ export class CloudflareSandboxAdapter implements SandboxHost {
         exitError = e;
       }
       // Streams normally end with the process; do not hang on one that does not.
-      await Promise.race([pumps, sleep(aborted || exitError ? DRAIN_GRACE_MS : 30_000)]);
+      await Promise.race([pumps, sleep(aborted || exitError ? DRAIN_GRACE_MS : DRAIN_MS)]);
+      finished = true;
+      for (const reader of readers) void reader.cancel().catch(() => {});
 
       if (aborted) return { exitCode: null, timedOut: true, stdout, stderr, aborted };
       if (!this.container.running) throw this.lost(what);
@@ -255,7 +275,7 @@ export class CloudflareSandboxAdapter implements SandboxHost {
 
   exec(command: string, opts: ExecOptions = {}): Promise<ExecResult> {
     return this.enqueue(async () => {
-      const r = await this.run(["sh", "-lc", command], command, opts);
+      const r = await this.run(["sh", "-lc", command], command, opts, MAX_OUTPUT_CHARS);
       return { exitCode: r.exitCode, timedOut: r.timedOut, stdout: r.stdout, stderr: r.stderr };
     });
   }
@@ -334,7 +354,7 @@ export class CloudflareSandboxAdapter implements SandboxHost {
       await this.gitOk(["add", "-A"], "git add");
       const args = ["diff", "--cached", baseline];
       if (path) args.push("--", path);
-      return (await this.git(args)).stdout;
+      return this.gitOk(args, "git diff");
     });
   }
 

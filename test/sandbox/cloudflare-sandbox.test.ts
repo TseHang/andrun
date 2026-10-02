@@ -181,6 +181,39 @@ describe("S7: setup, exec, files, patch, list and diff behave like LocalSandbox"
     expect(container.maxConcurrent).toBe(1);
   });
 
+  it("bounds the output of a flooding command", async () => {
+    await setup();
+    let streamed = 0;
+    let largest = 0;
+    const r = await sandbox.exec(`node -e "process.stdout.write('x'.repeat(3000000)); process.stderr.write('e'.repeat(10))"`, {
+      onOutput: (_stream, chunk) => {
+        streamed += chunk.length;
+        largest = Math.max(largest, chunk.length);
+      },
+    });
+    expect(largest).toBeLessThanOrEqual(32_000); // each chunk becomes one event row
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout.length).toBeLessThan(1_001_000);
+    expect(r.stdout).toMatch(/output truncated/);
+    expect(r.stderr).toBe("e".repeat(10));
+    expect(streamed).toBeLessThan(1_002_000);
+  });
+
+  it("does not wait on a background process that keeps the output pipes open", async () => {
+    await setup();
+    const started = Date.now();
+    const r = await sandbox.exec("(sleep 20 &) ; echo started");
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("started\n");
+    expect(Date.now() - started).toBeLessThan(5000);
+  });
+
+  it("a failing git diff is an error, not an empty diff", async () => {
+    await setup();
+    await sandbox.exec("rm -rf .git");
+    await expect(sandbox.diff()).rejects.toThrow(/git/);
+  });
+
   it("never passes secrets or other environment into the container", async () => {
     await setup();
     await sandbox.exec("npm test");

@@ -1,6 +1,6 @@
 # &run SessionDO + Cloudflare Sandbox — Implementation Checklist
 
-**Status**: ✅ Built — Passing (2026-10-02): 125 tests, local runtime and the deployed URL `https://andrun.mengtse-hang.workers.dev`
+**Status**: ✅ Built — Passing (2026-10-02): 133 tests, local runtime and the deployed URL (the review fixes after the last deploy are verified locally, not yet redeployed) `https://andrun.mengtse-hang.workers.dev`
 **Date**: 2026-10-01
 **Architecture**: `docs/architecture/web-codex-architecture-decision.md` → Phase 2; `docs/architecture/spike-sandbox-1.0.md` (findings 1–6 are binding)
 
@@ -299,3 +299,15 @@ Runtime verification, deployed, after the `monitor()` change (2026-10-02, deploy
 - **Isolation (S16)**: asked the deployed agent to run `env` and an outbound `fetch`, approving each command at its gate. `env` printed only `HOME`, `PATH` and `PWD`; the fetch printed `BLOCKED EAI_AGAIN` after about 10 s. The served page contains no key or bearer token.
 - `npm test` took 0.9 s in a session started after the npm global-config change. The earlier 10 s stall was seen only on two cold-start sessions and this one was a warm start, so the cause remains unconfirmed.
 - Not covered at runtime: S11's watchdog (a run interrupted by an eviction) is proven by its engine test only; no deploy happened to land mid-run.
+
+Code review (`/code-review` high, 2026-10-02), each fixed with a test first unless noted:
+- A session that failed at a gate because the sandbox could not be rebuilt kept an unanswered tool call and its pending approval; the next message then sent a transcript a provider rejects. A new turn now answers open tool calls, and `failed` clears the pending approval.
+- A message sent while the sandbox was being rebuilt after an approval was held back and later replayed as a rejection of the next gate. A segment now counts as running from the moment it starts.
+- A message typed during the agent's last step stayed in memory unseen. It is now applied when the run pauses or ends.
+- Command output had no bound: a flooding command could exceed the 2 MB row limit or memory. Output is capped at 1 MB per stream, streamed in chunks of at most 32 KB, and merged rows stop at 64 KB.
+- `diff()` ignored a failing `git diff` and returned an empty diff; it now throws.
+- Change saving compared characters, not bytes, to the 1 MB limit and swallowed every error; a multi-byte file could silently stop all saving. It now measures bytes, skips binary files instead of storing them corrupted, isolates failures per file, and logs them.
+- After a command exited, a background child holding the pipes stalled every call for 30 s; now 2 s.
+- A rejected `setInactivityTimeout` in the constructor could reset the Durable Object; it is ignored there (no test: constructor code only runs in workerd).
+- Dropped: "`DEBUG_ENDPOINTS` should default to 0" — Henry chose to keep it on for the demo (Open Questions); it is listed in `docs/limits.md` as C3.
+- Known limits and open items now live in `docs/limits.md`.

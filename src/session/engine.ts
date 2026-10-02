@@ -6,7 +6,7 @@ import { createSession, resume, runAgent, type RunResult } from "../core/agent";
 import type { AgentEvent, EventBody } from "../core/events";
 import { getProfile } from "../core/modes";
 import { MAX_FILE_BYTES } from "../core/tools";
-import type { AgentDeps, AgentState, ApprovalDecision, PendingApproval } from "../core/types";
+import { SandboxLostError, type AgentDeps, type AgentState, type ApprovalDecision, type PendingApproval } from "../core/types";
 import { OutputCoalescer } from "./coalesce";
 import { parseClientFrame, titleOf } from "./frames";
 import type { EngineDeps } from "./ports";
@@ -172,6 +172,15 @@ export class SessionEngine {
 
   /** A message to a session that is not running: the transcript continues, nothing else is reset. */
   private newTurn(state: AgentState, text: string): void {
+    // A run can fail with tool calls still open (the sandbox could not be rebuilt at a gate); a provider
+    // rejects a transcript like that, so they are answered here, like `guarded()` does in the core.
+    const answered = new Set(state.messages.flatMap((m) => (m.role === "tool" ? [m.tool_call_id] : [])));
+    for (const m of [...state.messages]) {
+      if (m.role !== "assistant") continue;
+      for (const c of m.tool_calls ?? []) {
+        if (!answered.has(c.id)) state.messages.push({ role: "tool", tool_call_id: c.id, content: JSON.stringify({ error: "the run failed" }) });
+      }
+    }
     state.messages.push({ role: "user", content: text });
     state.pending = null;
     state.failures = null;
@@ -216,6 +225,8 @@ export class SessionEngine {
     const state = this.store.loadState();
     if (!state) return;
     state.status = status;
+    // A failed run has nothing left to approve (the sandbox could not be rebuilt at a gate, for example).
+    if (status === "failed") state.pending = null;
     this.liveStatus = status;
     this.emitFor(state, { type: "status", status });
     this.store.saveState(state, this.now());
@@ -253,7 +264,11 @@ export class SessionEngine {
   private startSegment(decision: ApprovalDecision | null, needSandbox: boolean): void {
     const controller = new AbortController();
     this.controller = controller;
-    const run: Promise<void> = this.segment(controller, decision, needSandbox)
+    // From here the session is running for incoming frames, also while the sandbox is being rebuilt.
+    this.liveStatus = "running";
+    // Started on a microtask, so the segment is registered as in flight before any of it runs.
+    const run: Promise<void> = Promise.resolve()
+      .then(() => this.segment(controller, decision, needSandbox))
       .catch((err) => console.error("run segment failed:", err))
       .finally(() => {
         if (this.inflight === run) {
@@ -268,7 +283,13 @@ export class SessionEngine {
   private finishSegment(): void {
     if (this.deleted) return;
     try {
-      if (this.store.loadState()?.status !== "running") this.deps.setAlarm(null);
+      const status = this.store.loadState()?.status;
+      this.liveStatus = status ?? null;
+      if (status !== "running") this.deps.setAlarm(null);
+      // Messages typed too late to be injected into the run are applied now, as if just sent:
+      // a Reject + comment at a gate, or a new turn after the run ended.
+      const late = this.queued.splice(0);
+      if (late.length > 0) this.handleFrame(JSON.stringify({ type: "message", text: late.join("\n\n") }), () => {});
     } catch (err) {
       console.error("finishing a run segment failed:", err);
     }
@@ -353,7 +374,7 @@ export class SessionEngine {
       this.ownEmit({ type: "tool_output", callId, stream: "result", chunk: `ready in ${(readyMs / 1000).toFixed(1)} s` });
       if (changes.length > 0) {
         // The sandbox was lost and rebuilt (D11): say so, the user may have waited a long time.
-        const skipped = notRestored.length > 0 ? ` Not restored (over 1 MB): ${notRestored.join(", ")}.` : "";
+        const skipped = notRestored.length > 0 ? ` Not restored (over 1 MB or binary): ${notRestored.join(", ")}.` : "";
         this.ownEmit({ type: "error", source: "sandbox", message: RESTORED_NOTE + skipped, next: "The run continues." });
       }
       return true;
@@ -368,7 +389,12 @@ export class SessionEngine {
 
   /** Reconciles never overlap and never block `emit`. */
   private queueReconcile(): Promise<void> {
-    this.reconcileChain = this.reconcileChain.then(() => this.reconcile()).catch(() => {}); // the sandbox may be gone
+    this.reconcileChain = this.reconcileChain
+      .then(() => this.reconcile())
+      .catch((err) => {
+        // A lost sandbox is expected here; anything else means changes are not being saved.
+        if (!(err instanceof SandboxLostError)) console.error("saving workspace changes failed:", err);
+      });
     return this.reconcileChain;
   }
 
@@ -387,15 +413,15 @@ export class SessionEngine {
       }
       const content = await sandbox.readFile(file.path);
       if (this.deleted) return;
-      const skipped = content.length > MAX_FILE_BYTES;
-      this.store.putChange({
-        path: file.path,
-        beforeSha: file.beforeSha,
-        afterSha: file.afterSha,
-        content: skipped ? null : content,
-        deleted: false,
-        skipped,
-      });
+      // Not saved: over 1 MB in bytes, or not valid UTF-8 text (a binary file would come back corrupted).
+      const skipped = content.includes("\uFFFD") || new TextEncoder().encode(content).length > MAX_FILE_BYTES;
+      const change = { path: file.path, beforeSha: file.beforeSha, afterSha: file.afterSha, deleted: false };
+      try {
+        this.store.putChange({ ...change, content: skipped ? null : content, skipped });
+      } catch (err) {
+        console.error(`saving ${file.path} failed:`, err);
+        this.store.putChange({ ...change, content: null, skipped: true });
+      }
     }
 
     const present = new Set(files.map((f) => f.path));
