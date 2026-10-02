@@ -1,6 +1,6 @@
 # &run SessionDO + Cloudflare Sandbox — Implementation Checklist
 
-**Status**: ✅ Built — Passing (2026-10-02): 133 tests, local runtime and the deployed URL (the review fixes after the last deploy are verified locally, not yet redeployed) `https://andrun.mengtse-hang.workers.dev`
+**Status**: ✅ Built — Passing (2026-10-02): 136 tests, local runtime and the deployed URL (the review fixes after the last deploy are verified locally, not yet redeployed) `https://andrun.mengtse-hang.workers.dev`
 **Date**: 2026-10-01
 **Architecture**: `docs/architecture/web-codex-architecture-decision.md` → Phase 2; `docs/architecture/spike-sandbox-1.0.md` (findings 1–6 are binding)
 
@@ -311,3 +311,11 @@ Code review (`/code-review` high, 2026-10-02), each fixed with a test first unle
 - A rejected `setInactivityTimeout` in the constructor could reset the Durable Object; it is ignored there (no test: constructor code only runs in workerd).
 - Dropped: "`DEBUG_ENDPOINTS` should default to 0" — Henry chose to keep it on for the demo (Open Questions); it is listed in `docs/limits.md` as C3.
 - Known limits and open items now live in `docs/limits.md`.
+
+Code review, second round on the fixes (2026-10-02), fixed with tests first:
+- Late messages were joined into one frame, so two long ones could exceed the 4,000 character limit and vanish. The first is now applied and the rest stay queued for the run it starts.
+- The 2 s wait for output after exit also applied to the adapter's own git commands; a cut-off file list would have read as "these files are no longer changed" and deleted their saved copies. Internal commands wait for their full output, or fail.
+- A file that could not be saved lost its record after the first rebuild, so a second rebuild said nothing. The record is kept.
+- A large file was read into memory only to find it was too large. Sizes now come from git, and such a file is never read.
+- Stored command output is capped like diffs, whoever produced it. The idle-timeout failure in the constructor is logged instead of swallowed.
+- Not applied: marking output cut by the time window (a background process's output is not the command's); splitting on surrogate pairs (cosmetic); closing open tool calls anywhere but a new turn (every failed session resumes through a new turn). The stale `awaiting_approval` during a rebuild is recorded as F5 in `docs/limits.md`.

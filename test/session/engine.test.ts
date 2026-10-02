@@ -750,6 +750,61 @@ describe("review: a failed session can always be continued", () => {
     expect(engine.snapshot()).toMatchObject({ status: "awaiting_approval", pending: { summary: "Added the empty array test." } });
   });
 
+  it("several long late messages are all delivered, none dropped by the length limit", async () => {
+    const w = world();
+    const ref: { engine?: SessionEngine } = {};
+    const first = `first: ${"a".repeat(2500)}`;
+    const second = `second: ${"b".repeat(2500)}`; // together over the 4,000 character frame limit
+    const model = new ScriptedModelClient([
+      () => {
+        ref.engine!.handleFrame(JSON.stringify({ type: "message", text: first }), () => {});
+        ref.engine!.handleFrame(JSON.stringify({ type: "message", text: second }), () => {});
+        return call("finish", { summary: "Done." });
+      },
+      call("finish", { summary: "Done again." }),
+    ]);
+    const engine = (ref.engine = w.engine(model));
+    engine.create({ id: ID, mode: "code", task: TASK });
+    await engine.idle();
+
+    // The first is the Reject comment at the gate; the second is injected into the run that follows.
+    expect(ofType(w.events(), "approval_resolved")).toMatchObject([{ approved: false, comment: first }]);
+    const request = model.requests[1]!.messages;
+    expect(request.some((m) => m.role === "tool" && m.content.includes(first))).toBe(true);
+    expect(request.at(-1)).toEqual({ role: "user", content: second });
+    expect(engine.snapshot()!.status).toBe("awaiting_approval");
+  });
+
+  it("a file that could not be saved is reported after every rebuild, not only the first", async () => {
+    const tarball = fixtureTarball(FIXTURE, {
+      "package.json": JSON.stringify({
+        name: "big",
+        private: true,
+        type: "module",
+        scripts: { test: `node -e "require('fs').writeFileSync('big.bin', 'x'.repeat(1100000))"` },
+      }),
+    });
+    const w = world({ tarball });
+    const engine = w.engine(
+      new ScriptedModelClient([
+        call("run_command", { command: "npm test" }),
+        call("finish", { summary: "1" }),
+        call("finish", { summary: "2" }),
+        call("finish", { summary: "3" }),
+      ]),
+    );
+    engine.create({ id: ID, mode: "code", task: "write a big file" });
+    await engine.idle();
+
+    for (const round of [1, 2]) {
+      await w.container.destroy();
+      const before = w.events().length;
+      await send(engine, { type: "reject", approvalId: engine.snapshot()!.pending!.approvalId, comment: `again ${round}` });
+      const note = ofType(w.events().slice(before), "error").find((e) => e.source === "sandbox");
+      expect(note?.message, `rebuild ${round}`).toContain("big.bin");
+    }
+  });
+
   it("a message sent while the sandbox is being rebuilt after an approval is queued for the run", async () => {
     const tarball = fixtureTarball(FIXTURE, { "junk.txt": "junk\n" });
     const w = world({ tarball });

@@ -288,8 +288,9 @@ export class SessionEngine {
       if (status !== "running") this.deps.setAlarm(null);
       // Messages typed too late to be injected into the run are applied now, as if just sent:
       // a Reject + comment at a gate, or a new turn after the run ended.
-      const late = this.queued.splice(0);
-      if (late.length > 0) this.handleFrame(JSON.stringify({ type: "message", text: late.join("\n\n") }), () => {});
+      // Only the first is dispatched; it starts a run, and the rest stay queued for that run to pick up.
+      const first = this.queued.shift();
+      if (first !== undefined) this.handleFrame(JSON.stringify({ type: "message", text: first }), () => {});
     } catch (err) {
       console.error("finishing a run segment failed:", err);
     }
@@ -411,11 +412,15 @@ export class SessionEngine {
         this.store.putChange({ path: file.path, beforeSha: file.beforeSha, afterSha: null, content: null, deleted: true, skipped: false });
         continue;
       }
+      const change = { path: file.path, beforeSha: file.beforeSha, afterSha: file.afterSha, deleted: false };
+      // Not saved: over 1 MB (never read), or not valid UTF-8 text (a binary file would come back corrupted).
+      if (file.size !== null && file.size > MAX_FILE_BYTES) {
+        this.store.putChange({ ...change, content: null, skipped: true });
+        continue;
+      }
       const content = await sandbox.readFile(file.path);
       if (this.deleted) return;
-      // Not saved: over 1 MB in bytes, or not valid UTF-8 text (a binary file would come back corrupted).
       const skipped = content.includes("\uFFFD") || new TextEncoder().encode(content).length > MAX_FILE_BYTES;
-      const change = { path: file.path, beforeSha: file.beforeSha, afterSha: file.afterSha, deleted: false };
       try {
         this.store.putChange({ ...change, content: skipped ? null : content, skipped });
       } catch (err) {
@@ -424,10 +429,12 @@ export class SessionEngine {
       }
     }
 
+    // A row for a file that could not be saved is kept even when the file is gone: after a rebuild it is
+    // the only record that something is missing, and every later rebuild must say so again.
     const present = new Set(files.map((f) => f.path));
-    for (const path of stored.keys()) {
+    for (const [path, row] of stored) {
       if (this.deleted) return;
-      if (!present.has(path)) this.store.removeChange(path);
+      if (!present.has(path) && !row.skipped) this.store.removeChange(path);
     }
   }
 }

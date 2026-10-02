@@ -11,6 +11,8 @@ const READY_POLL_MS = 250;
 const DRAIN_GRACE_MS = 1000;
 /** After a normal exit: long enough for late output, short enough that a background child holding the pipes does not stall the agent. */
 const DRAIN_MS = 2000;
+/** For the adapter's own git and tar commands, whose output must be complete. */
+const INTERNAL_DRAIN_MS = 30_000;
 /** Per stream, for the agent's own commands: a flooding command must not exhaust memory or storage. */
 const MAX_OUTPUT_CHARS = 1_000_000;
 const TRUNCATED = "\n[… output truncated]\n";
@@ -83,8 +85,10 @@ export class CloudflareSandboxAdapter implements SandboxHost {
     argv: string[],
     what: string,
     opts: ExecOptions = {},
+    /** Set for the agent's own commands: their output is capped and their pipes are not waited on for long. */
     maxOutput = Infinity,
   ): Promise<RunResult> {
+    const internal = maxOutput === Infinity;
     this.assertRunning(what);
     const controller = new AbortController();
     let aborted = false;
@@ -157,13 +161,18 @@ export class CloudflareSandboxAdapter implements SandboxHost {
         exitError = e;
       }
       // Streams normally end with the process; do not hang on one that does not.
-      await Promise.race([pumps, sleep(aborted || exitError ? DRAIN_GRACE_MS : DRAIN_MS)]);
+      let drained = false;
+      void pumps.then(() => (drained = true));
+      await Promise.race([pumps, sleep(aborted || exitError ? DRAIN_GRACE_MS : internal ? INTERNAL_DRAIN_MS : DRAIN_MS)]);
+      await Promise.resolve();
       finished = true;
       for (const reader of readers) void reader.cancel().catch(() => {});
 
       if (aborted) return { exitCode: null, timedOut: true, stdout, stderr, aborted };
       if (!this.container.running) throw this.lost(what);
       if (exitError) throw exitError instanceof Error ? exitError : new Error(String(exitError));
+      // The adapter parses its own git output; a partial list would read as "these files are unchanged".
+      if (internal && !drained) throw new Error(`${what}: the output did not finish`);
       return { exitCode, timedOut: false, stdout, stderr, aborted };
     } finally {
       if (timer) clearTimeout(timer);
@@ -363,6 +372,15 @@ export class CloudflareSandboxAdapter implements SandboxHost {
       const baseline = await this.getBaseline();
       await this.gitOk(["add", "-A"], "git add");
       const raw = await this.gitOk(["diff", "--cached", "--raw", "--no-abbrev", "--no-renames", "-z", baseline], "git diff");
+      // Sizes of everything staged, from one command, so a large file is never read just to learn it is too big.
+      const tree = (await this.gitOk(["write-tree"], "git write-tree")).trim();
+      const sizes = new Map<string, number>();
+      for (const entry of (await this.gitOk(["ls-tree", "-r", "-l", "-z", tree], "git ls-tree")).split("\0")) {
+        const tab = entry.indexOf("\t");
+        if (tab === -1) continue;
+        const size = Number(entry.slice(0, tab).trim().split(/\s+/)[3]);
+        if (Number.isFinite(size)) sizes.set(entry.slice(tab + 1), size);
+      }
       const tokens = raw.split("\0");
       const out: ChangedFile[] = [];
       for (let i = 0; i + 1 < tokens.length; i += 2) {
@@ -375,6 +393,7 @@ export class CloudflareSandboxAdapter implements SandboxHost {
           status: letter === "A" ? "added" : letter === "D" ? "deleted" : "modified",
           beforeSha: ZERO_SHA.test(before!) ? null : before!,
           afterSha: ZERO_SHA.test(after!) ? null : after!,
+          size: letter === "D" ? null : (sizes.get(path) ?? null),
         });
       }
       return out.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));

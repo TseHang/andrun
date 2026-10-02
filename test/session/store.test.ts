@@ -124,6 +124,13 @@ describe("SessionStore (ADR D8)", () => {
     expect(stored.diff.length).toBeLessThanOrEqual(260_000);
     expect(stored.diff).toMatch(/elided/);
     expect(stored.diff.startsWith("+x\n")).toBe(true);
+
+    // Command output is capped the same way, whoever produced the chunk.
+    store.appendEvent(ev(2, { type: "tool_output", callId: "c1", stream: "stdout", chunk: "y".repeat(1_200_000) }));
+    const output = store.eventsAfter(1)[0]!;
+    if (output.type !== "tool_output") throw new Error("wrong event");
+    expect(output.chunk.length).toBeLessThanOrEqual(260_000);
+    expect(output.chunk).toMatch(/elided/);
   });
 
   it("stores, replaces and removes changes", () => {

@@ -149,6 +149,7 @@ describe("S7: setup, exec, files, patch, list and diff behave like LocalSandbox"
       ["src/sum.js", "modified"],
       ["test/sum.test.js", "deleted"],
     ]);
+    expect(changed.map((c) => c.size)).toEqual([6, 8, null]); // bytes, so a large file is never read just to be skipped
     const [added, modified, deleted] = changed;
     expect(added!.beforeSha).toBeNull();
     expect(added!.afterSha).toMatch(/^[0-9a-f]{40}$/);
@@ -207,6 +208,16 @@ describe("S7: setup, exec, files, patch, list and diff behave like LocalSandbox"
     expect(r.stdout).toBe("started\n");
     expect(Date.now() - started).toBeLessThan(5000);
   });
+
+  it("internal git output is never cut by a background process's short drain window", async () => {
+    await setup();
+    // 5,000 changed files: the raw diff is several pipe buffers long.
+    await sandbox.exec(`node -e "const fs=require('fs');fs.mkdirSync('many');for(let i=0;i<5000;i++)fs.writeFileSync('many/f'+i+'.txt',String(i))"`);
+    const changed = await sandbox.changedFiles();
+    expect(changed).toHaveLength(5000);
+    expect(changed.every((c) => typeof c.size === "number")).toBe(true);
+    expect(await sandbox.listFiles("many")).toHaveLength(5000);
+  }, 60_000);
 
   it("a failing git diff is an error, not an empty diff", async () => {
     await setup();

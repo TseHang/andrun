@@ -7,6 +7,7 @@ import type { SessionMeta, SqlStore, StoredChange } from "./ports";
 
 /** Keeps one event row far below the 2 MB Durable Object row limit. */
 const MAX_DIFF_CHARS = 256_000;
+const elide = (text: string) => `${text.slice(0, MAX_DIFF_CHARS)}\n[… ${text.length - MAX_DIFF_CHARS} bytes elided]`;
 
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS session (
@@ -148,10 +149,8 @@ export class SessionStore {
   appendEvent(event: AgentEvent): void {
     if (event.type === "message_delta") return;
     let stored = event;
-    if (event.type === "file_changed" && event.diff.length > MAX_DIFF_CHARS) {
-      const elided = event.diff.length - MAX_DIFF_CHARS;
-      stored = { ...event, diff: `${event.diff.slice(0, MAX_DIFF_CHARS)}\n[… ${elided} bytes elided]` };
-    }
+    if (event.type === "file_changed" && event.diff.length > MAX_DIFF_CHARS) stored = { ...event, diff: elide(event.diff) };
+    if (event.type === "tool_output" && event.chunk.length > MAX_DIFF_CHARS) stored = { ...event, chunk: elide(event.chunk) };
     this.sql.exec("INSERT OR REPLACE INTO events (seq, json) VALUES (?, ?)", event.seq, JSON.stringify(stored));
   }
 

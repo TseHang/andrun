@@ -18,6 +18,8 @@ export interface ChangedFile {
   status: "added" | "modified" | "deleted";
   beforeSha: string | null;
   afterSha: string | null;
+  /** Size of the new content in bytes; `null` for a deleted file. */
+  size: number | null;
 }
 
 /** The sandbox as the session sees it: the agent's `SandboxAdapter` plus its lifecycle. */
