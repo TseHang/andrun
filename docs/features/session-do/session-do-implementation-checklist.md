@@ -1,6 +1,6 @@
 # &run SessionDO + Cloudflare Sandbox — Implementation Checklist
 
-**Status**: ✅ Approved (Henry, 2026-10-01)
+**Status**: ✅ Built — Passing (2026-10-02): 125 tests, local runtime and the deployed URL `https://andrun.mengtse-hang.workers.dev`
 **Date**: 2026-10-01
 **Architecture**: `docs/architecture/web-codex-architecture-decision.md` → Phase 2; `docs/architecture/spike-sandbox-1.0.md` (findings 1–6 are binding)
 
@@ -229,18 +229,18 @@ Secrets: `AIAND_API_KEY` (Worker secret / `.dev.vars`). `AIAND_BASE_URL` is a va
 **Test**: Runtime — deployed URL, with the fake SSE flow repeated locally first.
 
 ## Edge Cases
-- [ ] The tarball download fails (404, or network error) → `error{source:"sandbox"}` with the HTTP status, then `status(failed)`; no container is left running. **Test**: `test/session/engine.test.ts` › "tarball failure fails the session visibly"
-- [ ] The container does not become ready within 60 s → same visible failure. **Test**: `test/sandbox/cloudflare-sandbox.test.ts` › "start timeout throws SandboxLostError"
-- [ ] The DO crashed after writing events but before the checkpoint → on load, `next_seq` is `max(stored next_seq, max(events.seq) + 1)`, so no `seq` is reused. **Test**: `test/session/store.test.ts` › "next_seq never collides with stored events"
-- [ ] Two tabs on one session → both receive every frame; a decision from one tab resolves the gate for both. **Test**: `test/session/engine.test.ts` › "create runs to the gate…" (every persisted event is broadcast once, in order); fan-out to two sockets is a runtime check
-- [ ] A file over 1 MB was changed by a command → it is not stored in `changes`; a rebuild lists it in the restore note as not restored. **Test**: `test/session/engine.test.ts` › "oversized changes are skipped and reported"
-- [ ] One event row stays under the 2 MB row limit: `file_changed.diff` is capped at 256 KB with an elision marker. **Test**: `test/session/store.test.ts` › "caps oversized event payloads"
-- [ ] `src/session/**` and `src/core/**` have no platform imports. **Test**: `test/core/boundary.test.ts` › "src/core has no platform imports" and "src/session has no platform imports"
-- [ ] Unknown routes → `404` JSON; a non-WebSocket request to `/ws` → `426`. **Test**: `test/worker/router.test.ts` › "unknown routes and non-upgrade ws requests"
-- [ ] **Open spike item 1**: can the DO hibernate with a WebSocket open while its container is running? **Runtime check**: deployed session at the gate, socket open, no traffic for 5 min. Then `GET /sessions/:id`: a changed `debug.bootId` with the socket still open and `containerRunning: true` means yes. Then approve, to prove the run resumes. Result recorded in `spike-sandbox-1.0.md`.
-- [ ] **Open spike item 2**: cold start after a long idle period. **Runtime check**: leave a session at the gate for 16 min, confirm `containerRunning: false` (the 15 min `setInactivityTimeout`, re-armed in the constructor when the container is running), then reject with a comment and record the "ready in … s" value and that S10's rebuild happened. Result recorded in `spike-sandbox-1.0.md`.
-- [ ] Containers are destroyed on `done` and `failed`. **Runtime check**: `wrangler containers list` shows no running instance after S16 and S17.
-- [ ] `pnpm test`, `pnpm typecheck` and `pnpm lint` pass, including the 53 Phase 1 tests. **Runtime check**: run all three before the PR.
+- [x] The tarball download fails (404, or network error) → `error{source:"sandbox"}` with the HTTP status, then `status(failed)`; no container is left running. **Test**: `test/session/engine.test.ts` › "tarball failure fails the session visibly" ✅
+- [x] The container does not become ready within 60 s → same visible failure. **Test**: `test/sandbox/cloudflare-sandbox.test.ts` › "start timeout throws SandboxLostError" ✅ (also: a container that fails to start is reported at once with the platform's reason)
+- [x] The DO crashed after writing events but before the checkpoint → on load, `next_seq` is `max(stored next_seq, max(events.seq) + 1)`, so no `seq` is reused. **Test**: `test/session/store.test.ts` › "next_seq never collides with stored events" ✅
+- [x] Two tabs on one session → both receive every frame; a decision from one tab resolves the gate for both. **Test**: `test/session/engine.test.ts` › "create runs to the gate…" (every persisted event is broadcast once, in order); fan-out to two sockets is a runtime check ✅ engine test; two sockets on the deployed URL both saw `done` (smoke)
+- [x] A file over 1 MB was changed by a command → it is not stored in `changes`; a rebuild lists it in the restore note as not restored. **Test**: `test/session/engine.test.ts` › "oversized changes are skipped and reported" ✅
+- [x] One event row stays under the 2 MB row limit: `file_changed.diff` is capped at 256 KB with an elision marker. **Test**: `test/session/store.test.ts` › "caps oversized event payloads" ✅
+- [x] `src/session/**` and `src/core/**` have no platform imports. **Test**: `test/core/boundary.test.ts` › "src/core has no platform imports" and "src/session has no platform imports" ✅
+- [x] Unknown routes → `404` JSON; a non-WebSocket request to `/ws` → `426`. **Test**: `test/worker/router.test.ts` › "unknown routes and non-upgrade ws requests" ✅
+- [x] **Open spike item 1**: can the DO hibernate with a WebSocket open while its container is running? **Runtime check**: deployed session at the gate, socket open, no traffic for 5 min. Then `GET /sessions/:id`: a changed `debug.bootId` with the socket still open and `containerRunning: true` means yes. Then approve, to prove the run resumes. Result recorded in `spike-sandbox-1.0.md`. ✅ Yes: after 5.5 idle minutes with no deploy, `bootId` changed, the socket stayed open, the container kept running, and a later frame was answered.
+- [x] **Open spike item 2**: cold start after a long idle period. **Runtime check**: leave a session at the gate for 16 min, confirm `containerRunning: false` (the 15 min `setInactivityTimeout`, re-armed in the constructor when the container is running), then reject with a comment and record the "ready in … s" value and that S10's rebuild happened. Result recorded in `spike-sandbox-1.0.md`. ✅ `containerRunning: false` after 16.5 idle minutes. After about 50 idle minutes a reject rebuilt the sandbox in 1.7 s (container ready in 0.6 s, tarball and saved changes restored) and `npm test` passed in it. About 11 s is only the first start after a deploy.
+- [x] Containers are destroyed on `done` and `failed`. **Runtime check**: `wrangler containers list` shows no running instance after S16 and S17. ✅ `containerRunning: false` right after `done` (smoke, deployed). `wrangler containers info` counts lag behind, so the per-session `debug` field was used instead.
+- [x] `pnpm test`, `pnpm typecheck` and `pnpm lint` pass, including the 53 Phase 1 tests. **Runtime check**: run all three before the PR. ✅ 125 tests (Phase 1 suite included), two typechecks (Node and Worker), lint.
 
 Not applicable:
 - Auth / PII: no users (spec D3). Write protection is D14 only (Q1 accepted).
@@ -250,12 +250,12 @@ Not applicable:
 ## Open Questions
 - [x] **Demo repo**: public `TseHang/andrun-demo`, pinned at `0df6f53ec8a51785899d574c43db212513347537` (`package.json`, `src/sum.js`, `test/sum.test.js`; `node --test` fails 2 of 2). It is the Phase 4 PR target too. (Henry, 2026-10-01)
 - [x] **One Worker, one environment**: Worker `andrun` serves the page, the API and the WebSocket on one origin; `main` is production. There is no preview environment. Before the PR merges, the branch is deployed once by hand with `wrangler deploy` for the runtime checks; this is the deploy that commits the class name `SessionDO` to `scheduling_policy: durable_object` (no rollback). After the merge, Henry connects Workers Builds so that a push to `main` runs `wrangler deploy` (Worker code, assets and container image). (Henry, 2026-10-01)
-- [ ] **Paid checks.** S16, S17 and the two spike items need about 4 real sessions on `deepseek-v4-flash`, roughly ¥1–2 in total, plus container minutes inside the Workers Paid allowance. I will ask right before deploying. — decide by: Henry, at deploy time
+- [x] **Paid checks.** S16, S17 and the two spike items need about 4 real sessions on `deepseek-v4-flash`, roughly ¥1–2 in total, plus container minutes inside the Workers Paid allowance. I will ask right before deploying. — decide by: Henry, at deploy time ✅ Henry OK'd them on 2026-10-02; about 8 real sessions, each ¥0.1–0.3.
 - [x] **`POST /sessions/:id/debug/kill-sandbox`** stays on for the demo (`DEBUG_ENDPOINTS="1"`), sharing the delete limiter. (Henry, 2026-10-01)
 - [x] **A message typed at the approval gate is treated as Reject + comment** (S6). (Henry, 2026-10-01)
 - [x] **Limits**: create 5 / min / IP, delete 10 / min / IP, task ≤ 4,000 characters. No cap on concurrently running sessions for now; the accepted risk is that spend has a rate limit but no hard ceiling, with `KILL_SWITCH` as the stop. Revisit before the URL is shared publicly. (Henry, 2026-10-01)
-- [ ] Assumption: the default container instance type is enough for `node --test` on the fixtures (the spike used the default). If a run is OOM-killed, move to `basic`. — decide by: during build
-- [ ] Assumption: `node:sqlite` in Node 22.18 is close enough to DO SQLite for the queries used (plain `CREATE`/`INSERT`/`SELECT`/`DELETE`). The deployed run in S16 is the check on the real one. — decide by: during build
+- [x] Assumption: the default container instance type is enough for `node --test` on the fixtures (the spike used the default). If a run is OOM-killed, move to `basic`. — decide by: during build ✅ No OOM seen on the default (`lite`).
+- [x] Assumption: `node:sqlite` in Node 22.18 is close enough to DO SQLite for the queries used (plain `CREATE`/`INSERT`/`SELECT`/`DELETE`). The deployed run in S16 is the check on the real one. — decide by: during build ✅ The same queries ran on the deployed Durable Object.
 
 ## Build Progress
 | # | Unit | Proves | Status |
@@ -266,7 +266,7 @@ Not applicable:
 | 3 | `session/engine.ts`, `session/workspace.ts` | S1–S4, S6, S9–S13 (engine), tarball failure, oversized changes | ✅ done |
 | 4 | `worker/router.ts` | S13 (API), S14, S15 (HTTP), unknown routes | ✅ done |
 | 5 | DO shells, `worker/index.ts`, `worker/repo.ts`, `wrangler.jsonc`, `Dockerfile`, debug page, fake SSE server, `pnpm smoke` (taken over by the commander: it needs `wrangler dev` iterations) | Local runtime (`wrangler dev` + Docker + fake SSE) | ✅ done |
-| 6 | Deploy + runtime checks on the public URL (asks Henry first) | S16, S17, spike items 1–2 | ⏳ pending |
+| 6 | Deploy (by Henry) + runtime checks on the public URL | S16, S17, spike items 1–2 | ✅ done |
 
 Build notes:
 - The edge case "two tabs" is tested as "every persisted event is broadcast once, in order" (inside S1's test). The engine has one `broadcast` port; fanning out to several sockets is the Durable Object shell, which only runs in workerd, so two tabs are a runtime check.
@@ -288,6 +288,14 @@ Runtime verification, deployed (2026-10-02, `https://andrun.mengtse-hang.workers
 - S16, `pnpm smoke <url>`: all checks passed. Cold sandbox start 11.2 s and 11.9 s (first starts after a deploy), 0.6 s for a later one. Replay from `lastSeq=0` equalled the live history (31 events), reject looped back to the gate, approve ended in `done` on two sockets, the container was destroyed, delete returned `204` then `404`.
 - **Spike item 1, answered: yes.** A session at the gate with one WebSocket open and its container running was left idle for 5.5 min with no deploy in between: `bootId` changed (the Durable Object was evicted and rebuilt), the socket stayed open, `containerRunning` stayed `true`, and a frame sent afterwards was answered.
 - **Spike item 2, partly answered.** A session left at the gate showed `containerRunning: false` 16.5 min after the last request, with the socket still attached, so the 15 min idle timeout works after an eviction too. The rebuild time after that idle stop is not measured yet.
-- S17 (`--flow kill`) did not run to the kill: for one session the container never started ("did not become ready within 60s: exec() cannot be called on a container that is not running"), and a retry on the same session failed the same way, while another session started in 0.6 s minutes earlier. Cause unknown. `setup` now watches `container.monitor()` and fails at once with the platform's reason ("the sandbox did not start: …"). Trade-off: a pending `monitor()` keeps the Durable Object in memory for up to 15 min after a successful start, so hibernation at the gate begins later.
+- S17 (`--flow kill`), first attempt, did not run to the kill: for one session the container never started ("did not become ready within 60s: exec() cannot be called on a container that is not running"), and a retry on the same session failed the same way, while another session started in 0.6 s minutes earlier. Cause unknown. `setup` now watches `container.monitor()` and fails at once with the platform's reason ("the sandbox did not start: …"). Trade-off: a pending `monitor()` keeps the Durable Object in memory for up to 15 min after a successful start, so hibernation at the gate begins later.
 - Open observation: on two cold-start sessions `npm test` returned about 10 s after its last output; on a warm one the whole run reached the gate in 9 s. npm's update check is the suspect (no network, DNS timeout), and the image now disables it in npm's global config, but this is not confirmed.
 - The smoke check no longer requires `message_delta`: the real model often answers with tool calls only.
+
+Runtime verification, deployed, after the `monitor()` change (2026-10-02, deploy of 04:16 UTC):
+- **S17 / spec test D: passed.** `pnpm smoke <url> --flow kill`: the sandbox was killed mid-run, `error{source:"sandbox"}` and `status: failed` arrived 2.1 s later, `GET /sessions` showed `failed`, a message rebuilt the sandbox and the run reached the gate.
+- The session whose container had refused to start earlier started in 0.4 s on a retry after this deploy and ran to the gate, so that failure was not permanent. Its cause is still unknown; it did not recur, so the new "did not start" message has not been seen in production yet.
+- **D11 on the real platform**: see spike item 2 above. The rebuilt workspace held the fix and the tests passed.
+- **Isolation (S16)**: asked the deployed agent to run `env` and an outbound `fetch`, approving each command at its gate. `env` printed only `HOME`, `PATH` and `PWD`; the fetch printed `BLOCKED EAI_AGAIN` after about 10 s. The served page contains no key or bearer token.
+- `npm test` took 0.9 s in a session started after the npm global-config change. The earlier 10 s stall was seen only on two cold-start sessions and this one was a warm start, so the cause remains unconfirmed.
+- Not covered at runtime: S11's watchdog (a run interrupted by an eviction) is proven by its engine test only; no deploy happened to land mid-run.

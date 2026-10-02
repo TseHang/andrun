@@ -4,7 +4,8 @@ A Codex-style coding workspace on Cloudflare. You give it a task and a repo. An 
 
 **Status**:
 - Phase 1 (the agent loop, plus an eval against real models) is done.
-- Phase 2 (Durable Objects, the Cloudflare Sandbox, a debug page over the event stream) is built and verified locally; the deploy is next.
+- Phase 3 (the workspace UI) is next.
+- Phase 2 (Durable Objects, the Cloudflare Sandbox, a debug page over the event stream) is deployed: https://andrun.mengtse-hang.workers.dev
 
 ## Quick start
 
