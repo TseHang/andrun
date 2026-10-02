@@ -37,12 +37,13 @@
     { "name": "DELETE_LIMITER", "namespace_id": "1002", "simple": { "limit": 10, "period": 60 } }
   ],
 
-  // Not secret. AIAND_API_KEY and AIAND_BASE_URL are Worker secrets (`wrangler secret put`), and
-  // live in the git-ignored .dev.vars for local dev.
+  // Not secret. AIAND_API_KEY is a Worker secret (`wrangler secret put`). For local dev the
+  // git-ignored .dev.vars sets the key and overrides AIAND_BASE_URL.
   "vars": {
+    "AIAND_BASE_URL": "https://api.aiand.com/v1",
+    "DEBUG_ENDPOINTS": "1",
     "DEMO_REPO": "TseHang/andrun-demo",
     "DEMO_SHA": "0df6f53ec8a51785899d574c43db212513347537",
-    "KILL_SWITCH": "0",
-    "DEBUG_ENDPOINTS": "1"
-  }
+    "KILL_SWITCH": "0"
+  },
 }

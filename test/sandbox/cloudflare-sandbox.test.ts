@@ -256,6 +256,32 @@ describe("sandbox loss is a SandboxLostError (P2-d)", () => {
     expect(Date.now() - started).toBeLessThan(3000);
   });
 
+  it("reads the image when it starts the container, and says why a start did not work", async () => {
+    let asked = 0;
+    sandbox = new CloudflareSandboxAdapter({
+      container,
+      files: container.files,
+      image: () => {
+        asked++;
+        return "registry.example/sandbox:lazy";
+      },
+      workdir: container.workdir,
+      tmpDir: container.tmpDir,
+      startTimeoutMs: 400,
+    });
+    expect(asked).toBe(0); // not at construction: the Durable Object builds the adapter before any start
+    await setup();
+    expect(container.starts).toEqual([{ image: "registry.example/sandbox:lazy", enableInternet: false }]);
+    // The idle timeout is set once the container answers, not straight after start().
+    expect(container.inactivityMs).toBe(15 * 60_000);
+    const order = container.log.filter((l) => l === "setInactivityTimeout" || l === "exec:true");
+    expect(order.at(-1)).toBe("setInactivityTimeout");
+
+    await sandbox.destroy();
+    container.neverReady = true;
+    await expect(setup()).rejects.toThrow(/did not become ready within .*: container is not ready/);
+  });
+
   it("start timeout throws SandboxLostError", async () => {
     container.neverReady = true;
     sandbox = adapter({ startTimeoutMs: 400 });

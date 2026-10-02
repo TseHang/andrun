@@ -37,7 +37,11 @@ export class SessionDO extends DurableObject<Env> {
       sandbox: new CloudflareSandboxAdapter({
         container: container as unknown as ContainerLike,
         files: new Files(container),
-        image: container.images["sandbox"],
+        image: () => {
+          const image = container.images["sandbox"];
+          if (!image) throw new Error(`no "sandbox" image on the container binding (found: ${Object.keys(container.images).join(", ") || "none"})`);
+          return image;
+        },
         inactivityMs: INACTIVITY_MS,
       }),
       fetchTarball,

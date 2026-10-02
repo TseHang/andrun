@@ -34,6 +34,8 @@ export class FakeContainer implements ContainerLike {
 
   readonly starts: { image?: string; enableInternet: boolean }[] = [];
   readonly calls: { argv: string[]; options?: ExecOptionsLike }[] = [];
+  /** Order of lifecycle calls, to check sequencing. */
+  readonly log: string[] = [];
   destroyed = 0;
   inactivityMs: number | undefined;
   /** exec throws "not ready" for this long after start(). */
@@ -61,11 +63,13 @@ export class FakeContainer implements ContainerLike {
   }
 
   async setInactivityTimeout(durationMs: number): Promise<void> {
+    this.log.push("setInactivityTimeout");
     this.inactivityMs = durationMs;
   }
 
   async exec(argv: string[], options: ExecOptionsLike = {}): Promise<ExecProcessLike> {
     this.calls.push({ argv, options });
+    this.log.push(`exec:${argv[0]}`);
     if (!this.running) throw new Error("cannot exec in a container that is not running");
     if (this.neverReady || Date.now() < this.readyAt) throw new Error("container is not ready");
 

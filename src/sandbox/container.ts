@@ -38,8 +38,8 @@ export interface FilesLike {
 export interface CloudflareSandboxOptions {
   container: ContainerLike;
   files: FilesLike;
-  /** Image passed to `container.start` (the Durable Object passes `container.images.sandbox`). */
-  image?: string;
+  /** Image passed to `container.start`. A function is called when the container is started. */
+  image?: string | (() => string);
   /** Absolute workspace path inside the container. Default `/workspace`. */
   workdir?: string;
   /** Absolute scratch path inside the container, outside the workspace. Default `/tmp`. */

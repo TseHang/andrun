@@ -20,7 +20,7 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 export class CloudflareSandboxAdapter implements SandboxHost {
   private readonly container: ContainerLike;
   private readonly files: FilesLike;
-  private readonly image: string | undefined;
+  private readonly image: CloudflareSandboxOptions["image"];
   private readonly workdir: string;
   private readonly tmpDir: string;
   private readonly inactivityMs: number;
@@ -190,12 +190,15 @@ export class CloudflareSandboxAdapter implements SandboxHost {
     return this.enqueue(async () => {
       const t0 = Date.now();
       this.baseline = undefined;
-      if (!this.container.running) {
-        this.container.start({ ...(this.image !== undefined ? { image: this.image } : {}), enableInternet: false });
-        await this.container.setInactivityTimeout(this.inactivityMs);
+      const started = !this.container.running;
+      if (started) {
+        const image = typeof this.image === "function" ? this.image() : this.image;
+        this.container.start({ ...(image !== undefined ? { image } : {}), enableInternet: false });
       }
       await this.waitUntilReady(t0);
       const readyMs = Date.now() - t0;
+      // Set once the container answers: right after start() the platform may not know it yet.
+      if (started) await this.guard("set idle timeout", () => this.container.setInactivityTimeout(this.inactivityMs));
 
       const tarFile = `${this.tmpDir}/andrun-${crypto.randomUUID()}.tar.gz`;
       await this.guard("mkdir", () => this.files.mkdir(this.workdir, { recursive: true }));
@@ -217,15 +220,18 @@ export class CloudflareSandboxAdapter implements SandboxHost {
 
   private async waitUntilReady(t0: number): Promise<void> {
     const deadline = t0 + this.startTimeoutMs;
+    let last = "the readiness probe failed";
     for (;;) {
       try {
         const proc = await this.container.exec(["true"], { stdout: "ignore", stderr: "ignore" });
-        if ((await proc.exitCode) === 0) return;
-      } catch {
-        // not ready yet
+        const code = await proc.exitCode;
+        if (code === 0) return;
+        last = `the readiness probe exited with ${code}`;
+      } catch (e) {
+        last = e instanceof Error ? e.message : String(e); // not ready yet; kept for the timeout message
       }
       if (Date.now() + READY_POLL_MS > deadline) {
-        throw new SandboxLostError(`the sandbox did not become ready within ${Math.round(this.startTimeoutMs / 1000)}s`);
+        throw new SandboxLostError(`the sandbox did not become ready within ${Math.round(this.startTimeoutMs / 1000)}s: ${last}`);
       }
       await sleep(READY_POLL_MS);
     }

@@ -8,7 +8,7 @@ export interface Env {
   WORKSPACE: DurableObjectNamespace<WorkspaceDO>;
   CREATE_LIMITER: RateLimit;
   DELETE_LIMITER: RateLimit;
-  /** Worker secrets (`wrangler secret put`); `.dev.vars` locally. Never passed into the sandbox. */
+  /** Worker secret (`wrangler secret put`); `.dev.vars` locally. Never passed into the sandbox. */
   AIAND_API_KEY: string;
   AIAND_BASE_URL: string;
   DEMO_REPO: string;
