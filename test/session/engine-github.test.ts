@@ -56,7 +56,7 @@ describe("Code: approve opens the pull request (S4–S7, S9)", () => {
     expect(g.tarballRequests).toHaveLength(1);
     expect(g.guarded).toEqual([IP]);
     expect(g.upserts.at(-1)).toMatchObject({ id: ID, status: "done", pr: 12 });
-    expect(g.engine.snapshot()).toMatchObject({ status: "done", pending: null, sha: g.fake.refs.get("main"), pr: { number: 12, url: "https://github.com/TseHang/andrun-demo/pull/12", branch: BRANCH } });
+    expect(g.engine.snapshot()).toMatchObject({ status: "done", pending: null, baseBranch: "main", sha: g.fake.refs.get("main"), pr: { number: 12, url: "https://github.com/TseHang/andrun-demo/pull/12", branch: BRANCH } });
   });
 
   it("the pull request title falls back to the session title", async () => {

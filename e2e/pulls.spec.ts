@@ -28,7 +28,8 @@ test("the list shows who wrote each pull request and what can be done", async ({
   await expect(s.prRow(13)).toContainText("feat/json-flag");
   await expect(s.prRow(13)).toContainText("Needs review");
   await expect(s.prRow(13).getByRole("link", { name: "Start review" })).toHaveAttribute("href", "/prs/13");
-  await expect(s.prRow(14)).toContainText("Opened by &run");
+  await expect(s.prRow(14)).toContainText("Opened by &run"); // instead of the bot's login
+  await expect(s.prRow(14)).toContainText("Needs review");
 
   await page.getByRole("tab", { name: "My PRs" }).click();
   await expect(page.locator("[data-pr]")).toHaveCount(1);

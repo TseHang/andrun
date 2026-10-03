@@ -57,6 +57,8 @@ export interface SessionSnapshot {
   status: Status;
   pending: PendingView | null;
   sandboxRunning: boolean;
+  /** The branch a Code session's pull request goes into; null until it is known (a pinned commit, or a review). */
+  baseBranch: string | null;
   sha: string;
   pr: { number: number; url: string | null; branch: string | null } | null;
 }

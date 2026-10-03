@@ -134,6 +134,7 @@ export class SessionEngine {
       pending: state.pending ? pendingView(state.pending) : null,
       sandboxRunning: this.deps.sandbox.isRunning(),
       sha: meta.sha,
+      baseBranch: this.store.githubState().baseBranch ?? null,
       pr: this.prOf(meta.repo, this.store.githubState()),
     };
   }
