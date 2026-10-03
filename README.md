@@ -6,7 +6,7 @@ A Codex-style coding workspace on Cloudflare. You give it a task and a repo. An 
 - Phase 1 (the agent loop, plus an eval against real models) is done.
 - Phase 2 (Durable Objects, the Cloudflare Sandbox, a debug page over the event stream) is deployed: https://andrun.mengtse-hang.workers.dev
 - Phase 3 (the workspace UI: Home, the session view with diffs and the approval bar, a model menu) is built and tested locally on branch `feat/workspace-ui`; not deployed yet.
-- Phase 4 (GitHub: Approve opens a pull request as the App bot; Pull requests page; Review mode with editable findings, posted as the reviewer) is built and tested locally on branch `feat/github`; not deployed yet.
+- Phase 4 (GitHub: Approve opens a pull request as the App bot; Pull requests page; Review mode with editable findings, posted as the reviewer) is deployed from branch `feat/github`; spec tests B and E passed on the public URL with the real model and the real GitHub.
 
 ## Quick start
 

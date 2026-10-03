@@ -63,6 +63,7 @@ Last updated: 2026-10-03 (Phase 4).
 
 - **O1. A container that never started.** Once, on the deployed Worker, `start()` was accepted but the container never ran, and a retry on the same session failed the same way. After the next deploy the same session started in 0.4 s. The cause is unknown. Since then `setup` reports the platform's reason at once ("the sandbox did not start: …"); that message has not appeared in production yet.
 - **O2. The very first deployed session** failed with "The container has not been started". Two changes went in together (read the image at start time; set the idle timeout after the container answers) and the next deploy worked. Which one mattered, or whether it was O1 again, was not isolated.
+- **O4. Post review failed twice with HTTP 522 and then 520** on the deployed Worker (2026-10-03), while reads and the pull request publish worked in the same minutes. The third attempt, after a redeploy, succeeded. These codes come from the network between the Worker and GitHub, not from GitHub's API. No review was posted by the failed attempts and none was duplicated. Not reproduced since; if it comes back, look at `wrangler tail` during a post.
 - **O3. `npm test` ended about 10 s after its last output** on two cold-start sessions. npm's update check is the suspect (no network, DNS timeout). The image now disables it in npm's global config and a later run took 0.9 s, but that run was a warm start, so this is not confirmed.
 
 ## To-dos carried into later phases

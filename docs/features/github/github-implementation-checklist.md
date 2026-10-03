@@ -1,6 +1,6 @@
 # &run GitHub: PR on approve + Review mode — Implementation Checklist
 
-**Status**: ✅ Built — Passing locally (2026-10-03). S21 (deployed URL, real model, real GitHub) is waiting for Henry's OK.
+**Status**: ✅ Built — Passing (2026-10-03). Deployed from `feat/github` (version 2ec3ee1c) and S21 passed with the real model and the real GitHub.
 **Date**: 2026-10-03
 **Branch**: `feat/github`
 **Architecture**: `docs/architecture/web-codex-architecture-decision.md` → Phase 4 (D4, D9, D10, D14; amendments A5–A8)
@@ -283,10 +283,10 @@ Tests from earlier phases that change meaning (to be recorded in Build Progress)
 - [x] **P4-d**: Edit and Dismiss are disabled while the agent runs. (Henry, 2026-10-03)
 - [x] **Deployed `DEMO_SHA`**: empty. No prepared demo; any task, then review the pull request it opened. The variable stays as an override. (Henry, 2026-10-03)
 - [x] **Sandbox network stays off (P4-l)**: the diff reaches the agent through the first message, not through a clone. (Henry, 2026-10-03)
-- [ ] **Paid checks**: S21 (about ¥1) and one real-model run of the review eval case (`deepseek-v4-flash`, 3 runs). Neither is run without Henry's OK. — decide by: Henry
+- [x] **Paid checks**: S21 approved and run (Henry, 2026-10-03; ¥0.65). The real-model run of the review eval case (`deepseek-v4-flash`, 3 runs) is not run yet and still needs Henry's OK.
 - [x] **The GitHub App and the PAT exist and the four secrets are set on Cloudflare** (Henry, 2026-10-03). Local runs keep using the fake GitHub.
-- [x] Assumption (held locally): a Rate Limiting binding can be called from inside a Durable Object. Seen in `wrangler dev`: the request budget refused a publish started from the SessionDO. To be seen once more on the deployed Worker in S21.
-- [ ] Assumption: commits created through the Git Data API with an installation token and no `author` field are attributed to the bot. — decide by: during build (checked on the real repo before S21)
+- [x] Assumption (held): a Rate Limiting binding can be called from inside a Durable Object. Seen in `wrangler dev` (the request budget refused a publish started from the SessionDO) and on the deployed Worker (S21: the publish and the review ran through the guard and the budget).
+- [x] Assumption (held): a commit created through the Git Data API with an installation token and no `author` is attributed to the bot (`andrun-bot[bot]`, verified). Seen in S21.
 
 ## Build Progress
 | # | Unit | Proves | Status |
@@ -325,7 +325,10 @@ Found by the E2E runs and fixed:
 Runtime verification (2026-10-03, `wrangler dev` + fake model + fake GitHub, Chromium):
 - S15, S16, S17–S19 walked in the browser by the E2E specs; all 23 E2E tests pass in one run. Screens captured: Home, the open-PR gate, the pull request card with review comments, the Pull requests page, the review start page, Ready to post, Files changed with findings, Review posted. No page error and no console error.
 - S1–S14 and S20: Vitest (230 tests).
-- S21 not run: it needs a deploy, costs about ¥1 and writes to the real repo. Waiting for Henry's OK.
+- S21 done 2026-10-03 on https://andrun.mengtse-hang.workers.dev with `deepseek-v4-flash` (Henry approved; ¥0.65 in total):
+  - B: a Code session (task: add `src/slugify.js` with a known bug and a test) started from the head of `main` (`0df6f53`), reached the gate in 5 steps (¥0.21), and Approve opened https://github.com/TseHang/andrun-demo/pull/1. On GitHub: author `andrun-bot`, branch `agent/3dad850c-1 → main`, title "Add slugify helper and test" (from `finish`), body with the summary, the task and the changed files; one commit by `andrun-bot[bot]`, verified, parent `0df6f53`. It is on the Pull requests page under Needs review and My PRs.
+  - E: the review of #1 drafted four findings in 6 steps (¥0.44), all on diff lines. The planted bug was found at `src/slugify.js:4` ("Consecutive spaces produce consecutive hyphens"). One finding was dismissed (`src/slugify.js:2`), the planted one was edited, verdict Request changes. GitHub shows one review by TseHang, `CHANGES_REQUESTED`, on commit `ae3d210`, with exactly the three kept comments (`src/slugify.js:4` twice, `test/slugify.test.js:5`), the edited text included and the dismissed one absent. The repo has the same two branches and `main` did not move.
+  - The first two Post review attempts failed with "GitHub answered 522" and then "520"; each was shown as a GitHub error and the session stayed at Ready to post, and no review reached GitHub. The third attempt, after a redeploy that added the PAT format check, succeeded, and GitHub has exactly one review. The cause of the two failures is not known (see `limits.md` O4).
 
 Observations (not fixed, not user-visible):
 - `wrangler dev` logs "saving workspace changes failed: git … failed" when a session is deleted or ends while a save is in flight. The save is for a sandbox that is being destroyed; nothing is lost. It was already possible in Phase 2.
