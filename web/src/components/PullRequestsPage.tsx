@@ -37,6 +37,7 @@ function age(updatedAt: string): string {
 function Row({ pull }: { pull: PullRow }) {
   const { codeSession, reviewSession } = pull;
   const state = reviewState(reviewSession?.status);
+  const waiting = !reviewSession && (pull.openComments ?? 0) > 0 ? pull.openComments! : 0;
   return (
     <div data-pr={pull.number} className="flex min-h-[68px] items-center gap-4 border-t border-black/8 px-1 last:border-b">
       <div className="flex min-w-0 grow flex-col gap-0.5">
@@ -47,7 +48,7 @@ function Row({ pull }: { pull: PullRow }) {
           {pull.mine ? "Opened by &run" : pull.author} · {pull.headRef} · {age(pull.updatedAt)}
         </span>
       </div>
-      <span className={state.className}>{state.text}</span>
+      {waiting > 0 ? <span className="text-accent-text">{`${waiting} ${waiting === 1 ? "comment" : "comments"} to answer`}</span> : <span className={state.className}>{state.text}</span>}
       {codeSession && (
         <a href={`/s/${codeSession.id}`} className={`${PILL} bg-black/6`}>
           View session

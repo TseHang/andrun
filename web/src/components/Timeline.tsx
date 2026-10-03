@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef, type ReactNode } from "react";
 import type { SessionView, TimelineItem } from "../state/reducer";
 import { modelLabel, prTarget } from "../state/format";
 import { StepGroup } from "./StepGroup";
@@ -90,7 +90,7 @@ function Item({ item, session }: { item: TimelineItem; session: SessionInfo }) {
   }
 }
 
-export function Timeline({ view, session }: { view: SessionView; session: SessionInfo }) {
+export function Timeline({ view, session, children }: { view: SessionView; session: SessionInfo; children?: ReactNode }) {
   const ref = useRef<HTMLElement>(null);
   const height = useRef(0);
   // Follow only if the view was at the bottom before this render's content was added.
@@ -109,6 +109,7 @@ export function Timeline({ view, session }: { view: SessionView; session: Sessio
             {session.code && item.kind === "approved" && view.items[i + 1]?.kind !== "pr" && <p className="text-center text-xs text-text-secondary">{NOTE}</p>}
           </div>
         ))}
+        {children}
       </div>
     </section>
   );

@@ -92,7 +92,20 @@ async function listPulls(request: Request, env: RouterEnv): Promise<Response> {
       for (const s of sessions) if (s.pr === number && s.mode === mode && (!best || s.created_at > best.created_at)) best = s;
       return best ? { id: best.id, status: best.status } : null;
     };
-    return json({ pulls: pulls.map((p) => ({ ...p, codeSession: newest(p.number, "code"), reviewSession: newest(p.number, "review") })) });
+    // How many review comments wait on a pull request &run opened (the list shows it only where no review session is); a pull whose comments cannot be read gets no count.
+    const open = await Promise.all(
+      pulls.map(async (p) => {
+        if (!p.mine || newest(p.number, "review")) return undefined;
+        try {
+          return (await env.github.listReviewComments(p.number)).filter((t) => !t.answered).length;
+        } catch {
+          return undefined;
+        }
+      }),
+    );
+    return json({
+      pulls: pulls.map((p, i) => ({ ...p, ...(open[i] !== undefined && { openComments: open[i] }), codeSession: newest(p.number, "code"), reviewSession: newest(p.number, "review") })),
+    });
   } catch (err) {
     return githubFailure(err);
   }
@@ -104,6 +117,42 @@ async function getPull(request: Request, env: RouterEnv, n: string): Promise<Res
   if (refused) return refused;
   try {
     return json(await env.github.getPull(Number(n)));
+  } catch (err) {
+    return githubFailure(err);
+  }
+}
+
+async function getComments(request: Request, env: RouterEnv, n: string): Promise<Response> {
+  if (!/^[1-9]\d*$/.test(n)) return notFound();
+  const refused = await limited(env.githubReadLimiter, request);
+  if (refused) return refused;
+  try {
+    return json({ comments: await env.github.listReviewComments(Number(n)) });
+  } catch (err) {
+    return githubFailure(err);
+  }
+}
+
+const MAX_REPLY_CHARS = 4000;
+
+async function postReply(request: Request, env: RouterEnv, n: string, id: string): Promise<Response> {
+  if (!/^[1-9]\d*$/.test(n) || !/^[1-9]\d*$/.test(id)) return notFound();
+  if (!env.githubWrites) return error(503, "GitHub writes are disabled");
+  const refused = await limited(env.githubWriteLimiter, request);
+  if (refused) return refused;
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return error(400, "body must be valid JSON");
+  }
+  const raw = typeof body === "object" && body !== null && !Array.isArray(body) ? (body as Record<string, unknown>)["text"] : undefined;
+  const text = typeof raw === "string" ? raw.trim() : "";
+  if (text === "") return error(400, "text must be a non-empty string");
+  if (text.length > MAX_REPLY_CHARS) return error(400, `text must be at most ${MAX_REPLY_CHARS} characters`);
+  try {
+    return json(await env.github.replyToComment(Number(n), Number(id), text), 201);
   } catch (err) {
     return githubFailure(err);
   }
@@ -128,7 +177,10 @@ async function route(request: Request, env: RouterEnv): Promise<Response> {
   const parts = pathname.split("/").filter((p, i) => i === 0 || p !== "");
   const method = request.method;
   if (parts[0] === "" && parts[1] === "config" && parts.length === 2) return method === "GET" ? config(env) : notFound();
-  if (parts[0] === "" && parts[1] === "pulls" && parts.length <= 3) {
+  if (parts[0] === "" && parts[1] === "pulls") {
+    if (parts.length === 4 && parts[3] === "comments") return method === "GET" ? getComments(request, env, parts[2]!) : notFound();
+    if (parts.length === 6 && parts[3] === "comments" && parts[5] === "replies") return method === "POST" ? postReply(request, env, parts[2]!, parts[4]!) : notFound();
+    if (parts.length > 3) return notFound();
     if (method !== "GET") return notFound();
     return parts.length === 2 ? listPulls(request, env) : getPull(request, env, parts[2]!);
   }

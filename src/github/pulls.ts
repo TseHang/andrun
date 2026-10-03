@@ -37,6 +37,36 @@ export interface PullDetail {
   files: PullFile[];
 }
 
+export interface ReviewReply {
+  id: number;
+  author: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface ReviewThread {
+  id: number;
+  author: string;
+  path: string;
+  line: number;
+  body: string;
+  createdAt: string;
+  url: string;
+  replies: ReviewReply[];
+  answered: boolean;
+}
+
+interface RawComment {
+  id: number;
+  user: { login: string };
+  path: string;
+  line: number | null;
+  body: string;
+  created_at: string;
+  html_url: string;
+  in_reply_to_id?: number;
+}
+
 interface RawPull {
   number: number;
   title: string;
@@ -96,4 +126,28 @@ export async function defaultBranchHead(request: Request, repo: string, token: s
   const info = (await request("GET", `/repos/${repo}`, token)) as { default_branch: string };
   const ref = (await request("GET", `/repos/${repo}/git/ref/heads/${info.default_branch}`, token)) as { object: { sha: string } };
   return { branch: info.default_branch, sha: ref.object.sha };
+}
+
+/** The review comments of a pull request, grouped into threads: a comment with no parent starts one. */
+export async function listReviewComments(request: Request, repo: string, token: string, n: number): Promise<ReviewThread[]> {
+  const raw = (await request("GET", `/repos/${repo}/pulls/${n}/comments?per_page=100`, token)) as RawComment[];
+  const threads = new Map<number, ReviewThread>();
+  for (const c of raw) {
+    if (c.in_reply_to_id === undefined || c.in_reply_to_id === null) {
+      threads.set(c.id, { id: c.id, author: c.user.login, path: c.path, line: c.line ?? 0, body: c.body, createdAt: c.created_at, url: c.html_url, replies: [], answered: false });
+    }
+  }
+  for (const c of raw) {
+    const thread = c.in_reply_to_id === undefined || c.in_reply_to_id === null ? undefined : threads.get(c.in_reply_to_id);
+    if (!thread) continue;
+    thread.replies.push({ id: c.id, author: c.user.login, body: c.body, createdAt: c.created_at });
+    thread.answered = true;
+  }
+  return [...threads.values()];
+}
+
+/** Replies in a review comment's thread; `pat` makes the reply the user's own. */
+export async function replyToComment(request: Request, repo: string, pat: string, n: number, commentId: number, text: string): Promise<{ id: number; url: string }> {
+  const res = (await request("POST", `/repos/${repo}/pulls/${n}/comments/${commentId}/replies`, pat, { body: text })) as { id: number; html_url: string };
+  return { id: res.id, url: res.html_url };
 }
