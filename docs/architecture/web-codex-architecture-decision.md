@@ -182,7 +182,7 @@ Delivers:
 - the Pull Requests page (All / Needs review / My PRs). "My PRs" are the pull requests the bot opened (A5).
 - a page before a review starts: the PR's diff from GitHub, an editable review brief, and a Start review button; nothing runs until it is pressed (A6)
 - the `review` profile, findings panel (keep/edit/dismiss, jump to line), and Post review via PAT (test E)
-- the My PR page: read the review comments on a bot-opened PR, reply as Henry, and ask the agent for another round (`agent/<session>-2`) (A7)
+- the My PR page (A7): not in this phase, see A15
 - Code sessions start from the default branch's head at create time, resolved with the App token; `DEMO_SHA` stays as an optional override (A8)
 Scope: `github/` (App JWT with a PKCS#8 key, installation token cache, Git Data commit, PR list/read, review post), the review profile, and the `report_finding` tool (it emits the `review_finding` event; A9).
 Spec: `docs/features/github/github-implementation-checklist.md`.
@@ -254,7 +254,7 @@ The questions left open here were decided in the Phase 4 checklist (Henry, 2026-
 | A13 | D10, A8 | The sandbox network stays off. The review agent gets the pull request's patches, numbered with new-file lines, in its first message. `DEMO_SHA` is empty on the deployed Worker; there is no prepared demo task. | 4 |
 | A14 | D16 | The session index has a `pr` column, so the pull request list can link sessions. Every open pull request can be reviewed, also one the bot opened. | 4 |
 
-| A15 | A5, A7 | Replies on a bot-opened pull request are posted by the bot (the App token), not with the PAT: the author answers the reviewer, and the two roles stay apart. The PAT is used only to post reviews. (Henry, 2026-10-03, after S21.) | 4 |
+| A15 | A5, A7 | Two roles, kept apart: the **bot** is the coder (opens pull requests, pushes commits, and will answer comments on its pull requests); **TseHang** is the reviewer (the PAT is used only to post reviews). The second identity exists because an account cannot review its own pull request. The My PR page (A7) was built and then taken out of Phase 4 (git tag `my-pr-a7`); it comes back after its design is settled. (Henry, 2026-10-03.) | 4 |
 
 Not built: the product spec's search box and reviewer-written comments (not drawn).
 

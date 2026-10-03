@@ -1,17 +1,17 @@
-// The GitHub module's entry point: one client for the configured repo. Reads, publishing and replies on
-// the bot's own pull requests use the App's installation token; reviews use the user's PAT so they are
-// posted as the user.
+// The GitHub module's entry point: one client for the configured repo. Reads and publishing use the
+// App's installation token (the bot, who writes the code); reviews use the user's PAT so they are
+// posted as the user (the reviewer).
 
 import { createAppAuth } from "./app-auth";
 import { GitHubError, createRequest } from "./client";
 import { publish, type PublishInput, type PublishResult } from "./publish";
-import { defaultBranchHead, getPull, listPulls, listReviewComments, replyToComment, type PullDetail, type PullSummary, type ReviewThread } from "./pulls";
+import { defaultBranchHead, getPull, listPulls, type PullDetail, type PullSummary } from "./pulls";
 import { postReview, type ReviewInput } from "./review";
 
 export { GitHubError } from "./client";
 export { commentableLines, numberedPatch } from "./diff-lines";
 export type { PublishFile, PublishInput, PublishResult } from "./publish";
-export type { PullDetail, PullFile, PullSummary, ReviewReply, ReviewThread } from "./pulls";
+export type { PullDetail, PullFile, PullSummary } from "./pulls";
 export { REVIEW_FOOTER, buildReview } from "./review";
 export type { ReviewComment, ReviewFinding, ReviewInput } from "./review";
 
@@ -32,8 +32,6 @@ export interface GitHub {
   listPulls(): Promise<PullSummary[]>;
   getPull(n: number): Promise<PullDetail>;
   postReview(input: ReviewInput): Promise<{ url: string }>;
-  listReviewComments(n: number): Promise<ReviewThread[]>;
-  replyToComment(n: number, commentId: number, text: string): Promise<{ id: number; url: string }>;
 }
 
 export function createGitHub(config: GitHubConfig): GitHub {
@@ -59,7 +57,5 @@ export function createGitHub(config: GitHubConfig): GitHub {
     listPulls: async () => listPulls(request, repo, await auth.token(), await auth.botLogin()),
     getPull: async (n) => getPull(request, repo, await auth.token(), n),
     postReview: async (input) => postReview(request, repo, await userToken(), input),
-    listReviewComments: async (n) => listReviewComments(request, repo, await auth.token(), n),
-    replyToComment: async (n, commentId, text) => replyToComment(request, repo, await auth.token(), n, commentId, text),
   };
 }

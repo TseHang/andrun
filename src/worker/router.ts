@@ -92,21 +92,8 @@ async function listPulls(request: Request, env: RouterEnv): Promise<Response> {
       for (const s of sessions) if (s.pr === number && s.mode === mode && (!best || s.created_at > best.created_at)) best = s;
       return best ? { id: best.id, status: best.status } : null;
     };
-    // How many review comments wait on a pull request &run opened (the list shows it only where no review session is); a pull whose comments cannot be read gets no count.
-    // One GitHub call each, so only the newest MAX_COMMENT_COUNTS of them are counted.
-    const counted = new Set(pulls.filter((p) => p.mine && !newest(p.number, "review")).slice(0, MAX_COMMENT_COUNTS).map((p) => p.number));
-    const open = await Promise.all(
-      pulls.map(async (p) => {
-        if (!counted.has(p.number)) return undefined;
-        try {
-          return (await env.github.listReviewComments(p.number)).filter((t) => !t.answered).length;
-        } catch {
-          return undefined;
-        }
-      }),
-    );
     return json({
-      pulls: pulls.map((p, i) => ({ ...p, ...(open[i] !== undefined && { openComments: open[i] }), codeSession: newest(p.number, "code"), reviewSession: newest(p.number, "review") })),
+      pulls: pulls.map((p) => ({ ...p, codeSession: newest(p.number, "code"), reviewSession: newest(p.number, "review") })),
     });
   } catch (err) {
     return githubFailure(err);
@@ -119,49 +106,6 @@ async function getPull(request: Request, env: RouterEnv, n: string): Promise<Res
   if (refused) return refused;
   try {
     return json(await env.github.getPull(Number(n)));
-  } catch (err) {
-    return githubFailure(err);
-  }
-}
-
-async function getComments(request: Request, env: RouterEnv, n: string): Promise<Response> {
-  if (!/^[1-9]\d*$/.test(n)) return notFound();
-  const refused = await limited(env.githubReadLimiter, request);
-  if (refused) return refused;
-  try {
-    return json({ comments: await env.github.listReviewComments(Number(n)) });
-  } catch (err) {
-    return githubFailure(err);
-  }
-}
-
-const MAX_REPLY_CHARS = 4000;
-const MAX_COMMENT_COUNTS = 10;
-
-async function postReply(request: Request, env: RouterEnv, n: string, id: string): Promise<Response> {
-  if (!/^[1-9]\d*$/.test(n) || !/^[1-9]\d*$/.test(id)) return notFound();
-  if (!env.githubWrites) return error(503, "GitHub writes are disabled");
-  const refused = await limited(env.githubWriteLimiter, request);
-  if (refused) return refused;
-
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return error(400, "body must be valid JSON");
-  }
-  const raw = typeof body === "object" && body !== null && !Array.isArray(body) ? (body as Record<string, unknown>)["text"] : undefined;
-  const text = typeof raw === "string" ? raw.trim() : "";
-  if (text === "") return error(400, "text must be a non-empty string");
-  if (text.length > MAX_REPLY_CHARS) return error(400, `text must be at most ${MAX_REPLY_CHARS} characters`);
-  try {
-    // A reply is posted under the user's name, so it is limited to pull requests &run opened.
-    const pull = (await env.github.listPulls()).find((p) => p.number === Number(n));
-    if (!pull) return notFound();
-    if (!pull.mine) return error(400, "replies are only for pull requests &run opened");
-    // The check above is about pull request `n`, so the comment must be one of its threads.
-    if (!(await env.github.listReviewComments(pull.number)).some((t) => t.id === Number(id))) return notFound();
-    return json(await env.github.replyToComment(Number(n), Number(id), text), 201);
   } catch (err) {
     return githubFailure(err);
   }
@@ -187,8 +131,6 @@ async function route(request: Request, env: RouterEnv): Promise<Response> {
   const method = request.method;
   if (parts[0] === "" && parts[1] === "config" && parts.length === 2) return method === "GET" ? config(env) : notFound();
   if (parts[0] === "" && parts[1] === "pulls") {
-    if (parts.length === 4 && parts[3] === "comments") return method === "GET" ? getComments(request, env, parts[2]!) : notFound();
-    if (parts.length === 6 && parts[3] === "comments" && parts[5] === "replies") return method === "POST" ? postReply(request, env, parts[2]!, parts[4]!) : notFound();
     if (parts.length > 3) return notFound();
     if (method !== "GET") return notFound();
     return parts.length === 2 ? listPulls(request, env) : getPull(request, env, parts[2]!);

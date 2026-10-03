@@ -13,9 +13,9 @@ This closes `limits.md` L6 and makes spec tests B and E pass on the public URL.
 
 ## Fixed rules (Henry, 2026-10-03)
 - No login. Every pull request &run opens is opened by the **GitHub App bot**. "My PRs" = pull requests the bot opened from a session.
-- Reviews are posted with **Henry's PAT**, as TseHang. Replies on a pull request &run opened are posted by the bot, its author (changed 2026-10-03 after S21; before, replies also used the PAT).
+- Two roles. The **bot** is the coder: it opens pull requests and pushes commits. **TseHang** is the reviewer: reviews are posted with Henry's PAT. The second identity exists because an account cannot review its own pull request.
 - The repo is fixed: `TseHang/andrun-demo`. A Code session resolves the default branch's head when it is created (App token). `DEMO_SHA` stays as an optional override (A8).
-- The My PR page (A7) is the first thing to cut. Its scenarios are S17–S19 and are built last.
+- The My PR page (A7) is the first thing to cut. Its scenarios are S17–S19. **It was built, then taken out on 2026-10-03 (Henry): see the end of this file.**
 - The pull request for test E is opened by the bot, not by TseHang.
 - There is no prepared demo (Henry, 2026-10-03). A Code session can be given any task; the pull request it opens can then be reviewed in &run. `DEMO_SHA` is empty on the deployed Worker, and agent pull requests may be merged.
 
@@ -207,19 +207,19 @@ New dependencies: none.
 **Then** before the second click nothing ran (no session existed). During the run the header says "Read-only review" and the findings appear in the panel. Clicking a finding opens Files changed at that line. The bar says "N inline comments, M note in the summary · Posts to GitHub as TseHang". After posting: a card "Review posted · Request changes" with a link; the fake GitHub holds exactly the kept comments on the right lines with the edited text; the row on the list says "Reviewed". The fake repo's refs did not change.
 **Test**: E2E — `e2e/review.spec.ts` › "review a pull request: dismiss, edit, request changes, post"
 
-### S17 (A7, cut first): Review comments are listed on a My PR
+### S17 (A7, removed 2026-10-03, not in the product): Review comments are listed on a My PR
 **Given** pull request #12 opened by the bot with two review comments by another account, one of them already answered by TseHang
 **When** `GET /pulls/12/comments`, and I open the session of #12
 **Then** `200 {comments:[{id, author, path, line, body, createdAt, replies:[…], answered}]}`. The session page shows a "Review comments" panel with "1 open", each comment with its file and line, and the list row says "1 comment to answer".
 **Test**: API — `test/worker/router.test.ts` › "review comments of a pull request"; E2E — `e2e/my-pr.spec.ts` › "review comments: listed, replied to as TseHang, and fixed by the agent"
 
-### S18 (A7, cut first): Reply as the bot
+### S18 (A7, removed 2026-10-03, not in the product): Reply as the bot
 **Given** that page
 **When** I type a reply and click **Reply**
 **Then** `POST /pulls/12/comments/:id/replies {text}` is sent with the App token; the reply appears under the comment, written by the &run bot; the comment counts as answered. The route is refused with `429` by the write limiter and `503` when writes are off; an empty or over-4,000-character text gets `400`.
 **Test**: API — `test/worker/router.test.ts` › "reply to a review comment"; E2E — the same `e2e/my-pr.spec.ts` test, and "a reply that GitHub refuses is shown and nothing is lost"
 
-### S19 (A7, cut first): Ask the agent to fix
+### S19 (A7, removed 2026-10-03, not in the product): Ask the agent to fix
 **Given** that page
 **When** I click **Ask the agent to fix** on a comment
 **Then** a message is sent to the session: the comment's file and line, its text, and my reply text if there is one. The agent runs, reaches the gate, and Approve adds a commit to pull request #12.
@@ -297,7 +297,7 @@ Tests from earlier phases that change meaning (to be recorded in Build Progress)
 | 4 | Web: reducer, pull request card, approval bar, Pull requests page, sidebar, Home copy | S15, reducer and list edges | ✅ done (E2E `pr.spec`, `pulls.spec`, `code-run.spec`, `home.spec` green) |
 | 5 | Web: review start page, review session (tabs, findings panel, verdict bar) | S16, review edges | ✅ done (E2E `review.spec` green, run twice) |
 | 6 | Eval: review case | S20 | ✅ done |
-| 7 | A7 (cut first): review comments, reply, ask the agent to fix | S17, S18, S19 | ✅ done (E2E `my-pr.spec` green) |
+| 7 | A7 (cut first): review comments, reply, ask the agent to fix | S17, S18, S19 | ⛔ built, then removed (Henry, 2026-10-03; tag `my-pr-a7`) |
 | 8 | Docs: ADR amendments, `limits.md`, README | — | ✅ done (by the commander) |
 
 Test changes during the build:
@@ -337,3 +337,5 @@ Observations (not fixed, not user-visible):
 Units: 8 (implementer: 7, commander: 1 for the docs; small fixes after verification by the commander).
 
 Changed after S21 (Henry, 2026-10-03): replies on a pull request &run opened are posted by the bot instead of TseHang, so the author (bot) and the reviewer (TseHang) stay two roles. Tests updated: `test/github/pulls.test.ts`, `test/worker/router.test.ts`, `e2e/my-pr.spec.ts`.
+
+My PR (A7) taken out (Henry, 2026-10-03): the comment list inside the Code session, with a Reply and an "Ask the agent to fix" button per comment, did not feel right, and the design is not settled. Removed: `web/src/components/ReviewComments.tsx`, "N comments to answer" on the list, `GET /pulls/:n/comments`, `POST /pulls/:n/comments/:id/replies`, `listReviewComments` / `replyToComment` in `src/github/`, their tests and `e2e/my-pr.spec.ts`. S17–S19 no longer apply. The code is at git tag `my-pr-a7`; the to-do is in `docs/limits.md`. Round 2 of a Code session (a message, then Approve adds a commit to the same pull request) does not depend on it and stays.

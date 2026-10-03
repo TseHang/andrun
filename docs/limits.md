@@ -56,8 +56,7 @@ Last updated: 2026-10-03 (Phase 4).
 | C3 | `POST /sessions/:id/debug/kill-sandbox` is public while `DEBUG_ENDPOINTS="1"`. It gives no more power than the public delete. | Set `DEBUG_ENDPOINTS="0"` after the demo. |
 | C4 | Anyone with the URL sees and can delete every session (one shared workspace, spec D3). | Out of scope for this version. |
 
-| C6 | **The App's GitHub quota (5,000 requests an hour) can be used up by visitors.** Reads are limited to 60 a minute per IP, and the Worker's GitHub requests to 240 a minute for the public routes and 240 a minute for the sessions (separate budgets, so list requests cannot block an approve). That bounds a burst but not an hour, and one visitor can use up the routes' budget for the others for that minute. When the quota is gone, GitHub's rate-limit message is shown and pull requests and reviews stop working until it resets. The list counts review comments for at most 10 pull requests per load. | A short cache for the pull request list; a login. |
-| C7 | **A reply is posted as the &run bot by anyone with the URL**, only on pull requests &run opened (not as TseHang: the pull request's author answers its reviewer). "Ask the agent to fix" gives the agent a comment that someone wrote on GitHub; the result still stops at the approval gate. | A login. |
+| C6 | **The App's GitHub quota (5,000 requests an hour) can be used up by visitors.** Reads are limited to 60 a minute per IP, and the Worker's GitHub requests to 240 a minute for the public routes and 240 a minute for the sessions (separate budgets, so list requests cannot block an approve). That bounds a burst but not an hour, and one visitor can use up the routes' budget for the others for that minute. When the quota is gone, GitHub's rate-limit message is shown and pull requests and reviews stop working until it resets. | A short cache for the pull request list; a login. |
 
 ## Open observations (cause not confirmed)
 
@@ -75,5 +74,6 @@ Last updated: 2026-10-03 (Phase 4).
 - [x] Phase 4: Code sessions start from the default branch's head; `DEMO_SHA` is an optional pin (ADR A8).
 - [x] Phase 4: PR on approve reads the changed files from the session's `changes`; a change with a file over 1 MB or a binary file is refused (L6).
 - [ ] After merge: connect Workers Builds so `main` deploys automatically (Henry, in the Cloudflare dashboard).
+- [ ] Later: **My PR** (ADR A7): on a pull request &run opened, show the reviewer's comments and let the agent address them. A first version was built and taken out on 2026-10-03 (git tag `my-pr-a7`): a comment list inside the Code session with a Reply and an "Ask the agent to fix" button per comment felt wrong there. Open design questions: where it lives (not mixed into the Code session's timeline), and one action in the composer that hands all open comments to the agent instead of one click per comment. Roles when it comes back: the bot (the coder) replies; TseHang only reviews.
 - [ ] Before sharing the URL publicly: C1, C3 and C5.
 - [ ] Decide on F1 and F2 together: either watch `monitor()` for the whole run, or not at all.

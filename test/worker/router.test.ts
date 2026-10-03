@@ -32,7 +32,6 @@ function fakeEnv(over: Partial<RouterEnv> = {}) {
   const fake = createFakeGitHub();
   const github = createGitHub({ apiUrl: "https://api.github.test", repo: FAKE_REPO, appId: "1", installationId: "2", privateKey: testKeys().privateKey, pat: FAKE_PAT, fetch: fake.fetch });
   const ghRead = limiter(60);
-  const ghWrite = limiter(10);
   const touched: string[] = [];
   const indexRemoved: string[] = [];
   const killed: string[] = [];
@@ -74,10 +73,9 @@ function fakeEnv(over: Partial<RouterEnv> = {}) {
     github,
     githubWrites: true,
     githubReadLimiter: ghRead.binding,
-    githubWriteLimiter: ghWrite.binding,
     ...over,
   };
-  return { env, sessions, created, touched, indexRemoved, killed, index, fake, createKeys: create.keys, deleteKeys: del.keys, readKeys: ghRead.keys, writeKeys: ghWrite.keys };
+  return { env, sessions, created, touched, indexRemoved, killed, index, fake, createKeys: create.keys, deleteKeys: del.keys, readKeys: ghRead.keys };
 }
 
 const req = (method: string, path: string, opts: { body?: unknown; ip?: string; headers?: Record<string, string> } = {}) =>
@@ -441,87 +439,5 @@ describe("router (Phase 3: P3-c, P3-d)", () => {
       const text = await (await handle(req("GET", path), f.env)).text();
       expect(text).not.toMatch(/ghs_|github_pat_|PRIVATE KEY|installation/i);
     }
-  });
-
-  // ---------- A7: review comments (cut first) ----------
-
-  function withComments(over: Partial<RouterEnv> = {}) {
-    const f = withPulls(over);
-    const a = f.fake.addComment({ pull: 12, user: "octocat", path: "src/stats.js", line: 3, body: "Should mean([]) return 0 or throw?" });
-    const b = f.fake.addComment({ pull: 12, user: "octocat", path: "test/stats.test.js", line: 9, body: "Please add a case for a single element." });
-    f.fake.addComment({ pull: 12, user: "TseHang", path: b.path, line: b.line, body: "Will do.", in_reply_to_id: b.id });
-    return { ...f, a, b };
-  }
-
-  it("review comments of a pull request", async () => {
-    const f = withComments();
-    const res = await handle(req("GET", "/pulls/12/comments"), f.env);
-    expect(res.status).toBe(200);
-    const { comments } = (await res.json()) as { comments: Record<string, unknown>[] };
-    expect(comments).toMatchObject([
-      { id: f.a.id, author: "octocat", path: "src/stats.js", line: 3, body: "Should mean([]) return 0 or throw?", replies: [], answered: false },
-      { id: f.b.id, author: "octocat", answered: true, replies: [{ author: "TseHang", body: "Will do." }] },
-    ]);
-    expect(f.readKeys).toEqual([IP_A]);
-    await expectError(await handle(req("GET", "/pulls/99/comments"), f.env), 404);
-    await expectError(await handle(req("GET", "/pulls/x/comments"), f.env), 404);
-
-    // The list says how many comments wait on a pull request &run opened; other rows carry no count.
-    const { pulls } = (await (await handle(req("GET", "/pulls"), f.env)).json()) as { pulls: Record<string, unknown>[] };
-    expect(pulls.find((p) => p["number"] === 12)).toMatchObject({ openComments: 1 });
-    expect(pulls.find((p) => p["number"] === 14)).toMatchObject({ openComments: 0 });
-    expect(pulls.find((p) => p["number"] === 13)).not.toHaveProperty("openComments");
-  });
-
-  it("the comment counts of the list are capped", async () => {
-    // Security review: one list request must not fan out into one GitHub call per pull request without a bound.
-    const f = fakeEnv();
-    for (let i = 0; i < 14; i++) f.fake.addPull({ number: 100 + i, title: `PR ${i}`, headRef: `agent/0000000${i.toString(16)}-1` });
-    const { pulls } = (await (await handle(req("GET", "/pulls"), f.env)).json()) as { pulls: Record<string, unknown>[] };
-    expect(pulls).toHaveLength(14);
-    expect(f.fake.requests.filter((r) => r.path.includes("/comments"))).toHaveLength(10);
-    expect(pulls.filter((p) => "openComments" in p)).toHaveLength(10);
-    expect(pulls.slice(0, 10).every((p) => p["openComments"] === 0)).toBe(true); // the newest ten
-  });
-
-  it("reply to a review comment", async () => {
-    const f = withComments();
-    const path = `/pulls/12/comments/${f.a.id}/replies`;
-    const res = await handle(req("POST", path, { body: { text: "  Good catch. It should throw.  " } }), f.env);
-    expect(res.status).toBe(201);
-    expect(await json(res)).toMatchObject({ id: expect.any(Number) as number, url: expect.stringContaining("#discussion_r") as string });
-    expect(f.fake.comments.at(-1)).toMatchObject({ user: BOT, body: "Good catch. It should throw.", in_reply_to_id: f.a.id });
-    expect(f.writeKeys).toEqual([IP_A]);
-
-    const n = f.fake.comments.length;
-    await expectError(await handle(req("POST", path, { body: { text: "   " } }), f.env), 400, /text/);
-    await expectError(await handle(req("POST", path, { body: { text: "x".repeat(4001) } }), f.env), 400, /4000/);
-    await expectError(await handle(req("POST", path, { body: "{not json" }), f.env), 400);
-    await expectError(await handle(req("POST", "/pulls/12/comments/424242/replies", { body: { text: "x" } }), f.env), 404);
-    await expectError(await handle(req("POST", "/pulls/12/comments/abc/replies", { body: { text: "x" } }), f.env), 404);
-    expect(f.fake.comments).toHaveLength(n);
-
-    // Security review: replies are only for pull requests &run opened, not any pull request in the repo.
-    await expectError(await handle(req("POST", "/pulls/13/comments/1/replies", { body: { text: "x" } }), f.env), 400, /only for pull requests &run opened/);
-    expect(f.fake.comments).toHaveLength(n);
-
-    // Security review: the comment must belong to the pull request that was checked.
-    const foreign = f.fake.addComment({ pull: 13, user: "octocat", path: "a.js", line: 1, body: "On someone else's pull request." });
-    await expectError(await handle(req("POST", `/pulls/12/comments/${foreign.id}/replies`, { body: { text: "x" } }), f.env), 404);
-    expect(f.fake.requests.filter((r) => r.method === "POST" && r.path.includes(`/comments/${foreign.id}/replies`))).toEqual([]);
-    expect(f.fake.comments).toHaveLength(n + 1);
-
-    // The kill switch and the write limiter (D14).
-    const off = withComments({ githubWrites: false });
-    await expectError(await handle(req("POST", `/pulls/12/comments/${off.a.id}/replies`, { body: { text: "x" } }), off.env), 503, /GitHub writes are disabled/);
-    expect(off.fake.requests.filter((r) => r.method === "POST" && r.path.includes("/replies"))).toEqual([]);
-
-    const limited = withComments({ githubWriteLimiter: limiter(1).binding });
-    const p = `/pulls/12/comments/${limited.a.id}/replies`;
-    expect((await handle(req("POST", p, { body: { text: "one" } }), limited.env)).status).toBe(201);
-    const refused = await handle(req("POST", p, { body: { text: "two" } }), limited.env);
-    await expectError(refused, 429);
-    expect(refused.headers.get("retry-after")).toBe("60");
-    expect((await handle(req("POST", p, { body: { text: "other ip" }, ip: IP_B }), limited.env)).status).toBe(201);
   });
 });

@@ -81,8 +81,6 @@ export interface PullRow {
   updatedAt: string;
   url: string;
   mine: boolean;
-  /** Review comments nobody has replied to; only on a pull request &run opened. */
-  openComments?: number;
   codeSession: { id: string; status: Status } | null;
   reviewSession: { id: string; status: Status } | null;
 }
@@ -128,44 +126,4 @@ export async function getPull(n: number): Promise<PullDetail | "not_found"> {
   if (res.status === 429) throw new Error("Too many requests. Try again in 60 seconds.");
   const body = (await res.json().catch(() => null)) as { error?: string } | null;
   throw new Error(body?.error ?? "Could not load the pull request.");
-}
-
-export interface ReviewThread {
-  id: number;
-  author: string;
-  path: string;
-  line: number;
-  body: string;
-  createdAt: string;
-  url: string;
-  replies: { id: number; author: string; body: string; createdAt: string }[];
-  answered: boolean;
-}
-
-/** The review comments of a pull request, as threads. Throws with the message to show. */
-export async function listComments(n: number): Promise<ReviewThread[]> {
-  const res = await fetch(`/pulls/${n}/comments`);
-  if (res.ok) return ((await res.json()) as { comments: ReviewThread[] }).comments;
-  if (res.status === 429) throw new Error("Too many requests. Try again in 60 seconds.");
-  const body = (await res.json().catch(() => null)) as { error?: string } | null;
-  throw new Error(body?.error ?? "Could not load the review comments.");
-}
-
-export type ReplyResult = { ok: true } | { ok: false; error: string };
-
-/** Replies in a thread as the PAT's user. */
-export async function replyToComment(n: number, id: number, text: string): Promise<ReplyResult> {
-  try {
-    const res = await fetch(`/pulls/${n}/comments/${id}/replies`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text }),
-    });
-    if (res.status === 201) return { ok: true };
-    if (res.status === 429) return { ok: false, error: "Too many requests. Try again in 60 seconds." };
-    const err = (await res.json().catch(() => null)) as { error?: string } | null;
-    return { ok: false, error: err?.error ?? "Could not post the reply." };
-  } catch {
-    return { ok: false, error: "Could not post the reply." };
-  }
 }

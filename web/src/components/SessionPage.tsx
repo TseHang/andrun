@@ -7,7 +7,6 @@ import { ApprovalBar } from "./ApprovalBar";
 import { ChangesPanel } from "./ChangesPanel";
 import { Composer } from "./Composer";
 import { DeleteDialog } from "./DeleteDialog";
-import { ReviewComments } from "./ReviewComments";
 import { PostBar, PostedBar } from "./ReviewBars";
 import { ReviewBody } from "./ReviewSession";
 import { SessionHeader } from "./SessionHeader";
@@ -64,7 +63,6 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
   const more = useRef<HTMLButtonElement>(null);
   const status = view.status ?? snap.status;
   const review = snap.mode === "review";
-  const prNumber = view.pr?.number ?? snap.pr?.number;
   const session = { id, code: snap.mode === "code", baseBranch: snap.baseBranch };
 
   // Re-read the snapshot (sandboxRunning) and the list after each status change.
@@ -135,9 +133,7 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
           <ReviewBody view={view} status={status} session={session} pr={snap.pr?.number ?? null} send={send} />
         ) : (
           <>
-            <Timeline view={view} session={session}>
-              {prNumber !== undefined && <ReviewComments pr={prNumber} prCards={view.items.filter((i) => i.kind === "pr").length} running={status === "running"} send={send} />}
-            </Timeline>
+            <Timeline view={view} session={session} />
             <ChangesPanel view={view} sandboxRunning={snap.sandboxRunning} sha={snap.sha} />
           </>
         )}

@@ -36,10 +36,9 @@ export interface RouterEnv {
   /** The fixed demo repo (P2-h), shown by `GET /config`. `sha` is `DEMO_SHA`; null means the default branch's head. */
   repo: { name: string; sha: string | null };
   /** The repo's GitHub client (App token); the router only reads. */
-  github: Pick<GitHub, "defaultBranchHead" | "listPulls" | "getPull" | "listReviewComments" | "replyToComment">;
+  github: Pick<GitHub, "defaultBranchHead" | "listPulls" | "getPull">;
   /** `GITHUB_WRITES="1"` and no kill switch: the web app shows publish and review actions. */
   githubWrites: boolean;
   githubReadLimiter: RateLimiter;
-  githubWriteLimiter: RateLimiter;
   newId(): string;
 }

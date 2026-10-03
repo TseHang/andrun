@@ -20,7 +20,6 @@ function routerEnv(env: Env): RouterEnv {
     github: githubFor(env, "routes"),
     githubWrites: env.GITHUB_WRITES === "1" && env.KILL_SWITCH !== "1",
     githubReadLimiter: env.GITHUB_READ_LIMITER,
-    githubWriteLimiter: env.GITHUB_WRITE_LIMITER,
     newId: () => crypto.randomUUID(),
   };
 }
