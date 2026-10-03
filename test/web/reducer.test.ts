@@ -137,7 +137,7 @@ describe("view state (P3-a)", () => {
       { stream: "stdout", text: "three\n" },
     ]);
     expect(cmd).toMatchObject({ exitCode: 1, done: true, expanded: true });
-    expect(rowSummary(cmd!)).toBe("exit 1 · 1.1 s");
+    expect(rowSummary(cmd!)).toBe("exit 1 · 1.5 s"); // from the call to the result
     expect(rowTone(cmd!)).toBe("failed");
 
     expect(slow).toMatchObject({ exitCode: null, done: true });

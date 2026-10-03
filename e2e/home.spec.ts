@@ -31,7 +31,7 @@ test("the picked model is sent and shown", async ({ page }) => {
 });
 
 test("429, 503 and 400 are shown without losing the task", async ({ page }) => {
-  const answers = [
+  const answers: { status: number; headers: Record<string, string>; body: { error: string } }[] = [
     { status: 429, headers: { "retry-after": "60" }, body: { error: "too many requests" } },
     { status: 503, headers: {}, body: { error: "new sessions are disabled" } },
     { status: 400, headers: {}, body: { error: "task must be a non-empty string of at most 4000 characters" } },
