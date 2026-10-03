@@ -1,5 +1,9 @@
 // Eval harness (ADR D12): seeded cases through the real agent loop with LocalSandbox.
 // Writes one JSONL trajectory per run (§5 events + a final result line) and a summary table.
+// A case (eval/cases/*.yaml) has id, fixture, mode, task, forbid_changes and optional max_steps, plus:
+//   code case:   check { cmd, expect_exit }, which must exit as expected after the run.
+//   review case: expect_finding { path, lines }, a review_finding on that path and one of those lines
+//                (spec §10); no file may change; check is optional.
 
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
@@ -20,7 +24,8 @@ export interface EvalCase {
   fixture: string;
   mode: "code" | "review";
   task: string;
-  check: { cmd: string; expect_exit: number };
+  check?: { cmd: string; expect_exit: number };
+  expect_finding?: { path: string; lines: number[] };
   forbid_changes: string[];
   max_steps?: number;
 }
@@ -58,8 +63,23 @@ function validateCase(file: string, raw: unknown): EvalCase {
   }
   if (c["mode"] !== "code" && c["mode"] !== "review") throw invalid(file, `"mode" must be "code" or "review"`);
   const check = c["check"] as Record<string, unknown> | null | undefined;
-  if (!check || typeof check["cmd"] !== "string" || typeof check["expect_exit"] !== "number") {
+  if (check === undefined || check === null ? c["mode"] === "code" : typeof check["cmd"] !== "string" || typeof check["expect_exit"] !== "number") {
     throw invalid(file, `"check" needs a string "cmd" and a number "expect_exit"`);
+  }
+  const expect = c["expect_finding"] as Record<string, unknown> | null | undefined;
+  if (c["mode"] === "code") {
+    if (expect !== undefined) throw invalid(file, `"expect_finding" is only for review cases`);
+  } else {
+    const lines = expect?.["lines"];
+    if (
+      !expect ||
+      typeof expect["path"] !== "string" ||
+      !Array.isArray(lines) ||
+      lines.length === 0 ||
+      !lines.every((n) => Number.isInteger(n) && n > 0)
+    ) {
+      throw invalid(file, `a review case needs "expect_finding" with a string "path" and a non-empty list of positive integer "lines"`);
+    }
   }
   const forbid = c["forbid_changes"];
   if (!Array.isArray(forbid) || !forbid.every((g) => typeof g === "string")) {
@@ -142,6 +162,7 @@ async function runOne(
   const started = Date.now();
   const file = join(opts.outDir, `${c.id}-${run}.jsonl`);
   writeFileSync(file, "");
+  const findings: { path: string; line: number }[] = [];
   const tally: Tally = { tokens_in: 0, tokens_out: 0, cost: null, tool_errors: 0, auto_approved: 0 };
   const result = (r: Partial<EvalResult>): EvalResult => ({
     type: "result",
@@ -172,6 +193,7 @@ async function runOne(
       emit: (e) => {
         if (e.type === "message_delta") return; // never persisted (D7)
         appendFileSync(file, JSON.stringify(e) + "\n");
+        if (e.type === "review_finding") findings.push({ path: e.path, line: e.line });
         if (e.type === "usage") {
           tally.tokens_in += e.tokens_in;
           tally.tokens_out += e.tokens_out;
@@ -206,11 +228,15 @@ async function runOne(
     const isForbidden = picomatch(c.forbid_changes);
     // If the baseline is gone (history rewritten), we can't prove the tests are untouched.
     const editedTests = diff.exitCode !== 0 || changed.some((f) => isForbidden(f));
-    const check = await sandbox.exec(c.check.cmd, { timeoutMs: config.commandTimeoutMs });
+    const check = c.check ? await sandbox.exec(c.check.cmd, { timeoutMs: config.commandTimeoutMs }) : undefined;
+    const checkOk = !c.check || check?.exitCode === c.check.expect_exit;
+    const want = c.expect_finding;
+    const found = !want || findings.some((f) => f.path === want.path && want.lines.includes(f.line));
+    const untouched = !want || (changed.length === 0 && diff.exitCode === 0);
 
     return result({
       outcome: outcome.kind,
-      pass: outcome.kind === "finished" && check.exitCode === c.check.expect_exit && !editedTests,
+      pass: outcome.kind === "finished" && checkOk && found && untouched && !editedTests,
       steps: state.step,
       edited_tests: editedTests,
       changed_files: changed,

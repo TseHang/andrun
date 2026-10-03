@@ -84,7 +84,8 @@ describe("S12: eval runner writes a trajectory and scores honestly", () => {
     const cases = await loadCases(CASES);
     expect(cases.map((c) => c.id).sort()).toEqual(["cli-flag", "empty-array", "multi-file", "review-slugify", "slugify", "sum-off-by-one"]);
     for (const c of cases) {
-      expect(c).toMatchObject({ mode: "code", check: { cmd: "npm test", expect_exit: 0 }, forbid_changes: ["test/**", "package.json"] });
+      // The review case (Phase 4) is checked in the S20 describe below.
+      if (c.mode === "code") expect(c).toMatchObject({ check: { cmd: "npm test", expect_exit: 0 }, forbid_changes: ["test/**", "package.json"] });
       expect(existsSync(join(FIXTURES, c.fixture))).toBe(true);
     }
     expect(await loadCases(CASES, "sum-off-by-one")).toHaveLength(1);
