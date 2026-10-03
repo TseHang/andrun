@@ -17,20 +17,20 @@ test("run, watch, approve", async ({ page }) => {
   await expect(s.rows("read_file")).toContainText("src/sum.js");
   await expect(s.rows("apply_patch")).toContainText("src/sum.js");
 
-  // At the gate: the diff, the bar, and nothing about pull requests.
+  // At the gate: the diff and the bar.
   await expect(s.changes.getByText("src/sum.js")).toBeVisible();
   await expect(s.changes.locator('[data-diff="del"]')).toHaveCount(1);
   await expect(s.changes.locator('[data-diff="add"]')).toHaveCount(1);
   await expect(s.approval).toContainText("Approval required · finish");
   await expect(s.approval).toContainText("Fixed the loop bound in sum()");
-  await expect(s.approval.getByRole("button", { name: "Approve" })).toBeVisible();
-  await expect(page.locator("body")).not.toContainText(/pull request|branch/i);
+  await expect(s.approval.getByRole("button", { name: "Approve and open PR" })).toBeVisible();
   await expect(s.sandbox).toHaveText("Running"); // S19
 
-  await s.approval.getByRole("button", { name: "Approve" }).click();
+  // Phase 4 (L6 closed): approving opens a pull request; the details are in e2e/pr.spec.ts.
+  await s.approval.getByRole("button", { name: "Approve and open PR" }).click();
   await expect(s.status).toHaveText("Done");
   await expect(s.approval).toHaveCount(0);
-  await expect(page.getByText("Approved. Nothing was pushed: pull requests are not connected yet.")).toBeVisible();
+  await expect(s.prCard).toContainText(/Pull request #\d+ opened/);
   const id = page.url().split("/s/")[1]!;
   await expect(s.sidebar.locator(`a[href="/s/${id}"]`)).toContainText("Done");
   await expect(s.sandbox).toHaveText("Stopped · starts again with your next message", { timeout: 20_000 }); // S19

@@ -59,6 +59,44 @@ export async function deleteSession(request: APIRequestContext, id: string): Pro
   await request.delete(`${BASE}/sessions/${id}`, { headers: { "cf-connecting-ip": ip() } });
 }
 
+// ---------- The fake GitHub (`pnpm fake-github`, test/support/fake-github.ts) ----------
+
+const GH = "http://localhost:8789";
+const ghPost = async (path: string, body: unknown = {}) =>
+  (await fetch(`${GH}${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })).json();
+
+export interface GitHubState {
+  refs: Record<string, string>;
+  pulls: { number: number; title: string; body: string; user: string; headRef: string; baseRef: string; state: string }[];
+  reviews: { pull: number; user: string; commit_id: string; event: string; body: string; comments: { path: string; line: number; side: string; body: string }[] }[];
+  comments: { id: number; pull: number; user: string; path: string; line: number; body: string; in_reply_to_id?: number }[];
+  writes: string[];
+  authors: Record<string, string>;
+}
+
+export const gh = {
+  reset: () => ghPost("/__reset"),
+  state: async () => (await (await fetch(`${GH}/__state`)).json()) as GitHubState,
+  /** The next `times` requests whose path matches get this status. */
+  fail: (f: { method?: string; path: string; status: number; body?: unknown; times?: number }) => ghPost("/__fail", f),
+  addPull: (p: Record<string, unknown>) => ghPost("/__pull", p) as Promise<{ number: number; headSha: string }>,
+  addComment: (c: Record<string, unknown>) => ghPost("/__comment", c) as Promise<{ id: number }>,
+};
+
+export const SLUGIFY_PATCH = ["@@ -0,0 +1,6 @@", "+export function slugify(text) {", "+  return text", "+    .toLowerCase()", '+    .replace(/ /g, "-")', '+    .replace(/[^a-z0-9-]/g, "");', "+}"].join("\n");
+
+/** Pull request #14 by the bot, with the planted bug of spec test E on line 4 of src/slugify.js. */
+export const seedReviewPull = () =>
+  gh.addPull({
+    number: 14,
+    title: "Add slugify helper",
+    headRef: "agent/1a2b3c4d-1",
+    files: [
+      { filename: "src/slugify.js", status: "added", additions: 6, deletions: 0, patch: SLUGIFY_PATCH },
+      { filename: "logo.png", status: "added", additions: 0, deletions: 0 },
+    ],
+  });
+
 // ---------- The screen (selectors shared by the specs) ----------
 
 export const ui = (page: Page) => ({
@@ -69,6 +107,11 @@ export const ui = (page: Page) => ({
   approval: page.getByRole("form", { name: "Approval" }),
   composer: page.getByRole("form", { name: "Message the agent" }),
   sandbox: page.getByTestId("sandbox-state"),
+  prCard: page.getByTestId("pr-card"),
+  reviewCard: page.getByTestId("review-card"),
+  findings: page.getByRole("complementary", { name: "Findings" }),
+  postBar: page.getByRole("form", { name: "Post review" }),
+  prRow: (n: number) => page.locator(`[data-pr="${n}"]`),
   rows: (name?: string) => page.locator(name ? `[data-step-name="${name}"]` : "[data-step-name]"),
 });
 

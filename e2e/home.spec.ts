@@ -17,7 +17,8 @@ test("the picked model is sent and shown", async ({ page }) => {
   await expect(model).toHaveText(/deepseek-v4-pro/);
 
   const mode = page.getByRole("group", { name: "Mode" });
-  await expect(mode.getByRole("button", { name: "Review" })).toBeDisabled();
+  // Phase 4 enables Review: a review starts from a pull request, so the switch leads to the list (G6).
+  await expect(mode.getByRole("link", { name: "Review" })).toHaveAttribute("href", "/prs");
   await expect(mode.getByRole("button", { name: "Task" })).toBeDisabled();
 
   await page.getByLabel("Task").fill("make the failing test pass");
