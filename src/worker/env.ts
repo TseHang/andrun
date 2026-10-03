@@ -10,6 +10,8 @@ export interface Env {
   DELETE_LIMITER: RateLimit;
   GITHUB_WRITE_LIMITER: RateLimit;
   GITHUB_READ_LIMITER: RateLimit;
+  /** Every request this Worker sends to GitHub counts against it, under one shared key. */
+  GITHUB_API_LIMITER: RateLimit;
   /** Worker secret (`wrangler secret put`); `.dev.vars` locally. Never passed into the sandbox. */
   AIAND_API_KEY: string;
   AIAND_BASE_URL: string;

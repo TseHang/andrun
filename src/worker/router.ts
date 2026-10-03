@@ -93,9 +93,11 @@ async function listPulls(request: Request, env: RouterEnv): Promise<Response> {
       return best ? { id: best.id, status: best.status } : null;
     };
     // How many review comments wait on a pull request &run opened (the list shows it only where no review session is); a pull whose comments cannot be read gets no count.
+    // One GitHub call each, so only the newest MAX_COMMENT_COUNTS of them are counted.
+    const counted = new Set(pulls.filter((p) => p.mine && !newest(p.number, "review")).slice(0, MAX_COMMENT_COUNTS).map((p) => p.number));
     const open = await Promise.all(
       pulls.map(async (p) => {
-        if (!p.mine || newest(p.number, "review")) return undefined;
+        if (!counted.has(p.number)) return undefined;
         try {
           return (await env.github.listReviewComments(p.number)).filter((t) => !t.answered).length;
         } catch {
@@ -134,6 +136,7 @@ async function getComments(request: Request, env: RouterEnv, n: string): Promise
 }
 
 const MAX_REPLY_CHARS = 4000;
+const MAX_COMMENT_COUNTS = 10;
 
 async function postReply(request: Request, env: RouterEnv, n: string, id: string): Promise<Response> {
   if (!/^[1-9]\d*$/.test(n) || !/^[1-9]\d*$/.test(id)) return notFound();
@@ -152,6 +155,10 @@ async function postReply(request: Request, env: RouterEnv, n: string, id: string
   if (text === "") return error(400, "text must be a non-empty string");
   if (text.length > MAX_REPLY_CHARS) return error(400, `text must be at most ${MAX_REPLY_CHARS} characters`);
   try {
+    // A reply is posted under the user's name, so it is limited to pull requests &run opened.
+    const pull = (await env.github.listPulls()).find((p) => p.number === Number(n));
+    if (!pull) return notFound();
+    if (!pull.mine) return error(400, "replies are only for pull requests &run opened");
     return json(await env.github.replyToComment(Number(n), Number(id), text), 201);
   } catch (err) {
     return githubFailure(err);

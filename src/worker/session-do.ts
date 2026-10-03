@@ -6,13 +6,13 @@ import { Files } from "@cloudflare/sandbox";
 import { DurableObject } from "cloudflare:workers";
 import { defaultConfig } from "../core/config";
 import { OpenAICompatModelClient } from "../core/model";
-import { createGitHub } from "../github";
 import { CloudflareSandboxAdapter } from "../sandbox/cloudflare-sandbox";
 import type { ContainerLike } from "../sandbox/container";
 import { SessionEngine } from "../session/engine";
 import type { SqlStore, SqlValue } from "../session/ports";
 import type { ServerFrame, SessionSnapshot } from "../session/protocol";
 import { WORKSPACE_NAME, type Env } from "./env";
+import { githubFor } from "./github";
 import { fetchTarball } from "./repo";
 
 /** Container idle timeout (ADR D10). */
@@ -59,15 +59,7 @@ export class SessionDO extends DurableObject<Env> {
       model: new OpenAICompatModelClient({ baseUrl: env.AIAND_BASE_URL, apiKey: env.AIAND_API_KEY }),
       config: defaultConfig,
       repo: { name: env.DEMO_REPO, sha: env.DEMO_SHA },
-      github: createGitHub({
-        apiUrl: env.GITHUB_API_URL,
-        repo: env.DEMO_REPO,
-        appId: env.GITHUB_APP_ID,
-        installationId: env.GITHUB_APP_INSTALLATION_ID,
-        privateKey: env.GITHUB_APP_PRIVATE_KEY,
-        pat: env.GITHUB_PAT,
-        fetch: (input, init) => fetch(input, init),
-      }),
+      github: githubFor(env),
       guard: {
         githubWrite: async (ip) => {
           if (env.GITHUB_WRITES !== "1" || env.KILL_SWITCH === "1") return "GitHub writes are disabled";

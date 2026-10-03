@@ -473,6 +473,17 @@ describe("router (Phase 3: P3-c, P3-d)", () => {
     expect(pulls.find((p) => p["number"] === 13)).not.toHaveProperty("openComments");
   });
 
+  it("the comment counts of the list are capped", async () => {
+    // Security review: one list request must not fan out into one GitHub call per pull request without a bound.
+    const f = fakeEnv();
+    for (let i = 0; i < 14; i++) f.fake.addPull({ number: 100 + i, title: `PR ${i}`, headRef: `agent/0000000${i.toString(16)}-1` });
+    const { pulls } = (await (await handle(req("GET", "/pulls"), f.env)).json()) as { pulls: Record<string, unknown>[] };
+    expect(pulls).toHaveLength(14);
+    expect(f.fake.requests.filter((r) => r.path.includes("/comments"))).toHaveLength(10);
+    expect(pulls.filter((p) => "openComments" in p)).toHaveLength(10);
+    expect(pulls.slice(0, 10).every((p) => p["openComments"] === 0)).toBe(true); // the newest ten
+  });
+
   it("reply to a review comment", async () => {
     const f = withComments();
     const path = `/pulls/12/comments/${f.a.id}/replies`;
@@ -488,6 +499,10 @@ describe("router (Phase 3: P3-c, P3-d)", () => {
     await expectError(await handle(req("POST", path, { body: "{not json" }), f.env), 400);
     await expectError(await handle(req("POST", "/pulls/12/comments/424242/replies", { body: { text: "x" } }), f.env), 404);
     await expectError(await handle(req("POST", "/pulls/12/comments/abc/replies", { body: { text: "x" } }), f.env), 404);
+    expect(f.fake.comments).toHaveLength(n);
+
+    // Security review: replies are only for pull requests &run opened, not any pull request in the repo.
+    await expectError(await handle(req("POST", "/pulls/13/comments/1/replies", { body: { text: "x" } }), f.env), 400, /only for pull requests &run opened/);
     expect(f.fake.comments).toHaveLength(n);
 
     // The kill switch and the write limiter (D14).
