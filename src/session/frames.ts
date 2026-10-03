@@ -1,6 +1,6 @@
 // Validation of frames received from the browser (P2-b). Platform-free.
 
-import { MAX_TASK_CHARS, TITLE_CHARS, type ParsedFrame } from "./protocol";
+import { MAX_FINDING_CHARS, MAX_TASK_CHARS, TITLE_CHARS, type ParsedFrame } from "./protocol";
 
 const bad = (reason: string): ParsedFrame => ({ ok: false, reason });
 const nonEmpty = (v: unknown): v is string => typeof v === "string" && v.length > 0;
@@ -27,6 +27,22 @@ export function parseClientFrame(raw: string | ArrayBuffer): ParsedFrame {
       if (typeof f.text !== "string" || f.text.trim() === "") return bad("message needs text");
       if (f.text.length > MAX_TASK_CHARS) return bad(`message is longer than ${MAX_TASK_CHARS} characters`);
       return { ok: true, frame: { type: "message", text: f.text } };
+    case "finding": {
+      if (!nonEmpty(f.id)) return bad("finding needs an id");
+      if (f.text === undefined && f.dismissed === undefined) return bad("finding needs text or dismissed");
+      if (f.dismissed !== undefined && typeof f.dismissed !== "boolean") return bad("dismissed must be true or false");
+      let text: string | undefined;
+      if (f.text !== undefined) {
+        text = typeof f.text === "string" ? f.text.trim() : "";
+        if (text === "") return bad("finding text must not be empty");
+        if (text.length > MAX_FINDING_CHARS) return bad(`finding text is longer than ${MAX_FINDING_CHARS} characters`);
+      }
+      return { ok: true, frame: { type: "finding", id: f.id, ...(text !== undefined && { text }), ...(f.dismissed !== undefined && { dismissed: f.dismissed }) } };
+    }
+    case "post_review":
+      if (!nonEmpty(f.approvalId)) return bad("post_review needs an approvalId");
+      if (f.verdict !== "COMMENT" && f.verdict !== "APPROVE" && f.verdict !== "REQUEST_CHANGES") return bad("verdict must be COMMENT, APPROVE or REQUEST_CHANGES");
+      return { ok: true, frame: { type: "post_review", approvalId: f.approvalId, verdict: f.verdict } };
     default:
       return bad("unknown frame type");
   }

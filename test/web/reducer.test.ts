@@ -245,7 +245,10 @@ describe("view state (P3-a)", () => {
 
     const approved = reduce(atFinish, f.e({ type: "approval_resolved", approvalId: "a1", approved: true }));
     expect(approved.gate).toBeNull();
-    expect(approved.items.at(-1)).toMatchObject({ kind: "approved" });
+    expect(approved.items.at(-1)).toMatchObject({ kind: "approved", finish: true });
+    // Code review: only the finish approval may carry the "no pull request" note, not a mid-run gate.
+    const letContinue = reduce(struck, e({ type: "approval_resolved", approvalId: "a4", approved: true }));
+    expect(letContinue.items.at(-1)).toMatchObject({ kind: "approved", finish: false });
 
     const rejected = reduce(atFinish, f.e({ type: "approval_resolved", approvalId: "a1", approved: false, comment: "also add a test for the empty array case" }));
     expect(rejected.gate).toBeNull();
@@ -339,9 +342,7 @@ describe("view state (P3-a)", () => {
     const base = run([e({ type: "message", id: "u1", role: "user", text: "hi" })]);
     const after = run(
       [
-        e({ type: "pr_opened", url: "https://github.com/x/y/pull/1" }),
-        e({ type: "review_finding", id: "f1", path: "a.js", line: 1, severity: "low", text: "nit" }),
-        e({ type: "review_posted", url: "https://github.com/x/y/pull/1", verdict: "COMMENT" }),
+        // pr_opened, review_finding and review_posted are drawn since Phase 4 (see the last describe).
         e({ type: "artifact", name: "a.txt", size: 1, url: "https://example.com/a.txt" }),
         e({ type: "something_new" } as unknown as EventBody),
       ],
@@ -416,5 +417,84 @@ describe("review findings (PR)", () => {
     ].join("\n");
     const v = run([e({ type: "tool_call", callId: "p1", name: "apply_patch", args: { patch }, summary: "db/schema.sql" })]);
     expect(rows(v)[0]).toMatchObject({ arg: "db/schema.sql", additions: 1, deletions: 1 });
+  });
+});
+
+describe("Phase 4: pull requests and reviews", () => {
+  const gate = (e: ReturnType<typeof script>) => [
+    e({ type: "status", status: "running" }),
+    e({ type: "approval_required", approvalId: "a1", tool: "finish", reason: "finishing requires approval", summary: "Fixed." }),
+    e({ type: "status", status: "awaiting_approval" }),
+  ];
+
+  it("pr_opened card", () => {
+    const e = script();
+    const url = "https://github.com/TseHang/andrun-demo/pull/12";
+    let v = run([
+      ...gate(e),
+      e({ type: "pr_opened", url, number: 12, branch: "agent/1a2b3c4d-1" }),
+      e({ type: "approval_resolved", approvalId: "a1", approved: true }),
+      e({ type: "status", status: "done" }),
+    ]);
+    expect(kinds(v)).toEqual(["approved", "pr"]); // the marker first, then what the approval did
+    expect(v.items[1]).toMatchObject({ kind: "pr", url, number: 12, branch: "agent/1a2b3c4d-1", updated: false });
+    expect(v.pr).toEqual({ url, number: 12, branch: "agent/1a2b3c4d-1" });
+
+    // Round 2 on the same pull request: a second card, and `pr` stays the same pull request.
+    v = run([e({ type: "pr_opened", url, number: 12, branch: "agent/1a2b3c4d-1", updated: true })], v);
+    expect(v.items.at(-1)).toMatchObject({ kind: "pr", number: 12, updated: true });
+    expect(v.pr).toMatchObject({ number: 12 });
+
+    // An event stored before the optional fields existed still gives a card with its link.
+    const old = run([e({ type: "pr_opened", url })]);
+    expect(old.items[0]).toMatchObject({ kind: "pr", url, updated: false });
+    expect(old.pr).toEqual({ url });
+    expect(initialView().pr).toBeNull();
+  });
+
+  it("a finding update replaces by id", () => {
+    const e = script();
+    const f = (id: string, line: number, extra: Record<string, unknown> = {}) =>
+      e({ type: "review_finding", id, path: "src/slugify.js", line, severity: "high", text: `finding ${id}`, inline: true, ...extra });
+    let v = run([f("a", 4), f("b", 5, { inline: false }), f("c", 6)]);
+    expect(v.findings.map((x) => x.id)).toEqual(["a", "b", "c"]);
+    expect(v.findings[0]).toEqual({ id: "a", path: "src/slugify.js", line: 4, severity: "high", text: "finding a", inline: true, dismissed: false, edited: false });
+    expect(v.findings[1]).toMatchObject({ inline: false });
+    expect(kinds(v)).toEqual([]); // findings live in the panel, not in the timeline
+
+    v = run([f("b", 5, { inline: false, dismissed: true }), e({ type: "review_finding", id: "a", path: "src/slugify.js", line: 4, severity: "high", text: "edited", inline: true, edited: true })], v);
+    expect(v.findings.map((x) => x.id)).toEqual(["a", "b", "c"]); // the order does not change
+    expect(v.findings[0]).toMatchObject({ text: "edited", edited: true, dismissed: false });
+    expect(v.findings[1]).toMatchObject({ dismissed: true });
+
+    // An event without the optional fields (Phase 1 shape) counts as inline, kept and not edited.
+    const old = run([e({ type: "review_finding", id: "z", path: "a.js", line: 1, severity: "low", text: "t" })]);
+    expect(old.findings[0]).toMatchObject({ inline: true, dismissed: false, edited: false });
+  });
+
+  it("review_posted card ends the review", () => {
+    const e = script();
+    const url = "https://github.com/TseHang/andrun-demo/pull/14#pullrequestreview-101";
+    const v = run([
+      ...gate(e),
+      e({ type: "review_posted", url, verdict: "REQUEST_CHANGES" }),
+      e({ type: "approval_resolved", approvalId: "a1", approved: true }),
+      e({ type: "status", status: "done" }),
+    ]);
+    expect(kinds(v)).toEqual(["review_posted"]); // no "Approved" marker: the card says what happened
+    expect(v.items[0]).toMatchObject({ kind: "review_posted", url, verdict: "REQUEST_CHANGES" });
+    expect(v.posted).toEqual({ url, verdict: "REQUEST_CHANGES" });
+    expect(v.gate).toBeNull();
+    expect(initialView().posted).toBeNull();
+  });
+
+  it("a GitHub error ends sending and keeps the gate", () => {
+    const e = script();
+    let v = markSending(run(gate(e)));
+    v = run([e({ type: "error", source: "github", message: "GitHub answered 502: Bad Gateway", next: "Approve again to retry." })], v);
+    expect(v.sending).toBe(false);
+    expect(v.gate).toMatchObject({ approvalId: "a1" });
+    expect(v.items.at(-1)).toMatchObject({ kind: "failure", source: "github", title: "GitHub error", message: "GitHub answered 502: Bad Gateway", next: "Approve again to retry." });
+    expect(v.status).toBe("awaiting_approval");
   });
 });

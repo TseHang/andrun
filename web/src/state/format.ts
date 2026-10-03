@@ -82,3 +82,9 @@ export function rowTone(row: StepRow): "failed" | "ok" | "muted" {
   if (row.error !== undefined || (row.exitCode !== undefined && row.exitCode !== 0)) return "failed";
   return row.exitCode === 0 ? "ok" : "muted";
 }
+
+/** Where a Code session's change goes: `branch → base`, the base left out while it is unknown. */
+export function prTarget(branch: string | undefined, id: string, baseBranch: string | null): string {
+  const from = branch ?? `agent/${id.slice(0, 8)}-1`;
+  return baseBranch ? `${from} → ${baseBranch}` : from;
+}

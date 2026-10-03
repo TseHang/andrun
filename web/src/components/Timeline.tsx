@@ -1,12 +1,24 @@
 import { useLayoutEffect, useRef } from "react";
-import type { Status } from "../../../src/core/events";
 import type { SessionView, TimelineItem } from "../state/reducer";
-import { modelLabel } from "../state/format";
+import { modelLabel, prTarget } from "../state/format";
 import { StepGroup } from "./StepGroup";
 
-const NOTE = "Approved. Nothing was pushed: pull requests are not connected yet.";
+const NOTE = "No files changed, so no pull request was opened.";
+const VERDICT = { COMMENT: "Comment", APPROVE: "Approve", REQUEST_CHANGES: "Request changes" };
 
-function Item({ item }: { item: TimelineItem }) {
+export interface SessionInfo {
+  id: string;
+  code: boolean;
+  baseBranch: string | null;
+}
+
+const GITHUB_LINK = (url: string) => (
+  <a href={url} target="_blank" rel="noreferrer" className="text-accent-text">
+    View on GitHub
+  </a>
+);
+
+function Item({ item, session }: { item: TimelineItem; session: SessionInfo }) {
   switch (item.kind) {
     case "user":
       return (
@@ -50,6 +62,21 @@ function Item({ item }: { item: TimelineItem }) {
           {item.next && <div className="mt-2 text-xs text-text-secondary">{item.next}</div>}
         </div>
       );
+    case "pr":
+      return (
+        <div data-testid="pr-card" className="my-3 rounded-xl bg-sidebar p-3.5">
+          <div className="text-[13px] font-semibold">{`Pull request${item.number !== undefined ? ` #${item.number}` : ""} ${item.updated ? "updated" : "opened"}`}</div>
+          <div className="mt-1 font-mono text-xs text-text-secondary">{prTarget(item.branch, session.id, session.baseBranch)}</div>
+          <div className="mt-1 text-xs text-text-secondary">Opened by the &run bot. {GITHUB_LINK(item.url)}</div>
+        </div>
+      );
+    case "review_posted":
+      return (
+        <div data-testid="review-card" className="my-3 rounded-xl bg-sidebar p-3.5">
+          <div className="text-[13px] font-semibold">Review posted · {VERDICT[item.verdict]}</div>
+          <div className="mt-1 text-xs">{GITHUB_LINK(item.url)}</div>
+        </div>
+      );
     case "approved":
       return (
         <div className="my-4 flex items-center gap-3 text-xs text-text-secondary">
@@ -63,11 +90,9 @@ function Item({ item }: { item: TimelineItem }) {
   }
 }
 
-export function Timeline({ view, status }: { view: SessionView; status: Status }) {
+export function Timeline({ view, session }: { view: SessionView; session: SessionInfo }) {
   const ref = useRef<HTMLElement>(null);
   const height = useRef(0);
-  const lastApproval = view.items.filter((i) => i.kind === "approved" || i.kind === "user").at(-1);
-
   // Follow only if the view was at the bottom before this render's content was added.
   useLayoutEffect(() => {
     const el = ref.current!;
@@ -75,16 +100,13 @@ export function Timeline({ view, status }: { view: SessionView; status: Status }
     height.current = el.scrollHeight;
   });
 
-  const approvedAt = view.items.map((i) => i.kind).lastIndexOf("approved");
-  const showNote = status === "done" && approvedAt >= 0 && lastApproval?.kind === "approved";
-
   return (
     <section aria-label="Timeline" ref={ref} className="min-h-0 min-w-0 grow overflow-y-auto">
       <div className="mx-auto max-w-[720px] px-6 pt-4 pb-44">
         {view.items.map((item, i) => (
           <div key={item.key}>
-            <Item item={item} />
-            {showNote && i === approvedAt && <p className="text-center text-xs text-text-secondary">{NOTE}</p>}
+            <Item item={item} session={session} />
+            {session.code && item.kind === "approved" && item.finish && view.items[i + 1]?.kind !== "pr" && <p className="text-center text-xs text-text-secondary">{NOTE}</p>}
           </div>
         ))}
       </div>

@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// End-to-end runs use `wrangler dev` (real Worker, DO and container) with the fake model.
+// End-to-end runs use `wrangler dev` (real Worker, DO and container) with the fake model and the fake GitHub.
 export default defineConfig({
   testDir: "e2e",
   fullyParallel: false,
@@ -11,6 +11,7 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [
     { command: "pnpm fake-model", port: 8788, reuseExistingServer: true },
+    { command: "pnpm fake-github", port: 8789, reuseExistingServer: true },
     {
       command: "pnpm build && pnpm dev",
       url: "http://localhost:8787/config",

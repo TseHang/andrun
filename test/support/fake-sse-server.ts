@@ -10,6 +10,7 @@
 //   [fail]  every request gets HTTP 500 (the run ends as failed after the client's retries)
 //   [ask]   the first turn runs `rm -rf tmp` (not on the allowlist, so the run stops at an approval
 //           gate); after that the normal script plays from the start
+// A Review session (system prompt of the review profile) gets REVIEW_SCRIPT instead.
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { pathToFileURL } from "node:url";
@@ -49,11 +50,22 @@ const SCRIPT: Turn[] = [
   { call: { name: "read_file", args: { path: "src/sum.js" } } },
   { text: "The loop stops one element early.", call: { name: "apply_patch", args: { patch: FIX_PATCH } } },
   { call: { name: "run_command", args: { command: "npm test" } } },
-  { call: { name: "finish", args: { summary: "Fixed the loop bound in sum(): it skipped the last element." } } },
+  { call: { name: "finish", args: { summary: "Fixed the loop bound in sum(): it skipped the last element.", title: "Fix the loop bound in sum()" } } },
   // Played after a reject or a follow-up message.
   { text: "Adding the requested test.", call: { name: "write_file", args: { path: "test/empty.test.js", content: EMPTY_TEST } } },
   { call: { name: "run_command", args: { command: "npm test" } } },
   { call: { name: "finish", args: { summary: "Added a test for the empty array case; all tests pass." } } },
+];
+// Played for a Review session (the system prompt says "code reviewer"): four findings on the pull
+// request the E2E spec seeds, one of them not on a changed line.
+const finding = (path: string, line: number, severity: string, text: string): Turn => ({ call: { name: "report_finding", args: { path, line, severity, text } } });
+const REVIEW_SCRIPT: Turn[] = [
+  { text: "Running the tests, then reading the diff.", call: { name: "run_command", args: { command: "npm test" } } },
+  finding("src/slugify.js", 4, "high", "Two spaces in a row become two hyphens."),
+  finding("src/slugify.js", 5, "medium", "Leading and trailing hyphens are kept."),
+  finding("README.md", 3, "medium", "README still shows the old name makeSlug."),
+  finding("src/slugify.js", 1, "low", "Consider a default export."),
+  { call: { name: "finish", args: { summary: "Four findings; the main one is repeated spaces." } } },
 ];
 const ASK_TURN: Turn = { call: { name: "run_command", args: { command: "rm -rf tmp" } } };
 const LAST: Turn = { call: { name: "finish", args: { summary: "Nothing more to do." } } };
@@ -83,7 +95,8 @@ async function chat(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const task = messages.find((m) => m.role === "user")?.content ?? "";
   const played = messages.filter((m) => m.role === "assistant").length;
   const ask = task.includes("[ask]");
-  const turn = ask && played === 0 ? ASK_TURN : (SCRIPT[ask ? played - 1 : played] ?? LAST);
+  const review = (messages.find((m) => m.role === "system")?.content ?? "").includes("code reviewer");
+  const turn = review ? (REVIEW_SCRIPT[played] ?? LAST) : ask && played === 0 ? ASK_TURN : (SCRIPT[ask ? played - 1 : played] ?? LAST);
   console.log(`[fake-model] turn ${played}: ${turn.call.name}`);
 
   if (task.includes("[fail]")) {

@@ -54,8 +54,19 @@ export type EventBody =
       /** True when a policy approved it without a human (eval, auto-approve bonus). */
       auto?: boolean;
     }
-  | { type: "pr_opened"; url: string }
-  | { type: "review_finding"; id: string; path: string; line: number; severity: Severity; text: string }
+  | { type: "pr_opened"; url: string; number?: number; branch?: string; updated?: boolean }
+  | {
+      type: "review_finding";
+      id: string;
+      path: string;
+      line: number;
+      severity: Severity;
+      text: string;
+      /** Set by the session: the line is on the pull request's diff, so it can be an inline comment. */
+      inline?: boolean;
+      dismissed?: boolean;
+      edited?: boolean;
+    }
   | { type: "review_posted"; url: string; verdict: ReviewVerdict }
   | { type: "artifact"; name: string; size: number; url: string }
   | {

@@ -41,6 +41,7 @@ export function Composer({ view, running, send, update }: { view: SessionView; r
         placeholder={running ? "Redirect the agent" : "Send a message to continue"}
         className="h-9 min-w-0 grow rounded-[10px] bg-black/5 px-3 text-[14px] transition-[background-color,box-shadow] focus:bg-white focus:shadow-[0_0_0_1px_rgba(0,0,0,0.2)]"
       />
+      {view.pr?.number !== undefined && !running && <span className="shrink-0 text-xs text-text-tertiary">Adds a commit to pull request #{view.pr.number}</span>}
       {running && <span className="shrink-0 text-xs text-text-tertiary">Added at the next step</span>}
       {view.refused && (
         <span role="alert" className="shrink-0 text-xs text-failed">

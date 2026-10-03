@@ -5,6 +5,7 @@ import { createSession, resume, runAgent } from "../../src/core/agent";
 import { defaultConfig, type AgentConfig } from "../../src/core/config";
 import type { AgentEvent } from "../../src/core/events";
 import { getProfile } from "../../src/core/modes";
+import { autoApprove } from "../../src/core/policy";
 import type { AgentDeps, AgentState, ModelClient, SandboxAdapter } from "../../src/core/types";
 import { MemorySandbox } from "../support/memory-sandbox";
 import { ScriptedModelClient, call, type ScriptStep } from "../support/scripted-model";
@@ -155,7 +156,9 @@ describe("transcript stays valid for the next turn", () => {
   it("every tool_call has a tool message when an auto-approved finish ends a multi-call turn", async () => {
     const turn = { calls: [{ name: "finish", args: { summary: "d" } }, { name: "list_files", args: {} }] };
     const reviewProfile = getProfile("review", defaultConfig);
-    const { state } = await runAgent(start("review"), reviewProfile, harness(new ScriptedModelClient([turn]), new MemorySandbox()).deps);
+    // Since P4-b a review's finish asks, so the auto-approving policy of the eval is what lets it through.
+    const deps = { ...harness(new ScriptedModelClient([turn]), new MemorySandbox()).deps, policy: autoApprove(reviewProfile.policy) };
+    const { state } = await runAgent(start("review"), reviewProfile, deps);
     expect(state.status).toBe("done");
     expect(unanswered(state)).toEqual([]);
   });

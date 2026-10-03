@@ -11,7 +11,7 @@
   "assets": {
     "directory": "./dist",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/sessions", "/sessions/*", "/config"]
+    "run_worker_first": ["/sessions", "/sessions/*", "/config", "/pulls", "/pulls/*"]
   },
 
   "durable_objects": {
@@ -39,16 +39,26 @@
   // Per IP (ADR D14).
   "ratelimits": [
     { "name": "CREATE_LIMITER", "namespace_id": "1001", "simple": { "limit": 5, "period": 60 } },
-    { "name": "DELETE_LIMITER", "namespace_id": "1002", "simple": { "limit": 10, "period": 60 } }
+    { "name": "DELETE_LIMITER", "namespace_id": "1002", "simple": { "limit": 10, "period": 60 } },
+    { "name": "GITHUB_WRITE_LIMITER", "namespace_id": "1003", "simple": { "limit": 10, "period": 60 } },
+    { "name": "GITHUB_READ_LIMITER", "namespace_id": "1004", "simple": { "limit": 60, "period": 60 } },
+    // Not per IP: a budget for the requests this Worker sends to GitHub, one for the public routes and one
+    // for the sessions (so list requests cannot block an approve). One approve is about 12 requests,
+    // so the budget leaves room for bursts; it bounds abuse, it does not keep it under the App's 5,000 an hour (limits.md C6).
+    { "name": "GITHUB_API_LIMITER", "namespace_id": "1005", "simple": { "limit": 240, "period": 60 } }
   ],
 
-  // Not secret. AIAND_API_KEY is a Worker secret (`wrangler secret put`). For local dev the
-  // git-ignored .dev.vars sets the key and overrides AIAND_BASE_URL.
+  // Not secret. AIAND_API_KEY, GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, GITHUB_APP_PRIVATE_KEY and
+  // GITHUB_PAT are Worker secrets (`wrangler secret put`). For local dev the git-ignored .dev.vars
+  // sets them and overrides AIAND_BASE_URL and GITHUB_API_URL.
   "vars": {
     "AIAND_BASE_URL": "https://api.aiand.com/v1",
     "DEBUG_ENDPOINTS": "1",
     "DEMO_REPO": "TseHang/andrun-demo",
-    "DEMO_SHA": "0df6f53ec8a51785899d574c43db212513347537",
+    "GITHUB_API_URL": "https://api.github.com",
+    "GITHUB_WRITES": "1",
+    // Empty = Code sessions start from the default branch's head; set a commit to pin it (ADR A8).
+    "DEMO_SHA": "",
     "KILL_SWITCH": "0"
   },
 }

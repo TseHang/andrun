@@ -16,6 +16,7 @@ describe("S13: core is platform-free (D1)", () => {
   it.each([
     ["src/core", CORE],
     ["src/session", SESSION],
+    ["src/github", join(import.meta.dirname, "../../src/github")],
   ])("%s has no platform imports", (_name, dir) => {
     const files = coreFiles(dir);
     expect(files.length).toBeGreaterThan(0);
@@ -34,6 +35,11 @@ describe("S13: core is platform-free (D1)", () => {
         }
       }
     }
+    expect(offenders).toEqual([]);
+  });
+
+  it("src/core does not know GitHub", () => {
+    const offenders = coreFiles(CORE).filter((file) => /from\s+["'][^"']*github/.test(readFileSync(file, "utf8")));
     expect(offenders).toEqual([]);
   });
 });
