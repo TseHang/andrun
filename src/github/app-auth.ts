@@ -31,14 +31,29 @@ async function signJwt(config: AppAuthConfig): Promise<string> {
   return `${unsigned}.${base64url(new Uint8Array(signature))}`;
 }
 
-/** Returns a function that gives the current installation token. */
-export function createAppAuth(config: AppAuthConfig): () => Promise<string> {
+export interface AppAuth {
+  /** The current installation token. */
+  token(): Promise<string>;
+  /** The App's bot login, `<slug>[bot]`; asked once, with the App JWT. */
+  botLogin(): Promise<string>;
+}
+
+export function createAppAuth(config: AppAuthConfig): AppAuth {
   let cached: { token: string; expiresAt: number } | undefined;
-  return async () => {
-    if (cached && config.now() < cached.expiresAt) return cached.token;
-    const jwt = await signJwt(config);
-    const res = (await config.request("POST", `/app/installations/${config.installationId}/access_tokens`, jwt)) as { token: string };
-    cached = { token: res.token, expiresAt: config.now() + TOKEN_TTL_MS };
-    return res.token;
+  let bot: string | undefined;
+  return {
+    async token() {
+      if (cached && config.now() < cached.expiresAt) return cached.token;
+      const jwt = await signJwt(config);
+      const res = (await config.request("POST", `/app/installations/${config.installationId}/access_tokens`, jwt)) as { token: string };
+      cached = { token: res.token, expiresAt: config.now() + TOKEN_TTL_MS };
+      return res.token;
+    },
+    async botLogin() {
+      if (bot) return bot;
+      const app = (await config.request("GET", "/app", await signJwt(config))) as { slug: string };
+      bot = `${app.slug}[bot]`;
+      return bot;
+    },
   };
 }

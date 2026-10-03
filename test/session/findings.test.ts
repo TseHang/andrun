@@ -76,6 +76,16 @@ describe("findings (S13, P4-c, P4-d)", () => {
     expect(g.engine.snapshot()!.status).toBe("awaiting_approval");
   });
 
+  it("a review that was posted is not posted twice", async () => {
+    // Security review: the review reached GitHub, but the session was interrupted before the gate closed.
+    const r = await reviewAtGate();
+    r.store().saveGithubState({ posted: { url: "https://github.com/TseHang/andrun-demo/pull/14#pullrequestreview-1", verdict: "COMMENT" } });
+    expect(await send(r.engine, { type: "post_review", approvalId: r.approvalId, verdict: "COMMENT" })).toEqual([]);
+    expect(r.fake.reviews).toEqual([]); // GitHub is not asked again
+    expect(ofType(r.events(), "review_posted")).toEqual([]);
+    expect(r.engine.snapshot()!.status).toBe("done");
+  });
+
   it("a posted review takes no more messages", async () => {
     const r = await reviewAtGate();
     await send(r.engine, { type: "post_review", approvalId: r.approvalId, verdict: "COMMENT" });

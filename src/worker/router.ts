@@ -3,7 +3,9 @@
 // reached through `env.session(id)` / `env.workspace`; ids are validated before they name one.
 
 import { contextWindowFor, defaultConfig, selectableModels } from "../core/config";
-import { MAX_TASK_CHARS } from "../session/protocol";
+import { GitHubError } from "../github";
+import { DEFAULT_REVIEW_BRIEF, MAX_TASK_CHARS } from "../session/protocol";
+import type { SessionSummary } from "../session/protocol";
 import type { RouterEnv } from "./types";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -37,8 +39,8 @@ async function createSession(request: Request, env: RouterEnv): Promise<Response
     return error(400, "body must be valid JSON");
   }
   if (typeof body !== "object" || body === null || Array.isArray(body)) return error(400, "body must be a JSON object");
-  const { mode, task, model } = body as Record<string, unknown>;
-  if (mode !== "code") return error(400, 'mode must be "code"');
+  const { mode, task, model, pr } = body as Record<string, unknown>;
+  if (mode !== "code" && mode !== "review") return error(400, 'mode must be "code" or "review"');
   const trimmed = typeof task === "string" ? task.trim() : "";
   if (trimmed === "" || trimmed.length > MAX_TASK_CHARS) {
     return error(400, `task must be a non-empty string of at most ${MAX_TASK_CHARS} characters`);
@@ -48,16 +50,71 @@ async function createSession(request: Request, env: RouterEnv): Promise<Response
     return error(400, `model must be one of: ${selectableModels.join(", ")}`);
   }
 
+  if (mode === "review" && (typeof pr !== "number" || !Number.isInteger(pr) || pr < 1)) return error(400, "pr must be a positive integer");
+
   // The repo is fixed by configuration (P2-h): other fields are ignored.
   const id = env.newId();
-  await env.session(id).create({ id, mode: "code", task: trimmed, ...(model !== undefined && { model }) });
+  const common = { id, task: trimmed, ...(model !== undefined && { model }) };
+  try {
+    if (mode === "code") {
+      if (env.repo.sha !== null) {
+        await env.session(id).create({ ...common, mode });
+      } else {
+        const head = await env.github.defaultBranchHead();
+        await env.session(id).create({ ...common, mode, sha: head.sha, baseBranch: head.branch });
+      }
+    } else {
+      const pull = await env.github.getPull(pr as number);
+      if (pull.state !== "open") return error(400, `pull request #${pull.number} is not open`);
+      if (pull.fork) return error(400, "pull requests from forks are not supported");
+      if (pull.changedFiles > pull.files.length) return error(400, "pull requests with more than 100 files are not supported");
+      await env.session(id).create({ ...common, mode, sha: pull.headSha, pr: { number: pull.number, title: pull.title, files: pull.files } });
+    }
+  } catch (err) {
+    return githubFailure(err);
+  }
   return json({ id }, 201);
+}
+
+/** A GitHub error becomes 404 or 502; anything else is not ours to handle. */
+function githubFailure(err: unknown): Response {
+  if (!(err instanceof GitHubError)) throw err;
+  return error(err.status === 404 ? 404 : 502, err.message);
+}
+
+async function listPulls(request: Request, env: RouterEnv): Promise<Response> {
+  const refused = await limited(env.githubReadLimiter, request);
+  if (refused) return refused;
+  try {
+    const [pulls, sessions] = await Promise.all([env.github.listPulls(), env.workspace.list()]);
+    const newest = (number: number, mode: "code" | "review") => {
+      let best: SessionSummary | undefined;
+      for (const s of sessions) if (s.pr === number && s.mode === mode && (!best || s.created_at > best.created_at)) best = s;
+      return best ? { id: best.id, status: best.status } : null;
+    };
+    return json({ pulls: pulls.map((p) => ({ ...p, codeSession: newest(p.number, "code"), reviewSession: newest(p.number, "review") })) });
+  } catch (err) {
+    return githubFailure(err);
+  }
+}
+
+async function getPull(request: Request, env: RouterEnv, n: string): Promise<Response> {
+  if (!/^[1-9]\d*$/.test(n)) return notFound();
+  const refused = await limited(env.githubReadLimiter, request);
+  if (refused) return refused;
+  try {
+    return json(await env.github.getPull(Number(n)));
+  } catch (err) {
+    return githubFailure(err);
+  }
 }
 
 function config(env: RouterEnv): Response {
   return json({
     repo: env.repo.name,
     sha: env.repo.sha,
+    githubWrites: env.githubWrites,
+    reviewBrief: DEFAULT_REVIEW_BRIEF,
     models: selectableModels.map((id) => ({ id, contextWindow: contextWindowFor(defaultConfig, id) })),
     defaultModel: defaultConfig.models.code,
     maxSteps: defaultConfig.maxSteps,
@@ -71,6 +128,10 @@ async function route(request: Request, env: RouterEnv): Promise<Response> {
   const parts = pathname.split("/").filter((p, i) => i === 0 || p !== "");
   const method = request.method;
   if (parts[0] === "" && parts[1] === "config" && parts.length === 2) return method === "GET" ? config(env) : notFound();
+  if (parts[0] === "" && parts[1] === "pulls" && parts.length <= 3) {
+    if (method !== "GET") return notFound();
+    return parts.length === 2 ? listPulls(request, env) : getPull(request, env, parts[2]!);
+  }
   if (parts[0] !== "" || parts[1] !== "sessions") return notFound();
 
   if (parts.length === 2) {

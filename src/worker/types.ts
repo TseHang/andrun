@@ -1,6 +1,8 @@
 // What the router needs from its environment (Phase 2, P2-b). `index.ts` builds this from the real
 // bindings; tests pass fakes. No platform imports, so `handle` runs under Node.
 
+import type { GitHub } from "../github";
+import type { SessionEngine } from "../session/engine";
 import type { SessionSnapshot, SessionSummary } from "../session/protocol";
 
 export interface RateLimiter {
@@ -9,7 +11,7 @@ export interface RateLimiter {
 
 /** One SessionDO, addressed by session id. Missing sessions answer `null` / `false` (ADR D18). */
 export interface SessionStub {
-  create(input: { id: string; mode: "code"; task: string; model?: string }): Promise<void>;
+  create(input: Parameters<SessionEngine["create"]>[0]): Promise<void>;
   snapshot(): Promise<(SessionSnapshot & { debug?: Record<string, unknown> }) | null>;
   remove(): Promise<boolean>;
   killSandbox(): Promise<boolean>;
@@ -31,7 +33,13 @@ export interface RouterEnv {
   killSwitch: boolean;
   /** `DEBUG_ENDPOINTS="1"`: routes `POST /sessions/:id/debug/kill-sandbox`. */
   debugEndpoints: boolean;
-  /** The fixed demo repo (P2-h), shown by `GET /config`. */
-  repo: { name: string; sha: string };
+  /** The fixed demo repo (P2-h), shown by `GET /config`. `sha` is `DEMO_SHA`; null means the default branch's head. */
+  repo: { name: string; sha: string | null };
+  /** The repo's GitHub client (App token); the router only reads. */
+  github: Pick<GitHub, "defaultBranchHead" | "listPulls" | "getPull">;
+  /** `GITHUB_WRITES="1"` and no kill switch: the web app shows publish and review actions. */
+  githubWrites: boolean;
+  githubReadLimiter: RateLimiter;
+  githubWriteLimiter: RateLimiter;
   newId(): string;
 }

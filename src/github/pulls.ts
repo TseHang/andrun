@@ -9,7 +9,7 @@ export interface PullSummary {
   headRef: string;
   updatedAt: string;
   url: string;
-  /** Opened by &run: a bot author on an `agent/` branch. */
+  /** Opened by &run: this App's bot as author, on an `agent/` branch. */
   mine: boolean;
 }
 
@@ -59,7 +59,7 @@ interface RawFile {
   patch?: string;
 }
 
-export async function listPulls(request: Request, repo: string, token: string): Promise<PullSummary[]> {
+export async function listPulls(request: Request, repo: string, token: string, botLogin: string): Promise<PullSummary[]> {
   const raw = (await request("GET", `/repos/${repo}/pulls?state=open&per_page=50`, token)) as RawPull[];
   return raw.map((p) => ({
     number: p.number,
@@ -68,7 +68,7 @@ export async function listPulls(request: Request, repo: string, token: string): 
     headRef: p.head.ref,
     updatedAt: p.updated_at,
     url: p.html_url,
-    mine: p.user.login.endsWith("[bot]") && p.head.ref.startsWith("agent/"),
+    mine: p.user.login === botLogin && p.head.ref.startsWith("agent/"),
   }));
 }
 

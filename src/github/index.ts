@@ -35,7 +35,7 @@ export interface GitHub {
 
 export function createGitHub(config: GitHubConfig): GitHub {
   const request = createRequest(config.apiUrl, config.fetch ?? fetch);
-  const token = createAppAuth({
+  const auth = createAppAuth({
     appId: config.appId,
     installationId: config.installationId,
     privateKey: config.privateKey,
@@ -44,10 +44,10 @@ export function createGitHub(config: GitHubConfig): GitHub {
   });
   const { repo, pat } = config;
   return {
-    defaultBranchHead: async () => defaultBranchHead(request, repo, await token()),
-    publish: async (input) => publish(request, repo, await token(), input),
-    listPulls: async () => listPulls(request, repo, await token()),
-    getPull: async (n) => getPull(request, repo, await token(), n),
+    defaultBranchHead: async () => defaultBranchHead(request, repo, await auth.token()),
+    publish: async (input) => publish(request, repo, await auth.token(), await auth.botLogin(), input),
+    listPulls: async () => listPulls(request, repo, await auth.token(), await auth.botLogin()),
+    getPull: async (n) => getPull(request, repo, await auth.token(), n),
     postReview: (input) => postReview(request, repo, pat, input),
   };
 }

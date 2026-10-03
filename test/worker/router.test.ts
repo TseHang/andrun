@@ -129,7 +129,7 @@ describe("router (P2-b)", () => {
     const f = fakeEnv({ createLimiter: limiter(100).binding });
     await expectError(await post(f.env, "{not json"), 400, /json/i);
     await expectError(await post(f.env, ["code"]), 400);
-    await expectError(await post(f.env, { mode: "review", task: "x" }), 400, /mode/);
+    await expectError(await post(f.env, { mode: "task", task: "x" }), 400, /mode/); // "review" is a mode since Phase 4
     await expectError(await post(f.env, { task: "x" }), 400, /mode/);
     await expectError(await post(f.env, { mode: "code" }), 400, /task/);
     await expectError(await post(f.env, { mode: "code", task: "   " }), 400, /task/);

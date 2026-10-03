@@ -2,3 +2,12 @@
 # For a zero-cost local run, start `pnpm fake-model` and use the two lines below as they are.
 AIAND_API_KEY=fake
 AIAND_BASE_URL=http://localhost:8788
+
+# GitHub: a local run talks to the fake GitHub (`pnpm fake-github`, port 8789), never the real one.
+GITHUB_API_URL=http://localhost:8789
+GITHUB_APP_ID=1
+GITHUB_APP_INSTALLATION_ID=1
+GITHUB_PAT=github_pat_fake
+# A throwaway key, generated only for this file. It is only ever used against the fake GitHub
+# and has no access to anything. Do not put a real App key here.
+GITHUB_APP_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDIWZCwDOMrXiX+\nxETOxPxspYOKadWVoPJhETnIFOKnXyrAAw+AVU2ichfaeYj4E+pKtfmv0N55Soft\nj42ZFR8LpZRzJhxJmDoLo93UiKzRIf0xK0il3iF+xvKpwBn+JgFHU5OPjj2oF8cV\n/Of6naGCg/OSlDJ9sxohmL2t6Q7AI235sKwkKbwS0o5KwGAFBzE7Xw2oi55nYOPU\nhih/lAl4CzNdgklxYmdWPjKNc5KwuAhuvdSn3+Vi+kwuTBYh1h64MOX9qI50Mede\nTgaXU/dwjkPJ2WdMJYnbJa5FhKRuDCJgH30c3GvyCPMGr3ruv9EeaSNjxaRXvZK/\nOl5okC5NAgMBAAECggEAAySEhH5vQcrkRa7GdYfZfcrK2Wz3kLVJmAQxJ9ZMB9wS\nS5jAsX6lDRtFDIRDhcCqOCnKlNtt4fEtWKiby/7s0b3zKis63lyo7G3RmPfb3hvu\nYMsRBKkLVXXBcLA2uCnYc0n4UpQkm3JkCRBCg0fdtLJlK7NvZ1Fb45MFxqiVNqZQ\nfNuIJ9r8fGOgMuu9ZwUlafpF/V/rlLX7taqxTqj3ub0NXmBy/VkxXtf7ad29Rgcf\nMae7AndGnTFikofDEl9UKVnMBHPJT7E/Qg6x5i1qilPvue89CQHn031SGdghTsTW\nW9tMxg8m1GSzclmXSh9l2cayWzwUr1xtJRzGia2NAQKBgQD4IpOG3Q7S0wIkCXLU\nGEQZikI/TqEDn8W01h4115LLhXwXzpbSxWLFTeslikKOheitNq7twUlz+3C7TxAd\nwQQE+eatJpeX/36CKBkqgUYcLm3sc/GdVCGSgNq8qW+9j/BedzDRyDwhj52r7HQr\nWoAcqXL1/+8l6l9AXN2o3yjXXQKBgQDOsz/B0ccnKd810sAEw0l1i1aWqCImE+rE\nf01O9SKD/1CTO8pAbzDC5R+v6gBr0g7Nk/fTbX1FdXutx74PwNhxO0/bpFBGRj4d\nqkPP6mVV1+wILVKhES6XYPrb5zr3FFw7RShJX5oXsjmDGvgpzFuaRAQW/p+6VS9g\n8VLVzB7zsQKBgQDLI9ttHIqnNFJbWFTmqFsQIa1skJ2nDuVXz7d50tt9vPFDuECn\nmyrqZojs+czVS3GaZNs/D+9ngWDgJ7EE+uCkhkZAWQjgSi2ytssrjhvstGIPozgZ\n2ieF/fGVZI1zPmTFoYSZKfl4bE/j0Telynh5fov8MyQBAWgrlBtvxgp0jQKBgE8I\n5REUSGUmMo4fBoMLtPP4EmTK5zvOE8+MqZ/ORaNZJZMWopAes/NhrssR25VenYBn\n2rQCQosjj+Xz4S2e3GP3fOKMIpGsXCX1q7Y9dv/q7vp1cgnaSwlg8KrS8I33QAj9\nuZjMsFvtLuZ9knRRCpmi9jlgpOyXk+UqgTT0tsURAoGAbwdHLTcmnlESZTnISrcJ\n2MS6DflsyMmNqi+ipK1QhAYeTFwunHek36CA+eYRYeLmAUZBhnVT6h1IjlU/CYad\n5OL+610Jg/Kp/R6MrJD5RYH/EnJVhNfOicfMFO+5kIvvpWx1l9cafVqapEqKKfAx\nvc+CFGq5fRzCx/XEazcZJTg=\n-----END PRIVATE KEY-----"

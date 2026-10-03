@@ -256,6 +256,8 @@ export class SessionEngine {
       return reply({ type: "rejected", reason: "no such pending approval" });
     }
     this.startSegment({ approved: true }, false, async () => {
+      // Already on GitHub (the session was interrupted before the gate closed): only close the gate.
+      if (this.store.githubState().posted) return true;
       if (!(await this.allowed(ip, reply))) return false;
       const meta = this.store.meta();
       const review = this.store.githubState().review;
@@ -273,8 +275,8 @@ export class SessionEngine {
         });
         return false;
       }
-      this.ownEmit({ type: "review_posted", url: posted.url, verdict: frame.verdict });
       this.store.saveGithubState({ posted: { url: posted.url, verdict: frame.verdict } });
+      this.ownEmit({ type: "review_posted", url: posted.url, verdict: frame.verdict });
       this.upsertIndex("awaiting_approval");
       return true;
     });

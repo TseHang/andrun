@@ -6,6 +6,7 @@ import { Files } from "@cloudflare/sandbox";
 import { DurableObject } from "cloudflare:workers";
 import { defaultConfig } from "../core/config";
 import { OpenAICompatModelClient } from "../core/model";
+import { createGitHub } from "../github";
 import { CloudflareSandboxAdapter } from "../sandbox/cloudflare-sandbox";
 import type { ContainerLike } from "../sandbox/container";
 import { SessionEngine } from "../session/engine";
@@ -58,6 +59,22 @@ export class SessionDO extends DurableObject<Env> {
       model: new OpenAICompatModelClient({ baseUrl: env.AIAND_BASE_URL, apiKey: env.AIAND_API_KEY }),
       config: defaultConfig,
       repo: { name: env.DEMO_REPO, sha: env.DEMO_SHA },
+      github: createGitHub({
+        apiUrl: env.GITHUB_API_URL,
+        repo: env.DEMO_REPO,
+        appId: env.GITHUB_APP_ID,
+        installationId: env.GITHUB_APP_INSTALLATION_ID,
+        privateKey: env.GITHUB_APP_PRIVATE_KEY,
+        pat: env.GITHUB_PAT,
+        fetch: (input, init) => fetch(input, init),
+      }),
+      guard: {
+        githubWrite: async (ip) => {
+          if (env.GITHUB_WRITES !== "1" || env.KILL_SWITCH === "1") return "GitHub writes are disabled";
+          const { success } = await env.GITHUB_WRITE_LIMITER.limit({ key: ip });
+          return success ? null : "Too many requests. Try again in 60 seconds.";
+        },
+      },
       broadcast: (frame) => this.broadcast(frame),
       index: { upsert: (row) => env.WORKSPACE.getByName(WORKSPACE_NAME).upsert(row) },
       setAlarm: (at) => void (at === null ? ctx.storage.deleteAlarm() : ctx.storage.setAlarm(at)),
@@ -81,7 +98,7 @@ export class SessionDO extends DurableObject<Env> {
 
   // ---------- RPC, called by the Worker ----------
 
-  async create(input: { id: string; mode: "code"; task: string; model?: string }): Promise<void> {
+  async create(input: Parameters<SessionEngine["create"]>[0]): Promise<void> {
     this.engine.create(input);
     this.ctx.waitUntil(this.engine.idle());
   }
@@ -112,12 +129,14 @@ export class SessionDO extends DurableObject<Env> {
     const { 0: client, 1: server } = new WebSocketPair();
     // No await between the replay query and accepting the socket, so no event can fall in between.
     this.ctx.acceptWebSocket(server);
+    server.serializeAttachment({ ip: request.headers.get("cf-connecting-ip") ?? "unknown" });
     for (const event of missed) server.send(JSON.stringify(event));
     return new Response(null, { status: 101, webSocket: client });
   }
 
   override async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
-    this.engine.handleFrame(message, (frame) => ws.send(JSON.stringify(frame)));
+    const attachment = ws.deserializeAttachment() as { ip?: string } | null;
+    this.engine.handleFrame(message, (frame) => ws.send(JSON.stringify(frame)), { ip: attachment?.ip ?? "unknown" });
     this.ctx.waitUntil(this.engine.idle());
   }
 

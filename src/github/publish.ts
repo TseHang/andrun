@@ -28,6 +28,7 @@ interface RawPull {
   number: number;
   state: string;
   html_url: string;
+  user: { login: string };
 }
 
 interface RawCommit {
@@ -35,7 +36,7 @@ interface RawCommit {
   parents: { sha: string }[];
 }
 
-export async function publish(request: Request, repo: string, token: string, input: PublishInput): Promise<PublishResult> {
+export async function publish(request: Request, repo: string, token: string, botLogin: string, input: PublishInput): Promise<PublishResult> {
   const get = (path: string) => request("GET", `/repos/${repo}${path}`, token);
   const post = (path: string, body: unknown) => request("POST", `/repos/${repo}${path}`, token, body);
   const owner = repo.split("/")[0];
@@ -45,6 +46,7 @@ export async function publish(request: Request, repo: string, token: string, inp
   let pulls: RawPull[];
   for (;;) {
     pulls = (await get(`/pulls?head=${owner}:${branch}&state=all`)) as RawPull[];
+    if (pulls.some((p) => p.user.login !== botLogin)) throw new GitHubError(`branch ${branch} has a pull request that &run did not open`, 409);
     if (pulls[0]?.state !== "closed") break;
     round += 1;
     branch = `${input.branchPrefix}-${round}`;

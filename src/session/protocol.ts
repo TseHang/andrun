@@ -4,6 +4,16 @@ import type { AgentEvent, DiffSummary, ReviewVerdict, Status } from "../core/eve
 import type { ModeName } from "../core/types";
 
 export const MAX_TASK_CHARS = 4000;
+
+/** The brief a Review session starts with unless the user writes their own. */
+export const DEFAULT_REVIEW_BRIEF = `Review this pull request.
+
+1. Correctness: wrong results, edge cases, error handling.
+2. Tests: cases that are missing, tests that do not check behavior.
+3. Risk: breaking changes, security, data loss.
+
+Skip style and formatting.
+Give each finding a file, a line and a severity.`;
 export const TITLE_CHARS = 80;
 export const MAX_FINDING_CHARS = 4000;
 export const RESTORED_NOTE = "The sandbox was restarted and the workspace was restored from saved changes.";
