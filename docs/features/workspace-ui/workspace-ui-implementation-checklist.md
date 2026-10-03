@@ -1,6 +1,6 @@
 # &run Code Workspace UI — Implementation Checklist
 
-**Status**: ✅ Built — Passing locally (2026-10-03). S20 (deployed, real model) not yet run: it needs Henry's OK.
+**Status**: ✅ Built — Passing (2026-10-03). Deployed from this branch (version f54f4d21) and S20 passed with the real model.
 **Date**: 2026-10-02
 **Architecture**: `docs/architecture/web-codex-architecture-decision.md` → Phase 3
 **Design**: Claude Design canvas, page "v3 aligned", boards 1–5 (Home, Code session running, Approval gate, Done, States and errors): https://claude.ai/artifact/TZezwBinDXnfySoDgTwquD. Page "v2 prototype" is the earlier pass the G-rows below were found in.
@@ -258,6 +258,12 @@ Separately, with the task "[fail] x": a failure card "ai& did not answer" and "F
 **Then** the outcomes of S9, S10 and S11 hold with `deepseek-v4-flash`. The wordmark renders with no request to a font host. The built files in `dist/` contain neither `AIAND_API_KEY`'s value nor the string `api.aiand.com`.
 **Test**: Runtime — deployed URL, about 3 real sessions. Needs Henry's OK before it is run (Open Questions).
 
+**Result (2026-10-03, https://andrun.mengtse-hang.workers.dev, version f54f4d21, deepseek-v4-flash, driven by Playwright in Chromium)**:
+- A: `sandbox_setup` row within 1 s; the agent listed and read files, patched `src/sum.js` (+1 −1), ran `node --test` (exit 0) and reached the gate in 13 s. The Changes panel showed the diff with one removed and one added line. No text mentioned a pull request or a branch. Sandbox: Running.
+- C: Send with "also add a test for the empty array case" → Running → back at the gate in 12 s with `test/sum.test.js` (+4) and the "This change edits a test" warning. Approve → Done, the "Nothing was pushed" note, and Sandbox: Stopped 2 s later. 9 model calls, ¥0.39.
+- D: the sandbox was killed through the debug route after the first command; "The sandbox was lost" card, header Failed, and no spinner in the session (the one spinner on the page was another session's stale sidebar row, see the QA report). "continue" → a second `sandbox_setup` → the gate. 6 model calls, ¥0.23.
+- No request to a font host; no page errors. `dist/` holds neither the key nor `api.aiand.com`.
+
 ## Edge Cases
 - [x] Unknown or later-phase events (`pr_opened`, `review_finding`, `review_posted`, `artifact`) do not break the reducer; they are ignored. — **Test**: `test/web/reducer.test.ts` › "unknown events are ignored"
 - [x] A frame with `seq` at or below the highest seen is ignored; persisted `seq` gaps are accepted. — **Test**: `test/web/reducer.test.ts` › "duplicate and gapped seq"
@@ -284,7 +290,7 @@ Not applicable:
 - [x] **G6: Review and Task are shown disabled**, and each is enabled by the phase that builds it. (Henry, 2026-10-02)
 - [x] **G23: the task field** shows "Start your work, ship new feature!". It is built as a placeholder in an empty field, not as a task that Run would send: as a task it tells the agent nothing. Say so if you meant a pre-filled task. (Henry, 2026-10-02)
 - [x] **G8 / G10**: the optional `meta` on `tool_output` and `sandboxRunning` in the snapshot are in. (Henry, 2026-10-02)
-- [ ] **Paid checks**: S20 needs about 3 real sessions on `deepseek-v4-flash` (¥0.1–0.3 each). I will ask right before running it. — decide by: Henry, at deploy time
+- [x] **Paid checks**: Henry approved S20 (2026-10-03). Run in 2 sessions instead of 3 (A and C in one): ¥0.62 in total.
 - [x] Assumption (held): Playwright E2E needs Docker running locally, like `pnpm smoke`. There is no CI yet, so E2E is run by hand before the PR. — decide by: during build
 - [x] Assumption (held; opsz 20): the wordmark is outlined from DM Sans 700 (SIL Open Font License) with the "&" in `#cf4a12`; the PNG is 1024 px wide on a transparent background. — decide by: during build
 

@@ -55,4 +55,4 @@ Found along the way, not in the app: every local session leaves a `workerd-andru
 ## Not tested here
 - Safari and Firefox: only Chromium was run.
 - Widths under 1024 px: out of scope (checklist).
-- The deployed Worker with the real model: S20, waiting for Henry's OK.
+- (Done later the same day: S20 on the deployed Worker passed, see the checklist.) One stale row from before the fix ("what you can do", shown as Running) is also in the deployed index; it is corrected the next time that session changes status, or by deleting it.
