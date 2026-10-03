@@ -59,11 +59,6 @@ function Row({ pull }: { pull: PullRow }) {
           View review
         </a>
       )}
-      {reviewSession?.status === "done" && (
-        <a href={`/prs/${pull.number}`} className={`${PILL} bg-black/6`}>
-          Review again
-        </a>
-      )}
       {!reviewSession && (
         <a href={`/prs/${pull.number}`} className={`${PILL} bg-accent text-white`}>
           Start review

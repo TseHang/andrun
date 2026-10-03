@@ -105,6 +105,9 @@ test("review a pull request: dismiss, edit, request changes, post", async ({ pag
   await page.goto("/prs");
   await expect(s.prRow(14)).toContainText("Reviewed");
   await expect(s.prRow(14).getByRole("link", { name: "View review" })).toHaveAttribute("href", /\/s\/[0-9a-f-]{36}$/);
+  // At most two actions in a row: "Review again" lives in the posted review, not in the list.
+  await expect(s.prRow(14).getByRole("link")).toHaveCount(1);
+  await expect(s.prRow(14).getByRole("link", { name: "Review again" })).toHaveCount(0);
 });
 
 test("findings cannot be edited while the agent runs, and a refused review stays at the gate", async ({ page }) => {
