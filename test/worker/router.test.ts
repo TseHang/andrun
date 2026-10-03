@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { createGitHub } from "../../src/github";
+import { BOT, FAKE_PAT, FAKE_REPO, createFakeGitHub, testKeys } from "../support/fake-github";
 import { MAX_TASK_CHARS, type SessionSnapshot, type SessionSummary } from "../../src/session/protocol";
 import { handle } from "../../src/worker/router";
 import type { RateLimiter, RouterEnv } from "../../src/worker/types";
@@ -26,7 +28,11 @@ function limiter(max: number) {
 
 function fakeEnv(over: Partial<RouterEnv> = {}) {
   const sessions = new Map<string, SessionSnapshot>();
-  const created: { id: string; mode: string; task: string; model?: string }[] = [];
+  const created: Record<string, unknown>[] = [];
+  const fake = createFakeGitHub();
+  const github = createGitHub({ apiUrl: "https://api.github.test", repo: FAKE_REPO, appId: "1", installationId: "2", privateKey: testKeys().privateKey, pat: FAKE_PAT, fetch: fake.fetch });
+  const ghRead = limiter(60);
+  const ghWrite = limiter(10);
   const touched: string[] = [];
   const indexRemoved: string[] = [];
   const killed: string[] = [];
@@ -41,7 +47,7 @@ function fakeEnv(over: Partial<RouterEnv> = {}) {
       return {
         create: async (input) => {
           created.push(input);
-          sessions.set(id, { id, mode: "code", title: input.task.slice(0, 80), status: "running", pending: null, sandboxRunning: false });
+          sessions.set(id, { id, mode: input.mode, title: input.task.slice(0, 80), status: "running", pending: null, sandboxRunning: false, sha: input.sha ?? REPO.sha, pr: null });
         },
         snapshot: async () => sessions.get(id) ?? null,
         remove: async () => sessions.delete(id),
@@ -65,9 +71,13 @@ function fakeEnv(over: Partial<RouterEnv> = {}) {
     debugEndpoints: true,
     newId: () => `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`,
     repo: REPO,
+    github,
+    githubWrites: true,
+    githubReadLimiter: ghRead.binding,
+    githubWriteLimiter: ghWrite.binding,
     ...over,
   };
-  return { env, sessions, created, touched, indexRemoved, killed, index, createKeys: create.keys, deleteKeys: del.keys };
+  return { env, sessions, created, touched, indexRemoved, killed, index, fake, createKeys: create.keys, deleteKeys: del.keys, readKeys: ghRead.keys, writeKeys: ghWrite.keys };
 }
 
 const req = (method: string, path: string, opts: { body?: unknown; ip?: string; headers?: Record<string, string> } = {}) =>
@@ -246,6 +256,8 @@ describe("router (Phase 3: P3-c, P3-d)", () => {
       maxSteps: 30,
       maxTokens: 400_000,
       maxTaskChars: MAX_TASK_CHARS,
+      githubWrites: true,
+      reviewBrief: expect.stringMatching(/^Review this pull request\.[\s\S]*Correctness[\s\S]*severity/) as string,
     });
     expect(text).not.toMatch(/aiand\.com|key|secret|token"/i);
 
@@ -270,5 +282,161 @@ describe("router (Phase 3: P3-c, P3-d)", () => {
     await expectError(await post(f.env, { mode: "code", task: "t", model: 3 }), 400, /model/);
     await expectError(await post(f.env, { mode: "code", task: "t", model: "" }), 400, /model/);
     expect(f.created).toHaveLength(n);
+  });
+
+  // ---------- Phase 4: GitHub ----------
+
+  it("config reports githubWrites", async () => {
+    const off = fakeEnv({ githubWrites: false, repo: { name: REPO.name, sha: null } });
+    const body = await json(await handle(req("GET", "/config"), off.env));
+    expect(body).toMatchObject({ githubWrites: false, sha: null, repo: REPO.name });
+    expect(off.fake.requests).toEqual([]); // config never calls GitHub
+  });
+
+  it("code sessions resolve the default branch head; DEMO_SHA overrides it", async () => {
+    const f = fakeEnv({ repo: { name: REPO.name, sha: null } });
+    const head = f.fake.refs.get("main")!;
+    const res = await post(f.env, { mode: "code", task: "t" });
+    expect(res.status).toBe(201);
+    const { id } = await json(res);
+    expect(f.created).toEqual([{ id, mode: "code", task: "t", sha: head, baseBranch: "main" }]);
+
+    // The override: the configured commit is used and GitHub is not asked.
+    const pinned = fakeEnv();
+    expect((await post(pinned.env, { mode: "code", task: "t" })).status).toBe(201);
+    expect(pinned.created[0]).not.toHaveProperty("sha");
+    expect(pinned.fake.requests).toEqual([]);
+
+    // GitHub is down: no session is created.
+    const down = fakeEnv({ repo: { name: REPO.name, sha: null } });
+    down.fake.fail({ path: /^\/repos\//, status: 502, times: 5 });
+    await expectError(await post(down.env, { mode: "code", task: "t" }), 502, /GitHub/);
+    expect(down.created).toEqual([]);
+    expect(down.touched).toEqual([]);
+  });
+
+  function withPulls(over: Partial<RouterEnv> = {}) {
+    const f = fakeEnv(over);
+    f.fake.addPull({ number: 12, title: "Handle the empty array in mean()", headRef: "agent/7f3a9c1e-1" });
+    f.fake.addPull({ number: 13, title: "Add a --json flag to the CLI", headRef: "feat/json-flag", user: "octocat" });
+    f.fake.addPull({
+      number: 14,
+      title: "Add slugify helper",
+      headRef: "agent/1a2b3c4d-1",
+      files: [{ filename: "src/slugify.js", status: "added", additions: 2, deletions: 0, patch: "@@ -0,0 +1,2 @@\n+a\n+b" }],
+    });
+    return f;
+  }
+  const row = (id: string, mode: "code" | "review", pr: number, status: SessionSummary["status"], created_at: number): SessionSummary => ({
+    id,
+    mode,
+    title: "t",
+    status,
+    created_at,
+    updated_at: created_at,
+    pr,
+  });
+
+  it("pull list joins GitHub with the session index", async () => {
+    const f = withPulls();
+    f.index.push(
+      row("code-14", "code", 14, "done", 1),
+      row("review-14-old", "review", 14, "done", 2),
+      row("review-14-new", "review", 14, "awaiting_approval", 3),
+      row("code-12", "code", 12, "done", 4),
+      { id: "no-pr", mode: "code", title: "t", status: "running", created_at: 5, updated_at: 5 },
+    );
+    const res = await handle(req("GET", "/pulls"), f.env);
+    expect(res.status).toBe(200);
+    const { pulls } = (await res.json()) as { pulls: Record<string, unknown>[] };
+    expect(pulls.map((p) => p["number"])).toEqual([14, 13, 12]);
+    expect(pulls[0]).toEqual({
+      number: 14,
+      title: "Add slugify helper",
+      author: BOT,
+      headRef: "agent/1a2b3c4d-1",
+      updatedAt: expect.any(String) as string,
+      url: "https://github.com/TseHang/andrun-demo/pull/14",
+      mine: true,
+      codeSession: { id: "code-14", status: "done" },
+      reviewSession: { id: "review-14-new", status: "awaiting_approval" }, // the newest review session
+    });
+    expect(pulls[1]).toMatchObject({ number: 13, mine: false, codeSession: null, reviewSession: null });
+    expect(pulls[2]).toMatchObject({ number: 12, mine: true, codeSession: { id: "code-12", status: "done" }, reviewSession: null });
+    expect(f.touched).toEqual([]); // no session Durable Object is woken
+    expect(f.readKeys).toEqual([IP_A]);
+
+    f.fake.fail({ path: /\/pulls$/, status: 502 });
+    await expectError(await handle(req("GET", "/pulls"), f.env), 502, /GitHub.*502/);
+
+    const limited = withPulls({ githubReadLimiter: limiter(1).binding });
+    expect((await handle(req("GET", "/pulls"), limited.env)).status).toBe(200);
+    const refused = await handle(req("GET", "/pulls/14"), limited.env);
+    await expectError(refused, 429);
+    expect(refused.headers.get("retry-after")).toBe("60");
+  });
+
+  it("reads one pull request for the review start page", async () => {
+    const f = withPulls();
+    const res = await handle(req("GET", "/pulls/14"), f.env);
+    expect(res.status).toBe(200);
+    expect(await json(res)).toMatchObject({
+      number: 14,
+      title: "Add slugify helper",
+      author: BOT,
+      headRef: "agent/1a2b3c4d-1",
+      baseRef: "main",
+      headSha: f.fake.refs.get("main"),
+      state: "open",
+      additions: 2,
+      deletions: 0,
+      changedFiles: 1,
+      url: "https://github.com/TseHang/andrun-demo/pull/14",
+      files: [{ path: "src/slugify.js", status: "added", additions: 2, deletions: 0, patch: "@@ -0,0 +1,2 @@\n+a\n+b" }],
+    });
+    await expectError(await handle(req("GET", "/pulls/99"), f.env), 404);
+    await expectError(await handle(req("GET", "/pulls/abc"), f.env), 404);
+    await expectError(await handle(req("GET", "/pulls/0"), f.env), 404);
+    await expectError(await handle(req("POST", "/pulls"), f.env), 404);
+  });
+
+  it("review sessions are created from an open pull request", async () => {
+    const f = withPulls();
+    const res = await post(f.env, { mode: "review", pr: 14, task: "  Review this.  ", model: "zai-org/glm-5.3" });
+    expect(res.status).toBe(201);
+    const { id } = await json(res);
+    expect(f.created).toEqual([
+      {
+        id,
+        mode: "review",
+        task: "Review this.",
+        model: "zai-org/glm-5.3",
+        sha: f.fake.refs.get("main"),
+        pr: { number: 14, title: "Add slugify helper", files: [{ path: "src/slugify.js", status: "added", additions: 2, deletions: 0, patch: "@@ -0,0 +1,2 @@\n+a\n+b" }] },
+      },
+    ]);
+    expect(f.createKeys).toEqual([IP_A]); // the create limiter covers reviews too
+
+    const n = f.created.length;
+    await expectError(await post(f.env, { mode: "review", task: "brief" }), 400, /pr/);
+    await expectError(await post(f.env, { mode: "review", pr: "14", task: "brief" }), 400, /pr/);
+    await expectError(await post(f.env, { mode: "review", pr: 1.5, task: "brief" }), 400, /pr/);
+    await expectError(await post(f.env, { mode: "review", pr: 14, task: " " }), 400, /task/);
+    await expectError(await post(f.env, { mode: "review", pr: 99, task: "brief" }, IP_B), 404);
+    await expectError(await post(f.env, { mode: "task", task: "brief" }, IP_B), 400, /mode/);
+
+    f.fake.pulls.find((p) => p.number === 13)!.state = "closed";
+    await expectError(await post(f.env, { mode: "review", pr: 13, task: "brief" }, IP_B), 400, /pull request #13 is not open/);
+    f.fake.addPull({ number: 16, title: "Fork", headRef: "patch-1", user: "stranger", headRepo: "stranger/andrun-demo" });
+    await expectError(await post(f.env, { mode: "review", pr: 16, task: "brief" }, IP_B), 400, /pull requests from forks are not supported/);
+    expect(f.created).toHaveLength(n);
+  });
+
+  it("responses carry no credential", async () => {
+    const f = withPulls();
+    for (const path of ["/config", "/pulls", "/pulls/14"]) {
+      const text = await (await handle(req("GET", path), f.env)).text();
+      expect(text).not.toMatch(/ghs_|github_pat_|PRIVATE KEY|installation/i);
+    }
   });
 });

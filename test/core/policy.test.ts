@@ -53,11 +53,12 @@ describe("S3: policy gates risky tool calls", () => {
     expect(policy.decide({ mode: "code", tool: "read_file", args: { path: "a.js" } })).toEqual({ kind: "allow" });
   });
 
-  it("review mode denies commands outside the allowlist and lets finish through", () => {
+  it("review mode denies commands outside the allowlist and asks before finishing", () => {
     expect(policy.decide(cmd("npm test", "review"))).toEqual({ kind: "allow" });
     expect(policy.decide(cmd("rm -rf src", "review")).kind).toBe("deny");
     expect(policy.decide(cmd("ls & rm -rf src", "review")).kind).toBe("deny");
-    expect(policy.decide({ mode: "review", tool: "finish", args: { summary: "3 findings" } })).toEqual({ kind: "allow" });
+    // P4-b: a review ends at a gate ("Ready to post"), like a Code run.
+    expect(policy.decide({ mode: "review", tool: "finish", args: { summary: "3 findings" } })).toEqual({ kind: "ask", reason: "posting requires your decision" });
   });
 
   it("autoApprove turns ask into an auto allow with the reason, and keeps deny", () => {

@@ -58,7 +58,8 @@ describe("S4: review profile cannot write (D4)", () => {
     expect(finding).toMatchObject({ path: "src/sum.js", line: 3, severity: "high", text: "Loop skips the last element." });
     expect(finding && finding.type === "review_finding" && finding.id).toBeTruthy();
 
-    expect(outcome).toEqual({ kind: "finished", summary: "1 finding" });
-    expect(events.at(-1)).toMatchObject({ type: "status", status: "done" });
+    // P4-b: the review stops at a gate; a human posts it.
+    expect(outcome).toMatchObject({ kind: "awaiting_approval", pending: { reason: "posting requires your decision", summary: "1 finding" } });
+    expect(events.at(-1)).toMatchObject({ type: "status", status: "awaiting_approval" });
   });
 });
