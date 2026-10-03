@@ -1,7 +1,7 @@
 // The session's view model: reduce(view, frame) folds the event stream into what the UI shows (P3-a).
 // Pure and free of React, so a live run and a replay of the stored log give the same items.
 
-import type { AgentEvent, DiffSummary, ErrorSource, Status } from "../../../src/core/events";
+import type { AgentEvent, DiffSummary, ErrorSource, ReviewVerdict, Severity, Status } from "../../../src/core/events";
 import { RESTORED_NOTE, type ServerFrame } from "../../../src/session/protocol";
 import { parseDiff } from "./diff";
 import { isTestPath } from "./format";
@@ -36,7 +36,9 @@ export type TimelineItem =
   | { key: string; kind: "steps"; rows: StepRow[] }
   | { key: string; kind: "notice"; title: string; message: string }
   | { key: string; kind: "failure"; source: ErrorSource; title: string; message: string; next?: string }
-  | { key: string; kind: "approved" };
+  | { key: string; kind: "approved" }
+  | { key: string; kind: "pr"; url: string; number?: number; branch?: string; updated: boolean }
+  | { key: string; kind: "review_posted"; url: string; verdict: ReviewVerdict };
 
 export interface GateView {
   approvalId: string;
@@ -59,6 +61,17 @@ export interface ChangeView {
   diff: string | null;
 }
 
+export interface FindingView {
+  id: string;
+  path: string;
+  line: number;
+  severity: Severity;
+  text: string;
+  inline: boolean;
+  dismissed: boolean;
+  edited: boolean;
+}
+
 export interface SessionView {
   lastSeq: number;
   status: Status | null;
@@ -73,6 +86,10 @@ export interface SessionView {
   lastCommand: { command: string; exitCode: number | null } | null;
   /** Usage by stepId, until the step's assistant message arrives. */
   usageByStep: Record<string, Usage>;
+  /** The pull request this session opened, if any. */
+  pr: { url: string; number?: number; branch?: string } | null;
+  findings: FindingView[];
+  posted: { url: string; verdict: ReviewVerdict } | null;
 }
 
 export function initialView(): SessionView {
@@ -89,6 +106,9 @@ export function initialView(): SessionView {
     composerEnabled: true,
     lastCommand: null,
     usageByStep: {},
+    pr: null,
+    findings: [],
+    posted: null,
   };
 }
 
@@ -318,7 +338,13 @@ function apply(view: SessionView, ev: AgentEvent): SessionView {
       if (!ev.approved && view.gate?.callId) {
         items = mapRows(items, (r) => (r.callId === view.gate!.callId ? settle({ ...r, done: true, declined: true }) : r));
       }
-      if (ev.approved && !ev.auto) items = [...items, { key: `ok:${ev.approvalId}`, kind: "approved" }];
+      if (ev.approved && !ev.auto) {
+        // The server opens the pull request before it resolves the approval; the marker reads first.
+        const marker: TimelineItem = { key: `ok:${ev.approvalId}`, kind: "approved" };
+        const last = items.at(-1);
+        if (last?.kind === "pr") items = [...items.slice(0, -1), marker, last];
+        else if (last?.kind !== "review_posted") items = [...items, marker];
+      }
       if (!ev.approved && ev.comment) items = withUser(items, `u:r:${ev.approvalId}`, ev.comment);
       return { ...view, items, gate: null, sending: false };
     }
@@ -328,8 +354,28 @@ function apply(view: SessionView, ev: AgentEvent): SessionView {
         if (!row) return view;
         return { ...view, items: mapRows(view.items, (r) => (r === row ? settle({ ...r, error: ev.message }) : r)) };
       }
-      return { ...view, items: [...view.items, failureOf(ev)] };
+      return { ...view, items: [...view.items, failureOf(ev)], ...(ev.source === "github" && { sending: false }) };
     }
+    case "pr_opened": {
+      const pr = { url: ev.url, ...(ev.number !== undefined && { number: ev.number }), ...(ev.branch !== undefined && { branch: ev.branch }) };
+      return { ...view, pr, items: [...view.items, { key: `pr:${ev.seq}`, kind: "pr", ...pr, updated: ev.updated ?? false }] };
+    }
+    case "review_finding": {
+      const finding: FindingView = {
+        id: ev.id,
+        path: ev.path,
+        line: ev.line,
+        severity: ev.severity,
+        text: ev.text,
+        inline: ev.inline ?? true,
+        dismissed: ev.dismissed ?? false,
+        edited: ev.edited ?? false,
+      };
+      const has = view.findings.some((f) => f.id === ev.id);
+      return { ...view, findings: has ? view.findings.map((f) => (f.id === ev.id ? finding : f)) : [...view.findings, finding] };
+    }
+    case "review_posted":
+      return { ...view, posted: { url: ev.url, verdict: ev.verdict }, items: [...view.items, { key: `rp:${ev.seq}`, kind: "review_posted", url: ev.url, verdict: ev.verdict }] };
     case "status": {
       const closes = ev.status === "done" || ev.status === "failed" || ev.status === "budget_exceeded";
       const items = closes ? mapRows(view.items, (r) => (r.done ? r : settle({ ...r, done: true }))) : view.items;

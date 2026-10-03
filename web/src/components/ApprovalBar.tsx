@@ -1,11 +1,13 @@
 import { useRef, useState } from "react";
 import type { ClientFrame } from "../../../src/session/protocol";
+import { prTarget } from "../state/format";
 import { markSending, type GateView, type SessionView } from "../state/reducer";
 import { Spinner } from "./Spinner";
+import type { SessionInfo } from "./Timeline";
 
 const FALLBACK: Record<string, string> = { run_command: "Do not run this command.", apply_patch: "Do not apply this patch." };
 
-export function ApprovalBar({ view, gate, send, update }: { view: SessionView; gate: GateView; send: (f: ClientFrame) => boolean; update: (fn: (v: SessionView) => SessionView) => void }) {
+export function ApprovalBar({ view, gate, session, send, update }: { view: SessionView; gate: GateView; session: SessionInfo; send: (f: ClientFrame) => boolean; update: (fn: (v: SessionView) => SessionView) => void }) {
   const [comment, setComment] = useState("");
   const [offline, setOffline] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -13,6 +15,7 @@ export function ApprovalBar({ view, gate, send, update }: { view: SessionView; g
   const finish = gate.tool === "finish";
   const open = gate.callId !== undefined;
   const sending = view.sending;
+  const opensPr = finish && session.code;
 
   const fire = (frame: ClientFrame) => {
     const sent = send(frame);
@@ -37,9 +40,10 @@ export function ApprovalBar({ view, gate, send, update }: { view: SessionView; g
         if (text && !secondaryDisabled) secondary();
       }}
     >
-      <div className="text-[13px]">
+      <div className="flex items-baseline gap-2 text-[13px]">
         <span className="font-semibold text-accent-text">Approval required · {gate.tool}</span>
-        <span className="ml-2 text-text-secondary">{gate.reason}</span>
+        <span className="min-w-0 grow text-text-secondary">{gate.reason}</span>
+        {opensPr && <span className="shrink-0 font-mono text-xs text-text-secondary">{prTarget(view.pr?.branch, session.id, session.baseBranch)}</span>}
       </div>
       {gate.command && <div className="mt-2 rounded-lg bg-sidebar px-2.5 py-1.5 font-mono text-xs break-all">{gate.command}</div>}
       {gate.paths && gate.paths.length > 0 && <div className="mt-2 rounded-lg bg-sidebar px-2.5 py-1.5 font-mono text-xs break-all">{gate.paths.join(", ")}</div>}
@@ -74,7 +78,7 @@ export function ApprovalBar({ view, gate, send, update }: { view: SessionView; g
               Sending
             </>
           ) : (
-            gate.primary
+            opensPr ? "Approve and open PR" : gate.primary
           )}
         </button>
       </div>

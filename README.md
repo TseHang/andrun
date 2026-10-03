@@ -6,7 +6,7 @@ A Codex-style coding workspace on Cloudflare. You give it a task and a repo. An 
 - Phase 1 (the agent loop, plus an eval against real models) is done.
 - Phase 2 (Durable Objects, the Cloudflare Sandbox, a debug page over the event stream) is deployed: https://andrun.mengtse-hang.workers.dev
 - Phase 3 (the workspace UI: Home, the session view with diffs and the approval bar, a model menu) is built and tested locally on branch `feat/workspace-ui`; not deployed yet.
-- Phase 4 (pull requests and Review mode) is next.
+- Phase 4 (GitHub: Approve opens a pull request as the App bot; Pull requests page; Review mode with editable findings, posted as the reviewer) is built and tested locally on branch `feat/github`; not deployed yet.
 
 ## Quick start
 
@@ -44,8 +44,9 @@ Needs Docker running (the sandbox is a container). No ai& key and no cost: a fak
 ```sh
 cp .dev.vars.example .dev.vars
 pnpm fake-model                      # terminal 1: fake OpenAI-compatible SSE server on :8788
-pnpm build && pnpm dev               # terminal 2: build the app, then wrangler dev on :8787 (open it)
-pnpm smoke                           # terminal 3: create → gate → replay → reject → approve → delete
+pnpm fake-github                     # terminal 2: fake GitHub REST API on :8789 (one in-memory repo)
+pnpm build && pnpm dev               # terminal 3: build the app, then wrangler dev on :8787 (open it)
+pnpm smoke                           # terminal 4: create → gate → replay → reject → approve → delete
 pnpm smoke --flow kill               # kill the sandbox mid-run → failed → message → rebuilt
 ```
 
@@ -57,7 +58,9 @@ Each local session leaves a `workerd-andrun-…` container in Docker, and `wrang
 docker ps -aq --filter name=workerd-andrun- | xargs docker rm -f
 ```
 
-Tasks for the fake model can carry a marker: `[slow]` (8 s per answer), `[fail]` (every request fails), `[ask]` (first runs `rm -rf tmp`, which needs approval).
+Tasks for the fake model can carry a marker: `[slow]` (8 s per answer), `[fail]` (every request fails), `[ask]` (first runs `rm -rf tmp`, which needs approval). A Review session gets a fixed script of four findings.
+
+The fake GitHub starts with an empty pull request list. Approving a Code session opens one; `curl -X POST localhost:8789/__reset` empties it again, and `GET localhost:8789/__state` shows its refs, pull requests and reviews. `.dev.vars.example` holds a throwaway App key that only the fake accepts.
 
 To use the real model locally, put your ai& key and base URL in `.dev.vars` instead.
 
@@ -65,11 +68,22 @@ To use the real model locally, put your ai& key and base URL in `.dev.vars` inst
 
 ```sh
 pnpm exec wrangler secret put AIAND_API_KEY
+pnpm exec wrangler secret put GITHUB_APP_ID
+pnpm exec wrangler secret put GITHUB_APP_INSTALLATION_ID
+pnpm exec wrangler secret put GITHUB_APP_PRIVATE_KEY     # PKCS#8 PEM, see below
+pnpm exec wrangler secret put GITHUB_PAT
 pnpm run deploy
-pnpm smoke https://<your-worker>.workers.dev      # one real session: costs tokens
+pnpm smoke https://<your-worker>.workers.dev      # one real session: costs tokens, and its approve opens a real pull request
 ```
 
-The repo the agent works on is set by `DEMO_REPO` and `DEMO_SHA` in `wrangler.jsonc`. `KILL_SWITCH="1"` stops new sessions.
+The repo is set by `DEMO_REPO` in `wrangler.jsonc`. A Code session starts from the head of the repo's default branch; set `DEMO_SHA` to pin a commit instead. `KILL_SWITCH="1"` stops new sessions and every GitHub write; `GITHUB_WRITES="0"` stops only the GitHub writes.
+
+**GitHub setup** (two identities, so the reviewer is never the author):
+1. Create a GitHub App with repository permissions Contents (read and write), Pull requests (read and write) and Metadata (read). Install it on the one repo. The App id is on its settings page; the installation id is the number at the end of the installation's URL.
+2. Generate a private key for the App and convert it to PKCS#8, which is what WebCrypto reads: `openssl pkcs8 -topk8 -nocrypt -in app.private-key.pem -out app.pk8.pem`. That file's content is `GITHUB_APP_PRIVATE_KEY`.
+3. Create a fine-grained personal access token for the same repo with Pull requests (read and write). That is `GITHUB_PAT`: reviews are posted with it, as you.
+
+The App bot opens every pull request (branch `agent/<session>-<n>`). GitHub does not let an account approve or request changes on its own pull request, so pull requests to be reviewed must not be opened by the PAT's account.
 
 ## Known limits: what a rebuilt sandbox does and does not bring back
 
@@ -88,10 +102,11 @@ The UI must not suggest more than this: a restored workspace is "your file chang
 ```
 src/core/     the agent: loop, tools, modes, policy, model client, events (no platform imports)
 src/session/  session state machine, SQLite store, wire protocol (no platform imports)
+src/github/   GitHub client: App auth, pull request publish, pull request reads, review post (no platform imports)
 src/sandbox/  the sandbox adapter over a Cloudflare container
 src/worker/   Worker router and the two Durable Objects (thin shells over src/session)
 web/          the workspace UI (Vite + React + Tailwind); web/src/state is the event reducer, web/public the logo and the debug page
-e2e/          Playwright browser tests against wrangler dev + the fake model
+e2e/          Playwright browser tests against wrangler dev + the fake model + the fake GitHub
 eval/         eval runner, local sandbox, YAML cases, fixture repos
 test/         Vitest suites and test doubles
 spike/        throwaway Sandbox SDK 1.0 spike (not part of the app)
@@ -106,6 +121,8 @@ docs/         architecture decision, flow diagram, per-phase checklists
 - [Phase 1 checklist](docs/features/core-loop/core-loop-implementation-checklist.md)
 - [Phase 2 checklist](docs/features/session-do/session-do-implementation-checklist.md)
 - [Phase 3 checklist](docs/features/workspace-ui/workspace-ui-implementation-checklist.md)
+- [Phase 4 checklist](docs/features/github/github-implementation-checklist.md)
+- [Known limits](docs/limits.md)
 
 ## Why a loop, not a graph
 

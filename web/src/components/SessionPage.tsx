@@ -55,12 +55,12 @@ function Loader({ id }: { id: string }) {
 function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload: () => void }) {
   const { navigate, refreshList, reportStatus } = useApp();
   const { view, send, update, reconnecting, deleted } = useSession(id);
-  const { config } = useApp();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const more = useRef<HTMLButtonElement>(null);
   const status = view.status ?? snap.status;
+  const session = { id, code: snap.mode === "code", baseBranch: snap.baseBranch };
 
   // Re-read the snapshot (sandboxRunning) and the list after each status change.
   const first = useRef(true);
@@ -120,11 +120,11 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
       )}
       <SessionHeader title={snap.title} status={status} header={view.header} onDelete={() => setConfirming(true)} moreRef={more} />
       <div className="relative flex min-h-0 grow">
-        <Timeline view={view} status={status} />
-        <ChangesPanel view={view} sandboxRunning={snap.sandboxRunning} sha={config.sha} />
+        <Timeline view={view} session={session} />
+        <ChangesPanel view={view} sandboxRunning={snap.sandboxRunning} sha={snap.sha} />
         <div data-slot="floating-bar" className="pointer-events-none absolute bottom-5 left-7 right-5">
           {view.gate && status === "awaiting_approval" ? (
-            <ApprovalBar view={view} gate={view.gate} send={send} update={update} />
+            <ApprovalBar view={view} gate={view.gate} session={session} send={send} update={update} />
           ) : (
             <Composer view={view} running={status === "running"} send={send} update={update} />
           )}

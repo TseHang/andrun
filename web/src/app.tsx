@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Status } from "../../src/core/events";
 import type { SessionSummary } from "../../src/session/protocol";
-import { getConfig, listSessions, type Config } from "./api";
+import { getConfig, listPulls, listSessions, type Config, type PullRow } from "./api";
 import { Home } from "./components/Home";
 import { SessionPage } from "./components/SessionPage";
+import { PullRequestsPage } from "./components/PullRequestsPage";
+import { ReviewStartPage } from "./components/ReviewStartPage";
 import { Sidebar } from "./components/Sidebar";
 import { App_, type AppContext } from "./context";
 
@@ -12,6 +14,7 @@ export function App() {
   const [path, setPath] = useState(location.pathname);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [stale, setStale] = useState(false);
+  const [pulls, setPulls] = useState<{ pulls: PullRow[] | null; error: string | null }>({ pulls: null, error: null });
   const [live, setLive] = useState<{ id: string; status: Status } | null>(null);
 
   useEffect(() => {
@@ -30,7 +33,7 @@ export function App() {
       if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       const a = (e.target as Element).closest("a");
       if (!a || a.target || a.hasAttribute("download") || a.origin !== location.origin) return;
-      if (a.pathname !== "/" && !/^\/s\/[^/]+\/?$/.test(a.pathname)) return;
+      if (a.pathname !== "/" && !/^\/(s\/[^/]+|prs(\/\d+)?)\/?$/.test(a.pathname)) return;
       e.preventDefault();
       if (a.pathname + a.search !== location.pathname + location.search) navigate(a.pathname + a.search);
     };
@@ -69,17 +72,56 @@ export function App() {
     };
   }, [refreshList]);
 
+  // Same rule for the pull list, which comes from GitHub: the sidebar count and the page share it.
+  const askedPulls = useRef(0);
+  const appliedPulls = useRef(0);
+  const refreshPulls = useCallback(() => {
+    const n = ++askedPulls.current;
+    listPulls().then(
+      (rows) => {
+        if (n < appliedPulls.current) return;
+        appliedPulls.current = n;
+        setPulls({ pulls: rows, error: null });
+      },
+      (e: Error) => {
+        if (n < appliedPulls.current) return;
+        appliedPulls.current = n;
+        setPulls({ pulls: null, error: e.message });
+      },
+    );
+  }, []);
+
+  useEffect(() => {
+    refreshPulls();
+    window.addEventListener("focus", refreshPulls);
+    return () => window.removeEventListener("focus", refreshPulls);
+  }, [refreshPulls]);
+
+  const onPrs = /^\/prs\/?$/.test(path);
+  useEffect(() => {
+    if (onPrs) refreshPulls();
+  }, [onPrs, refreshPulls]);
+
   const reportStatus = useCallback((id: string, status: Status | null) => setLive(status ? { id, status } : null), []);
 
-  const ctx = useMemo<AppContext | null>(() => (config ? { config, navigate, refreshList, reportStatus } : null), [config, navigate, refreshList, reportStatus]);
+  const ctx = useMemo<AppContext | null>(() => (config ? { config, navigate, refreshList, refreshPulls, reportStatus } : null), [config, navigate, refreshList, refreshPulls, reportStatus]);
   if (!ctx) return null;
 
   const sessionId = /^\/s\/([^/]+)\/?$/.exec(path)?.[1];
+  const reviewNumber = /^\/prs\/(\d+)\/?$/.exec(path)?.[1];
   return (
     <App_.Provider value={ctx}>
       <div className="flex h-screen min-w-[1024px] overflow-hidden bg-white">
-        <Sidebar sessions={sessions} stale={stale} path={path} live={live} />
-        {sessionId ? <SessionPage id={sessionId} /> : <Home sessions={sessions} />}
+        <Sidebar sessions={sessions} stale={stale} path={path} live={live} pullCount={pulls.pulls?.length ?? null} />
+        {sessionId ? (
+          <SessionPage id={sessionId} />
+        ) : onPrs ? (
+          <PullRequestsPage pulls={pulls.pulls} error={pulls.error} />
+        ) : reviewNumber ? (
+          <ReviewStartPage number={Number(reviewNumber)} />
+        ) : (
+          <Home sessions={sessions} />
+        )}
       </div>
     </App_.Provider>
   );

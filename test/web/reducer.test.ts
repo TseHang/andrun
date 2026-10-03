@@ -339,9 +339,7 @@ describe("view state (P3-a)", () => {
     const base = run([e({ type: "message", id: "u1", role: "user", text: "hi" })]);
     const after = run(
       [
-        e({ type: "pr_opened", url: "https://github.com/x/y/pull/1" }),
-        e({ type: "review_finding", id: "f1", path: "a.js", line: 1, severity: "low", text: "nit" }),
-        e({ type: "review_posted", url: "https://github.com/x/y/pull/1", verdict: "COMMENT" }),
+        // pr_opened, review_finding and review_posted are drawn since Phase 4 (see the last describe).
         e({ type: "artifact", name: "a.txt", size: 1, url: "https://example.com/a.txt" }),
         e({ type: "something_new" } as unknown as EventBody),
       ],

@@ -6,6 +6,7 @@ export interface AppContext {
   config: Config;
   navigate: (to: string) => void;
   refreshList: () => void;
+  refreshPulls: () => void;
   /** The open session reports its live status so its sidebar row follows it. */
   reportStatus: (id: string, status: Status | null) => void;
 }

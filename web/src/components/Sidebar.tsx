@@ -9,11 +9,14 @@ interface Props {
   stale: boolean;
   path: string;
   live: { id: string; status: Status } | null;
+  /** Open pull requests; null when the list failed or has not loaded. */
+  pullCount: number | null;
 }
 
-export function Sidebar({ sessions, stale, path, live }: Props) {
+export function Sidebar({ sessions, stale, path, live, pullCount }: Props) {
   const { config } = useApp();
   const openId = /^\/s\/([^/]+)/.exec(path)?.[1];
+  const onPrs = /^\/prs(\/|$)/.test(path);
   return (
     <nav aria-label="Workspace" className="flex w-[248px] shrink-0 flex-col gap-[18px] border-r border-black/8 bg-sidebar px-2.5 py-3.5">
       <div className="flex items-center justify-between pl-2.5 pt-0.5">
@@ -27,9 +30,17 @@ export function Sidebar({ sessions, stale, path, live }: Props) {
           </svg>
         </a>
       </div>
-      <div className="flex flex-col">
+      <div className="flex flex-col gap-px">
         <a href="/" aria-current={path === "/" ? "page" : undefined} className={`flex h-8 items-center rounded-lg px-2.5 font-medium ${path === "/" ? "bg-black/6" : ""}`}>
           Sessions
+        </a>
+        <a
+          href="/prs"
+          aria-current={onPrs ? "page" : undefined}
+          className={`flex h-8 items-center justify-between rounded-lg px-2.5 font-medium ${onPrs ? "bg-black/6" : ""}`}
+        >
+          <span>Pull requests</span>
+          {pullCount !== null && <span className="text-text-secondary">{pullCount}</span>}
         </a>
       </div>
       <div className="flex min-h-0 grow flex-col gap-px overflow-y-auto">

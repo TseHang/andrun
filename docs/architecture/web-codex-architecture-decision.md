@@ -184,7 +184,8 @@ Delivers:
 - the `review` profile, findings panel (keep/edit/dismiss, jump to line), and Post review via PAT (test E)
 - the My PR page: read the review comments on a bot-opened PR, reply as Henry, and ask the agent for another round (`agent/<session>-2`) (A7)
 - Code sessions start from the default branch's head at create time, resolved with the App token; `DEMO_SHA` stays as an optional override (A8)
-Scope: `github/` (App JWT with a PKCS#8 key, installation token cache, Git Data commit, PR list/read, review post), the review profile, and a `review_finding` tool.
+Scope: `github/` (App JWT with a PKCS#8 key, installation token cache, Git Data commit, PR list/read, review post), the review profile, and the `report_finding` tool (it emits the `review_finding` event; A9).
+Spec: `docs/features/github/github-implementation-checklist.md`.
 Key Decisions used: D4, D9, D10, D14
 
 ### Phase 5 — Task mode (bonus, cut first)
@@ -242,7 +243,18 @@ The v2 design (Claude Design canvas, https://claude.ai/artifact/TZezwBinDXnfySoD
 | A7 | Phase 4 scope | The My PR page (reply to review comments, ask the agent for round 2) is added. It is the first thing to cut if Phase 4 runs late. | 4 |
 | A8 | D10, P2-h | The repo stays fixed by configuration. The commit does not: Review uses the PR head; Code resolves the default branch's head when the session is created. Until Phase 4 has a token, Code uses the pinned `DEMO_SHA`. | 4 |
 
-Still open for the Phase 4 spec: a review ends as `done` today (`finish` asks only in Code mode) while the design shows "Ready to post"; edited and dismissed findings have no storage and Post review has no route; the product spec's search box and reviewer's own comments are not drawn.
+The questions left open here were decided in the Phase 4 checklist (Henry, 2026-10-03):
+
+| # | Changes | What | Phase |
+|---|---|---|---|
+| A9 | Phase 4 scope | The tool is `report_finding`; the event is `review_finding`. | 4 |
+| A10 | D4, D6 | A review's `finish` asks, like Code's. The session waits at `awaiting_approval` ("Ready to post"). Post review is a `post_review` frame on the session socket that resolves that gate; Approve at a Code finish gate publishes first. The kill switch and the per-IP limit for GitHub writes are checked inside the SessionDO, with the client IP kept on the socket. | 4 |
+| A11 | D7, D8 | No new event type. `review_finding` gets optional `inline`, `dismissed`, `edited`; `pr_opened` gets optional `number`, `branch`, `updated`. Findings are rows in the SessionDO (`findings`); an edit re-emits `review_finding` with the same id. GitHub state per session is one JSON row (`github_state`); the `session` table is not altered. | 4 |
+| A12 | D9 | `<round>` in `agent/<session>-<round>` goes up per pull request, not per approve: a later approve adds a commit to the open pull request. `<session>` is the first 8 hex characters of the id. An existing branch or pull request is reused only if this App's bot created it. | 4 |
+| A13 | D10, A8 | The sandbox network stays off. The review agent gets the pull request's patches, numbered with new-file lines, in its first message. `DEMO_SHA` is empty on the deployed Worker; there is no prepared demo task. | 4 |
+| A14 | D16 | The session index has a `pr` column, so the pull request list can link sessions. Every open pull request can be reviewed, also one the bot opened. | 4 |
+
+Not built: the product spec's search box and reviewer-written comments (not drawn).
 
 ## Codex Position
 

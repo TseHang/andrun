@@ -1,9 +1,12 @@
 // Thin client for the Worker API.
+import type { Status } from "../../src/core/events";
 import type { SessionSnapshot, SessionSummary } from "../../src/session/protocol";
 
 export interface Config {
   repo: string;
-  sha: string;
+  sha: string | null;
+  githubWrites: boolean;
+  reviewBrief: string;
   models: { id: string; contextWindow: number }[];
   defaultModel: string;
   maxSteps: number;
@@ -64,4 +67,25 @@ export async function deleteSession(id: string): Promise<DeleteResult> {
   } catch {
     return "failed";
   }
+}
+
+export interface PullRow {
+  number: number;
+  title: string;
+  author: string;
+  headRef: string;
+  updatedAt: string;
+  url: string;
+  mine: boolean;
+  codeSession: { id: string; status: Status } | null;
+  reviewSession: { id: string; status: Status } | null;
+}
+
+/** Open pull requests, live from GitHub. Throws with the message to show. */
+export async function listPulls(): Promise<PullRow[]> {
+  const res = await fetch("/pulls");
+  if (res.ok) return ((await res.json()) as { pulls: PullRow[] }).pulls;
+  if (res.status === 429) throw new Error("Too many requests. Try again in 60 seconds.");
+  const body = (await res.json().catch(() => null)) as { error?: string } | null;
+  throw new Error(body?.error ?? "Could not load pull requests.");
 }
