@@ -1,6 +1,6 @@
 # &run — Architecture Decision
 
-**Status**: ✅ Agreed (2026-09-30)
+**Status**: ✅ Agreed (2026-09-30); amended 2026-10-02 to match the v2 design (see "Amendments")
 **Date**: 2026-09-30
 **Codex**: used (one round, see last section)
 **Inputs**: `aiand-codex-spec.md` v1.2 FINAL, `aiand-codex-task.md`
@@ -117,19 +117,19 @@ flowchart LR
 | D4 | Mode profile | `ModeProfile = {systemPrompt, tools[], policy, sandboxSetup: "tarball@sha" \| "pr-head@sha" \| "empty" \| "none", onFinish: "open_pr" \| "draft_review" \| "answer"}`. Code, Review and Task are data, not branches in the loop. Review simply omits `apply_patch`/`write_file`, and the Review policy denies non-allowlisted commands. | Spec D6. Review-can't-write is enforced by the missing tool, not by a prompt. | — |
 | D5 | Runtime placement | The loop runs inside the SessionDO, started from the RPC/WS message that triggers it. There is **one DO class that is both session and container host**. Confirmed by the spike (2026-09-30, `spike-sandbox-1.0.md`): SQLite rows and a running container coexist in one DO, and the rows survive a container destroy. | Fewest moving parts, and the container lifecycle is tied to the session. | Phase-1 spike fails → two classes (a pre-agreed fallback, not a re-decision). |
 | D6 | Session state machine | `idle → running ⇄ awaiting_approval → done`; any state → `failed`, and `running → budget_exceeded`. A new user message moves `done`/`failed`/`budget_exceeded` → `running` (a new turn, same sandbox if alive). Every transition persists a `status` event. A redirect message while running is queued and injected at the next step boundary. | Matches the §5 `status` values exactly. | — |
-| D7 | Event contract | `src/core/events.ts` is a discriminated union of the 13 §5 events. Envelope: `{seq, ts, sessionId, stepId?}`. `message` carries `{id, role, text}`; deltas travel as the non-persisted `message_delta {id, text}`. `tool_output` is coalesced (≤ 250 ms). Web imports the same file. | One contract, compile-checked on both sides. | — |
+| D7 | Event contract | `src/core/events.ts` is a discriminated union of the 13 §5 events. Envelope: `{seq, ts, sessionId, stepId?}`. `message` carries `{id, role, text}`; deltas travel as the non-persisted `message_delta {id, text}`. `tool_output` is coalesced (≤ 250 ms). Web imports the same file. *Amended 2026-10-02 (A2): the final `tool_output` may carry an optional `meta {bytes?, files?}`.* | One contract, compile-checked on both sides. | — |
 | D8 | Persistence | DO SQLite only. Tables: `session`, `messages` (model transcript), `events` (seq PK), `pending_approval`, `changes` (path, before-sha, after content hash). There is no external DB, no KV and no R2 in M1–M3. | Spec D5. Refresh is served by an event replay. | Task artifacts (M4) → R2. |
 | D9 | GitHub identities | **App bot** opens PRs via the Git Data API (blobs → tree(base_tree) → commit → `refs/heads/agent/<session>-<round>` → PR). The ref name is deterministic, so a retry reuses it (idempotent). **Henry's fine-grained PAT**, scoped to one repo, posts reviews with `commit_id` = head SHA and `comments[{path,line,side:"RIGHT"}]`. Findings that are not on a diff line go into the review body. The App key is stored as **PKCS#8** and the JWT is signed with WebCrypto RS256. The installation token is cached in memory for ~50 min. | Spec D2 and §7. It avoids the "author can't request changes on own PR" rule. | — |
 | D10 | Sandbox I/O | Repo in: the Worker fetches the tarball at a SHA and streams it in through `Files`; the container runs `git init` as the baseline. Egress: **off** (`enableInternet:false`). Demo repos have zero dependencies (`node:test`). Exec: argv via `sh -lc`, with an `AbortSignal` timeout of 120 s per command. Container idle timeout: 15 min, plus `destroy()` on `done`/`failed`. | Zero token or network surface in the sandbox. There is no default timeout in 1.0. | A case needs `npm install` → allow-list `registry.npmjs.org` through an outbound handler. |
 | D11 | Sandbox loss | If the container is gone at resume time, rebuild: tarball@SHA + replay `changes` from SQLite, emit `error{source:"sandbox"}` + a note, then continue. A command that was in flight is reported as failed, not retried. | Codex point: side effects are at-least-once. Files are restorable; processes are not. | — |
 | D12 | Eval harness | `eval/cases/*.yaml`: `{id, fixture, mode, task, check: {cmd, expect_exit}, forbid_changes: ["test/**"], max_steps}`. `LocalSandbox` works on a tmp dir with `child_process` and **no isolation** (trusted fixtures only). JSONL = the §5 events + a final `{type:"result", pass, steps, tokens_in, tokens_out, cost, tool_errors, edited_tests}`. Command: `pnpm eval --model <id> --runs 3`. | Same core, real model; the model choice is made by data (spec §10). | — |
-| D13 | Frontend | **Vite + React 19 + TypeScript + Tailwind v4**, SPA on Workers static assets. The UI state is `useReducer(events)`. Diff rendering uses a library decided in Phase 3; no Monaco. The client has no secrets. | Spec D5. No SSR need, and Vite has a first-party Cloudflare plugin. | — |
+| D13 | Frontend | **Vite + React 19 + TypeScript + Tailwind v4**, SPA on Workers static assets. The UI state is `useReducer(events)`. Diff rendering uses a library decided in Phase 3; no Monaco. The client has no secrets. *Decided 2026-10-02 (A3): our own unified-diff component, no library.* | Spec D5. No SSR need, and Vite has a first-party Cloudflare plugin. | — |
 | D14 | Abuse limits | Per-IP rate limit (Workers Rate Limiting binding) on session create, GitHub writes and delete session; the per-session budget comes from D2. A global kill-switch env var disables GitHub writes. | No login (spec D3). | See open question Q1. |
 | D15 | Sandbox SDK version | **1.0.0** (own DO + `ctx.container` + `Files`), pinned to an exact version. Do not use 0.x. The spike went ✅ Go (2026-09-30); Phase 2 findings are in `spike-sandbox-1.0.md`. | The spec requires the stable release; 0.x is legacy, with maintenance until 2026-12-31. | 1.0 blocks progress for > half a day → pin `0.12.x` (known API) and note it in the README. |
 | D16 | Session index | One fixed-name **WorkspaceDO** (`env.WORKSPACE.getByName("workspace")`). Its SQLite holds `sessions(id, mode, title, status, created_at, updated_at)`. SessionDO upserts its row on create and on every `status` transition, after its own transaction commits. The sidebar reads the list with `GET /sessions` → WorkspaceDO. The index is a cache: SessionDO stays the source of truth, a failed upsert is logged and retried on the next transition, and opening a session always reads SessionDO. There are no users, accounts or auth tables (spec D3: one shared workspace), and the PR list is not stored (read live from GitHub). | Each SessionDO has its own SQLite, so nothing can list all sessions without a global index. The same DO-SQLite pattern needs no D1 or KV. | The session list needs search or pagination beyond ~1k rows → D1. |
 | D17 | Context management | The core keeps the prompt within the model window without an extra LLM call. (1) Each tool result is capped at 8 KB (head + tail, with `[… N bytes elided]` in the middle). (2) Before each model call, if the estimated prompt is > 70 % of `contextWindow` (per model, in config), the oldest tool results are replaced with a one-line stub (`[read src/sum.js — elided]`), keeping the system prompt, user messages, and the last 6 steps intact. (3) Each `usage` event carries `context_tokens` and `context_window`, and the header shows a context meter. LLM-summary compaction is out of scope. | With 30 steps per session, mechanical compaction is enough and deterministic, so the eval can test it. | The eval shows failures from lost context → add summary compaction. |
 | D18 | Delete session | Sidebar row → Delete (with confirm) → `DELETE /sessions/:id`. SessionDO then: aborts the loop, `container.destroy()`, closes the WebSockets, and calls `ctx.storage.deleteAll()`, which also clears the alarm (compat date ≥ 2026-02-24). The Worker then removes the WorkspaceDO row. A DO can't be "revoked"; its name still resolves. An emptied DO stores nothing and costs nothing, so every SessionDO method checks for its `session` row and returns 404 when it is missing, instead of recreating an empty session. | Gives the user an explicit "free the resources now" action and a clean list. | — |
-| D19 | Model selection (heterogeneous mode, **bonus, illustrative only**) | The model is chosen behind the `ModelClient` port. MVP: one model per mode from config (e.g. `code`/`review` → the coding model, auto-approve classifier → a small cheap model). Every `usage` event records `model`. **Heterogeneous mode** would be a `RouterModelClient` that picks a model per step (plan vs. edit vs. read vs. classify) and may shape the call. It needs ai&'s internal routing API, so it is **not implemented**: the composer shows a disabled "Auto (heterogeneous)" model option with a short explanation, and the README's "What's next" section describes the design. | ai& controls the stack from server to model, so per-step routing is where it can optimise. Because the port already exists, adding it later changes no core code. | ai& exposes a routing API → implement `RouterModelClient` and evaluate it with the same harness. |
+| D19 | Model selection (heterogeneous mode, **bonus, illustrative only**) | The model is chosen behind the `ModelClient` port. MVP: one model per mode from config (e.g. `code`/`review` → the coding model, auto-approve classifier → a small cheap model). *Amended 2026-10-02 (A1): the user picks one of four models per session; the config value is the default.* Every `usage` event records `model`. **Heterogeneous mode** would be a `RouterModelClient` that picks a model per step (plan vs. edit vs. read vs. classify) and may shape the call. It needs ai&'s internal routing API, so it is **not implemented**: the composer shows a disabled "Auto (heterogeneous)" model option with a short explanation, and the README's "What's next" section describes the design. | ai& controls the stack from server to model, so per-step routing is where it can optimise. Because the port already exists, adding it later changes no core code. | ai& exposes a routing API → implement `RouterModelClient` and evaluate it with the same harness. |
 
 ## Alternatives Rejected
 
@@ -171,15 +171,19 @@ Key Decisions used: D5, D6, D8, D10, D11, D14, D15, D16, D18
 
 ### Phase 3 — Code workspace UI
 Depends on: Phase 2
-Delivers: the Codex-style SPA (sidebar + session list, timeline with collapsible steps and streamed output, diff panel, sticky approval bar, composer redirect, usage meta line, context meter, delete session, disabled "Auto (heterogeneous)" model option). Tests A, C and D pass in the browser.
+Delivers: the Codex-style SPA (sidebar + session list, timeline with collapsible steps and streamed output, diff panel, sticky approval bar, composer redirect, usage meta line, context meter, delete session, a model menu with four models and a disabled "Auto" option). Tests A, C and D pass in the browser.
+Spec: `docs/features/workspace-ui/workspace-ui-implementation-checklist.md`. Small backend additions (A1, A2, A4) are part of this phase. Review and Task are shown disabled in the mode switch; the Pull requests item is not shown yet.
 Key Decisions used: D6, D7, D13, D16, D17, D18, D19
 
 ### Phase 4 — GitHub: PR on approve + Review mode
 Depends on: Phase 3
 Delivers:
 - Approve → PR by the App bot (test B)
-- the Pull Requests page (All / Needs review / Opened by agent)
+- the Pull Requests page (All / Needs review / My PRs). "My PRs" are the pull requests the bot opened (A5).
+- a page before a review starts: the PR's diff from GitHub, an editable review brief, and a Start review button; nothing runs until it is pressed (A6)
 - the `review` profile, findings panel (keep/edit/dismiss, jump to line), and Post review via PAT (test E)
+- the My PR page: read the review comments on a bot-opened PR, reply as Henry, and ask the agent for another round (`agent/<session>-2`) (A7)
+- Code sessions start from the default branch's head at create time, resolved with the App token; `DEMO_SHA` stays as an optional override (A8)
 Scope: `github/` (App JWT with a PKCS#8 key, installation token cache, Git Data commit, PR list/read, review post), the review profile, and a `review_finding` tool.
 Key Decisions used: D4, D9, D10, D14
 
@@ -222,6 +226,23 @@ Limits that shape the design:
 | The GitHub PR creation times out after the ref is created → a duplicate PR on retry | Deterministic ref name; before creating, look up an existing PR for that head (D9). |
 | The public PAT path means any visitor can post a review as Henry | Accepted (Q1 = a): the URL is shared with few people. Mitigated by: rate limit, kill switch, and a PAT scoped to one repo with only `pull_requests:write`. |
 | The container is evicted during a long approval wait | D11 rebuild from tarball@SHA + `changes`. |
+
+## Amendments (2026-10-02, after the v2 design)
+
+The v2 design (Claude Design canvas, https://claude.ai/artifact/TZezwBinDXnfySoDgTwquD) was read against this document and the Phase 2 code. Henry agreed to these changes; the full list of differences is in the Phase 3 checklist.
+
+| # | Changes | What | Phase |
+|---|---|---|---|
+| A1 | D19 | The composer has a working model menu. `POST /sessions` takes an optional `model` from a list of four (`deepseek-v4-flash`, `deepseek-v4-pro`, `kimi-k2.7-code`, `glm-5.3`); the session stores it. "Auto" stays disabled and not built. | 3 |
+| A2 | D7 | The final `tool_output` of `read_file` and `list_files` may carry `meta {bytes?, files?}`. No event type is added. | 3 |
+| A3 | D13 | Diffs are drawn by our own component: unified view, line numbers, no syntax highlighting. | 3 |
+| A4 | Phase 2 surface | New `GET /config` (repo, commit, models, limits). `GET /sessions/:id` reports `sandboxRunning`. | 3 |
+| A5 | D9, Phase 4 | There is no login, so every pull request &run opens is opened by the bot. The tab "Opened by agent" is named "My PRs" and lists those. Reviews are posted as Henry (PAT). GitHub refuses Approve and Request changes on a pull request written by the reviewing account, so pull requests to be reviewed, including test E's, must not be authored by Henry's account. | 4 |
+| A6 | Phase 4 | Starting a review is a human click on a page that shows the diff and a pre-filled, editable brief. The brief is the session's task. `POST /sessions` must accept `mode:"review"` and a pull request number. | 4 |
+| A7 | Phase 4 scope | The My PR page (reply to review comments, ask the agent for round 2) is added. It is the first thing to cut if Phase 4 runs late. | 4 |
+| A8 | D10, P2-h | The repo stays fixed by configuration. The commit does not: Review uses the PR head; Code resolves the default branch's head when the session is created. Until Phase 4 has a token, Code uses the pinned `DEMO_SHA`. | 4 |
+
+Still open for the Phase 4 spec: a review ends as `done` today (`finish` asks only in Code mode) while the design shows "Ready to post"; edited and dismissed findings have no storage and Post review has no route; the product spec's search box and reviewer's own comments are not drawn.
 
 ## Codex Position
 

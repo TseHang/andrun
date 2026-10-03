@@ -50,6 +50,9 @@ Last updated: 2026-10-02 (end of Phase 2).
 
 - [ ] Phase 3: show the restore note (`error{source:"sandbox"}` after `sandbox_setup`) as a visible notice, with the names of files that were not restored (L1, L2).
 - [ ] Phase 3: make the cold-start wait obvious (L7), and explain `budget_exceeded` (C2).
+- [ ] Phase 3: a redirect typed while running is shown as "queued" in the browser only; the bubble is gone after a reload until the message is injected (F4).
+- [ ] Phase 4: a file changed only by a command has no diff in the Changes panel, only line counts at the gate (L3). Emit its diff when a run pauses.
+- [ ] Phase 4: Code sessions start from the pinned `DEMO_SHA`, not the branch head (ADR A8).
 - [ ] Phase 4: PR on approve reads the changed files from the session's `changes` (L6); decide what to do with files over 1 MB (L2) and binary files (L4) before that.
 - [ ] After merge: connect Workers Builds so `main` deploys automatically (Henry, in the Cloudflare dashboard).
 - [ ] Before sharing the URL publicly: C1 and C3.
