@@ -9,7 +9,7 @@ export interface RateLimiter {
 
 /** One SessionDO, addressed by session id. Missing sessions answer `null` / `false` (ADR D18). */
 export interface SessionStub {
-  create(input: { id: string; mode: "code"; task: string }): Promise<void>;
+  create(input: { id: string; mode: "code"; task: string; model?: string }): Promise<void>;
   snapshot(): Promise<(SessionSnapshot & { debug?: Record<string, unknown> }) | null>;
   remove(): Promise<boolean>;
   killSandbox(): Promise<boolean>;
@@ -31,5 +31,7 @@ export interface RouterEnv {
   killSwitch: boolean;
   /** `DEBUG_ENDPOINTS="1"`: routes `POST /sessions/:id/debug/kill-sandbox`. */
   debugEndpoints: boolean;
+  /** The fixed demo repo (P2-h), shown by `GET /config`. */
+  repo: { name: string; sha: string };
   newId(): string;
 }

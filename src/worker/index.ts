@@ -15,6 +15,7 @@ function routerEnv(env: Env): RouterEnv {
     deleteLimiter: env.DELETE_LIMITER,
     killSwitch: env.KILL_SWITCH === "1",
     debugEndpoints: env.DEBUG_ENDPOINTS === "1",
+    repo: { name: env.DEMO_REPO, sha: env.DEMO_SHA },
     newId: () => crypto.randomUUID(),
   };
 }

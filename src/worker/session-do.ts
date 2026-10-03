@@ -81,7 +81,7 @@ export class SessionDO extends DurableObject<Env> {
 
   // ---------- RPC, called by the Worker ----------
 
-  async create(input: { id: string; mode: "code"; task: string }): Promise<void> {
+  async create(input: { id: string; mode: "code"; task: string; model?: string }): Promise<void> {
     this.engine.create(input);
     this.ctx.waitUntil(this.engine.idle());
   }

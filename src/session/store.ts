@@ -13,7 +13,7 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS session (
     id TEXT PRIMARY KEY, mode TEXT NOT NULL, title TEXT NOT NULL, repo TEXT NOT NULL, sha TEXT NOT NULL,
     created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, status TEXT NOT NULL, step INTEGER NOT NULL,
-    tokens_used INTEGER NOT NULL, next_seq INTEGER NOT NULL, failures TEXT, nudged INTEGER NOT NULL)`,
+    tokens_used INTEGER NOT NULL, next_seq INTEGER NOT NULL, failures TEXT, nudged INTEGER NOT NULL, model TEXT)`,
   `CREATE TABLE IF NOT EXISTS messages (idx INTEGER PRIMARY KEY, json TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS events (seq INTEGER PRIMARY KEY, json TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS pending_approval (id INTEGER PRIMARY KEY CHECK (id = 1), json TEXT NOT NULL)`,
@@ -35,6 +35,8 @@ interface SessionRow {
   next_seq: number;
   failures: string | null;
   nudged: number;
+  /** Absent in a table created before Phase 3. */
+  model?: string | null;
 }
 
 interface ChangeRow {
@@ -70,8 +72,8 @@ export class SessionStore {
   create(meta: SessionMeta, state: AgentState): void {
     for (const ddl of SCHEMA) this.sql.exec(ddl);
     this.sql.exec(
-      `INSERT OR REPLACE INTO session (id, mode, title, repo, sha, created_at, updated_at, status, step, tokens_used, next_seq, failures, nudged)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO session (id, mode, title, repo, sha, created_at, updated_at, status, step, tokens_used, next_seq, failures, nudged, model)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       meta.id,
       meta.mode,
       meta.title,
@@ -85,6 +87,7 @@ export class SessionStore {
       state.nextSeq,
       state.failures ? JSON.stringify(state.failures) : null,
       state.nudged ? 1 : 0,
+      meta.model ?? null,
     );
     this.saveMessages(state.messages);
     this.savePending(state.pending);
@@ -93,7 +96,7 @@ export class SessionStore {
   meta(): SessionMeta | null {
     const r = this.row();
     if (!r) return null;
-    return { id: r.id, mode: r.mode, title: r.title, repo: r.repo, sha: r.sha, created_at: r.created_at, updated_at: r.updated_at };
+    return { id: r.id, mode: r.mode, title: r.title, repo: r.repo, sha: r.sha, created_at: r.created_at, updated_at: r.updated_at, ...(r.model && { model: r.model }) };
   }
 
   loadState(): AgentState | null {

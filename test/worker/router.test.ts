@@ -41,7 +41,7 @@ function fakeEnv(over: Partial<RouterEnv> = {}) {
       return {
         create: async (input) => {
           created.push(input);
-          sessions.set(id, { id, mode: "code", title: input.task.slice(0, 80), status: "running", pending: null });
+          sessions.set(id, { id, mode: "code", title: input.task.slice(0, 80), status: "running", pending: null, sandboxRunning: false });
         },
         snapshot: async () => sessions.get(id) ?? null,
         remove: async () => sessions.delete(id),
@@ -103,7 +103,7 @@ describe("router (P2-b)", () => {
 
     const got = await handle(req("GET", `/sessions/${id as string}`), f.env);
     expect(got.status).toBe(200);
-    expect(await json(got)).toMatchObject({ id, status: "running", pending: null });
+    expect(await json(got)).toMatchObject({ id, status: "running", pending: null, sandboxRunning: false });
   });
 
   it("lists sessions from the index", async () => {

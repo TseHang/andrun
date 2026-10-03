@@ -295,6 +295,7 @@ async function recordResult(ctx: RunContext, call: ToolCall, result: ToolResult,
     stream: "result",
     chunk: text.slice(0, UI_RESULT_CHARS),
     ...(name === "run_command" && result.exitCode !== undefined && { exitCode: result.exitCode }),
+    ...(result.ok && result.meta && { meta: result.meta }),
   });
   toolMessage(ctx, call, result.ok ? result.output : JSON.stringify({ error: result.error }));
 

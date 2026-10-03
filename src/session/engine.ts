@@ -10,12 +10,11 @@ import { SandboxLostError, type AgentDeps, type AgentState, type ApprovalDecisio
 import { OutputCoalescer } from "./coalesce";
 import { parseClientFrame, titleOf } from "./frames";
 import type { EngineDeps } from "./ports";
-import type { PendingView, ServerFrame, SessionSnapshot } from "./protocol";
+import { RESTORED_NOTE, type PendingView, type ServerFrame, type SessionSnapshot } from "./protocol";
 import { SessionStore } from "./store";
 
 const WATCHDOG_MS = 60_000;
 const COALESCE_WINDOW_MS = 250;
-const RESTORED_NOTE = "The sandbox was restarted and the workspace was restored from saved changes.";
 
 const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
@@ -54,7 +53,7 @@ export class SessionEngine {
 
   // ---------- Public API ----------
 
-  create(input: { id: string; mode: "code"; task: string }): void {
+  create(input: { id: string; mode: "code"; task: string; model?: string }): void {
     if (this.store.exists()) throw new Error("session already exists");
     const profile = getProfile(input.mode, this.deps.config);
     const state = createSession({ sessionId: input.id, mode: input.mode, task: input.task }, profile);
@@ -68,6 +67,7 @@ export class SessionEngine {
         sha: this.deps.repo.sha,
         created_at: now,
         updated_at: now,
+        ...(input.model !== undefined && { model: input.model }),
       },
       state,
     );
@@ -80,7 +80,14 @@ export class SessionEngine {
     const meta = this.store.meta();
     const state = this.store.loadState();
     if (!meta || !state) return null;
-    return { id: meta.id, mode: meta.mode, title: meta.title, status: state.status, pending: state.pending ? pendingView(state.pending) : null };
+    return {
+      id: meta.id,
+      mode: meta.mode,
+      title: meta.title,
+      status: state.status,
+      pending: state.pending ? pendingView(state.pending) : null,
+      sandboxRunning: this.deps.sandbox.isRunning(),
+    };
   }
 
   replay(lastSeq: number): AgentEvent[] | null {
@@ -303,7 +310,8 @@ export class SessionEngine {
 
     const state = this.deleted ? null : store.loadState();
     if (!state) return;
-    const profile = getProfile(state.mode, deps.config);
+    const base = getProfile(state.mode, deps.config);
+    const profile = { ...base, model: store.meta()?.model ?? base.model };
     const agentDeps: AgentDeps = {
       model: deps.model,
       sandbox: deps.sandbox,
