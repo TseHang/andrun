@@ -1,10 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { BASE, gh, seedReviewPull, ui } from "./support";
+import { BASE, deleteAllSessions, gh, seedReviewPull, ui } from "./support";
 
 // Spec test E (S16): the agent drafts findings, the human dismisses one, edits one, picks a verdict and posts.
 
-test.beforeEach(async () => {
+test.beforeEach(async ({ request }) => {
   await gh.reset();
+  await deleteAllSessions(request);
 });
 
 test("review a pull request: dismiss, edit, request changes, post", async ({ page, request }) => {

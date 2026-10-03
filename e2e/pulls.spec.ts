@@ -1,8 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { gh, seedReviewPull, ui } from "./support";
+import { deleteAllSessions, gh, seedReviewPull, ui } from "./support";
 
-test.beforeEach(async () => {
+test.beforeEach(async ({ request }) => {
   await gh.reset();
+  await deleteAllSessions(request);
 });
 
 test("empty tabs", async ({ page }) => {

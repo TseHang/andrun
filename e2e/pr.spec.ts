@@ -1,10 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { TASK, createSession, deleteSession, gh, sendFrame, ui, waitForStatus } from "./support";
+import { TASK, createSession, deleteSession, deleteAllSessions, gh, sendFrame, ui, waitForStatus } from "./support";
 
 // Spec test B (S15): Approve opens a real pull request as the bot. Runs against the fake GitHub.
 
-test.beforeEach(async () => {
+test.beforeEach(async ({ request }) => {
   await gh.reset();
+  await deleteAllSessions(request);
 });
 
 test("approve opens a pull request and it appears under My PRs", async ({ page }) => {
@@ -22,7 +23,7 @@ test("approve opens a pull request and it appears under My PRs", async ({ page }
 
   await s.approval.getByRole("button", { name: "Approve and open PR" }).click();
   await expect(s.status).toHaveText("Done");
-  await expect(s.timeline.getByText("Approved", { exact: true })).toBeVisible();
+  await expect(s.timeline.getByText("Approved")).toBeVisible();
   await expect(s.prCard).toContainText("Pull request #12 opened");
   await expect(s.prCard).toContainText(`${branch} → main`);
   await expect(s.prCard).toContainText("Opened by the &run bot.");

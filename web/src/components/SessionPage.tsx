@@ -53,7 +53,7 @@ function Loader({ id }: { id: string }) {
 }
 
 function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload: () => void }) {
-  const { navigate, refreshList, reportStatus } = useApp();
+  const { navigate, refreshList, refreshPulls, reportStatus } = useApp();
   const { view, send, update, reconnecting, deleted } = useSession(id);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -71,6 +71,12 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
     refreshList();
   }, [status]);
   useEffect(() => () => reportStatus(id, null), [id]);
+
+  // A pull request opened or a review posted here changes the Pull requests list and its count.
+  const published = view.items.filter((i) => i.kind === "pr" || i.kind === "review_posted").length;
+  useEffect(() => {
+    if (published > 0) refreshPulls();
+  }, [published]);
 
   // The sandbox comes up while the run starts: re-read the snapshot whenever a setup step finishes.
   const setups = view.items.reduce((n, i) => n + (i.kind === "steps" ? i.rows.filter((r) => r.name === "sandbox_setup" && r.done).length : 0), 0);

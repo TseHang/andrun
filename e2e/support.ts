@@ -55,6 +55,15 @@ export async function replay(id: string): Promise<AgentEvent[]> {
   return events;
 }
 
+/**
+ * The fake GitHub numbers pull requests from 12 again after a reset, so sessions left by earlier tests
+ * would be linked to the new pull requests. The GitHub specs start from an empty session list.
+ */
+export async function deleteAllSessions(request: APIRequestContext): Promise<void> {
+  const rows = (await (await request.get(`${BASE}/sessions`)).json()) as { id: string }[];
+  for (const row of rows) await deleteSession(request, row.id);
+}
+
 export async function deleteSession(request: APIRequestContext, id: string): Promise<void> {
   await request.delete(`${BASE}/sessions/${id}`, { headers: { "cf-connecting-ip": ip() } });
 }
