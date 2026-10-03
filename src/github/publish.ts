@@ -85,7 +85,9 @@ type Send = (path: string, body?: unknown) => Promise<unknown>;
 /** Creates the blobs and the tree for base tree + all files; returns the tree sha. */
 async function buildTree(get: Send, post: Send, input: PublishInput): Promise<string> {
   const base = (await get(`/git/commits/${input.baseSha}`)) as RawCommit;
-  const listing = (await get(`/git/trees/${base.tree.sha}?recursive=1`)) as { tree: { path: string; mode: string }[] };
+  const listing = (await get(`/git/trees/${base.tree.sha}?recursive=1`)) as { tree: { path: string; mode: string }[]; truncated?: boolean };
+  // A cut-off listing would lose deletions and file modes without a word.
+  if (listing.tree && listing.truncated) throw new GitHubError("the repository is too large to publish from: GitHub cut its file listing short", 0);
   const modes = new Map(listing.tree.map((e) => [e.path, e.mode]));
 
   const entries: { path: string; mode: string; type: "blob"; sha: string | null }[] = [];

@@ -159,6 +159,11 @@ describe("Code: approve opens the pull request (S4–S7, S9)", () => {
     expect(ofType(g.events(), "pr_opened")).toEqual([]);
     expect(ofType(g.events(), "error")).toEqual([]);
     expect(g.engine.snapshot()).toMatchObject({ status: "done", pr: null });
+
+    // Code review: with nothing to write, the kill switch does not hold the session at the gate.
+    const off = await codeAtGate([call("finish", { summary: "Nothing to change." })], { guard: () => "GitHub writes are disabled" });
+    expect(await send(off.engine, { type: "approve", approvalId: off.approvalId })).not.toContainEqual({ type: "rejected", reason: "GitHub writes are disabled" });
+    expect(off.engine.snapshot()).toMatchObject({ status: "done", pr: null });
   });
 
   it("a session without stored GitHub state", async () => {

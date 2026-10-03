@@ -83,7 +83,7 @@ export async function getPull(request: Request, repo: string, token: string, n: 
     baseRef: p.base.ref,
     headSha: p.head.sha,
     state: p.state === "open" ? "open" : "closed",
-    fork: p.head.repo?.full_name !== repo,
+    fork: p.head.repo?.full_name.toLowerCase() !== repo.toLowerCase(),
     url: p.html_url,
     additions: p.additions,
     deletions: p.deletions,

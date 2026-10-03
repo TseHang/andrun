@@ -1,7 +1,7 @@
 // GitHub App authentication (ADR D9): sign an RS256 JWT with WebCrypto, trade it for an installation
 // token, and keep that token in memory for 50 minutes (GitHub issues it for 60).
 
-import type { Request } from "./client";
+import { GitHubError, type Request } from "./client";
 
 const TOKEN_TTL_MS = 50 * 60_000;
 
@@ -24,7 +24,13 @@ function pkcs8Bytes(pem: string): Uint8Array<ArrayBuffer> {
 }
 
 async function signJwt(config: AppAuthConfig): Promise<string> {
-  const key = await crypto.subtle.importKey("pkcs8", pkcs8Bytes(config.privateKey), { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
+  let key: CryptoKey;
+  try {
+    key = await crypto.subtle.importKey("pkcs8", pkcs8Bytes(config.privateKey ?? ""), { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
+  } catch (e) {
+    // A key in the wrong format is a setup error; it is reported like any other GitHub failure.
+    throw new GitHubError(`GITHUB_APP_PRIVATE_KEY could not be read: ${e instanceof Error ? e.message : String(e)}`, 0);
+  }
   const iat = Math.floor(config.now() / 1000) - 60; // allow for clock drift
   const unsigned = `${encodeJson({ alg: "RS256", typ: "JWT" })}.${encodeJson({ iss: config.appId, iat, exp: iat + 600 })}`;
   const signature = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(unsigned));

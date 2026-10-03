@@ -106,7 +106,7 @@ export function Timeline({ view, session }: { view: SessionView; session: Sessio
         {view.items.map((item, i) => (
           <div key={item.key}>
             <Item item={item} session={session} />
-            {session.code && item.kind === "approved" && view.items[i + 1]?.kind !== "pr" && <p className="text-center text-xs text-text-secondary">{NOTE}</p>}
+            {session.code && item.kind === "approved" && item.finish && view.items[i + 1]?.kind !== "pr" && <p className="text-center text-xs text-text-secondary">{NOTE}</p>}
           </div>
         ))}
       </div>

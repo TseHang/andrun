@@ -47,7 +47,7 @@ export function createGitHub(config: GitHubConfig): GitHub {
   // A token is letters, digits and underscores. A secret pasted with a stray character fails in
   // transit with an error that says nothing about the cause, so it is refused here.
   const userToken = async () => {
-    const pat = config.pat.trim();
+    const pat = (config.pat ?? "").trim();
     if (!/^[A-Za-z0-9_]+$/.test(pat)) throw new GitHubError("GITHUB_PAT is not a valid token: set the secret again", 0);
     return pat;
   };

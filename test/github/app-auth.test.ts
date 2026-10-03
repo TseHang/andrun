@@ -44,6 +44,7 @@ describe("GitHub App auth (D9)", () => {
     }).privateKey;
     const { github, fake } = setup({}, { privateKey: pkcs1 });
     await expect(github.defaultBranchHead()).rejects.toThrow("GITHUB_APP_PRIVATE_KEY must be a PKCS#8 PEM");
+    await expect(github.defaultBranchHead()).rejects.toBeInstanceOf(GitHubError); // the router answers 502, not 500
     expect(fake.requests).toHaveLength(0);
   });
 

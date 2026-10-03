@@ -312,9 +312,9 @@ export class SessionEngine {
   /** Approving a Code session's finish opens or updates its pull request from the stored changes (P4-g). False keeps the gate open. */
   private async publishChanges(state: AgentState, pending: PendingApproval, reply: (frame: ServerFrame) => void, ip: string): Promise<boolean> {
     const { deps, store } = this;
-    if (!(await this.allowed(ip, reply))) return false;
     const changes = store.changes();
-    if (changes.length === 0) return true;
+    if (changes.length === 0) return true; // nothing to write: the guard is not asked
+    if (!(await this.allowed(ip, reply))) return false;
     const meta = store.meta();
     if (!meta) return false;
 

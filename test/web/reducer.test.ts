@@ -245,7 +245,10 @@ describe("view state (P3-a)", () => {
 
     const approved = reduce(atFinish, f.e({ type: "approval_resolved", approvalId: "a1", approved: true }));
     expect(approved.gate).toBeNull();
-    expect(approved.items.at(-1)).toMatchObject({ kind: "approved" });
+    expect(approved.items.at(-1)).toMatchObject({ kind: "approved", finish: true });
+    // Code review: only the finish approval may carry the "no pull request" note, not a mid-run gate.
+    const letContinue = reduce(struck, e({ type: "approval_resolved", approvalId: "a4", approved: true }));
+    expect(letContinue.items.at(-1)).toMatchObject({ kind: "approved", finish: false });
 
     const rejected = reduce(atFinish, f.e({ type: "approval_resolved", approvalId: "a1", approved: false, comment: "also add a test for the empty array case" }));
     expect(rejected.gate).toBeNull();

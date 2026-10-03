@@ -36,7 +36,7 @@ export type TimelineItem =
   | { key: string; kind: "steps"; rows: StepRow[] }
   | { key: string; kind: "notice"; title: string; message: string }
   | { key: string; kind: "failure"; source: ErrorSource; title: string; message: string; next?: string }
-  | { key: string; kind: "approved" }
+  | { key: string; kind: "approved"; finish: boolean }
   | { key: string; kind: "pr"; url: string; number?: number; branch?: string; updated: boolean }
   | { key: string; kind: "review_posted"; url: string; verdict: ReviewVerdict };
 
@@ -340,7 +340,7 @@ function apply(view: SessionView, ev: AgentEvent): SessionView {
       }
       if (ev.approved && !ev.auto) {
         // The server opens the pull request before it resolves the approval; the marker reads first.
-        const marker: TimelineItem = { key: `ok:${ev.approvalId}`, kind: "approved" };
+        const marker: TimelineItem = { key: `ok:${ev.approvalId}`, kind: "approved", finish: view.gate?.tool === "finish" };
         const last = items.at(-1);
         if (last?.kind === "pr") items = [...items.slice(0, -1), marker, last];
         else if (last?.kind !== "review_posted") items = [...items, marker];
