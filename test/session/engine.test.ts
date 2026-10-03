@@ -7,7 +7,7 @@ import { ModelError, type ChatMessage, type ModelClient, type ModelRequest, type
 import { CloudflareSandboxAdapter } from "../../src/sandbox/cloudflare-sandbox";
 import { SessionEngine } from "../../src/session/engine";
 import type { EngineDeps } from "../../src/session/ports";
-import type { ClientFrame, ServerFrame, SessionSummary } from "../../src/session/protocol";
+import { RESTORED_NOTE, type ClientFrame, type ServerFrame, type SessionSummary } from "../../src/session/protocol";
 import { SessionStore } from "../../src/session/store";
 import { FakeContainer } from "../support/fake-container";
 import { nodeSql } from "../support/node-sql";
@@ -628,7 +628,7 @@ describe("S10: a sandbox lost between runs is rebuilt (D11)", () => {
     const added = w.events().slice(before);
     const note = ofType(added, "error").find((e) => e.source === "sandbox");
     expect(note).toBeDefined();
-    expect(note!.message).toMatch(/restored/i);
+    expect(note!.message.startsWith(RESTORED_NOTE)).toBe(true); // the UI tells the notice apart by this constant (P3-e)
     expect(note!.next).toMatch(/continu/i);
     expect(ofType(added, "tool_call").some((e) => e.name === "sandbox_setup")).toBe(true);
     const lastRun = ofType(added, "tool_output").filter((e) => e.exitCode !== undefined);
@@ -966,5 +966,51 @@ describe("S13: delete frees everything, and a deleted session is 404 (D18)", () 
     expect(w.db.tables()).toEqual([]);
     expect(w.frames).toHaveLength(framesBefore);
     expect(w.upserts.every((u) => u.status === "running")).toBe(true);
+  });
+});
+
+describe("Phase 3: model per session (P3-d) and sandbox state (P3-o)", () => {
+  const PRO = "deepseek-ai/deepseek-v4-pro";
+
+  it("a session keeps its model across segments and engines", async () => {
+    const w = world();
+    const model = new ScriptedModelClient([...HAPPY(), ...AFTER_REJECT()]);
+    const engine = w.engine(model);
+    engine.create({ id: ID, mode: "code", task: TASK, model: PRO });
+    await engine.idle();
+    const approvalId = engine.snapshot()!.pending!.approvalId;
+
+    // A new engine over the same store, like an evicted Durable Object, continues on the same model.
+    await send(w.engine(model), { type: "reject", approvalId, comment: COMMENT });
+    expect(model.requests).toHaveLength(8);
+    expect(new Set(model.requests.map((r) => r.model))).toEqual(new Set([PRO]));
+    const usages = ofType(w.events(), "usage");
+    expect(usages.length).toBeGreaterThan(0);
+    for (const u of usages) expect(u).toMatchObject({ model: PRO, context_window: 1_000_000 });
+  });
+
+  it("no model means the config default, and a store from before Phase 3 resumes on it", async () => {
+    const { model, db, makeEngine, approvalId } = await atGate(AFTER_REJECT());
+    expect(model.requests.every((r) => r.model === defaultConfig.models.code)).toBe(true);
+
+    // A session row written before the model column existed.
+    db.sql.exec("ALTER TABLE session DROP COLUMN model");
+    const older = makeEngine(model);
+    expect(older.snapshot()).toMatchObject({ status: "awaiting_approval" });
+    await send(older, { type: "reject", approvalId, comment: COMMENT });
+    expect(model.requests).toHaveLength(8);
+    expect(model.requests.every((r) => r.model === defaultConfig.models.code)).toBe(true);
+    expect(older.snapshot()).toMatchObject({ status: "awaiting_approval" });
+  });
+
+  it("the snapshot reports whether the sandbox is running", async () => {
+    const w = await atGate();
+    expect(w.engine.snapshot()).toMatchObject({ status: "awaiting_approval", sandboxRunning: true });
+    await w.container.destroy();
+    expect(w.engine.snapshot()).toMatchObject({ sandboxRunning: false });
+
+    const approved = await atGate();
+    await send(approved.engine, { type: "approve", approvalId: approved.approvalId });
+    expect(approved.engine.snapshot()).toMatchObject({ status: "done", sandboxRunning: false });
   });
 });

@@ -299,4 +299,12 @@ Not applicable:
 - **G21** (diff for files changed by a command) should be fixed there, since opening a pull request needs those files.
 
 ## Build Progress
-_(filled by /build-to-run)_
+| # | Unit | Proves | Status |
+|---|---|---|---|
+| 1 | Backend: `GET /config`, model per session, `RESTORED_NOTE` export, `sandboxRunning`, `meta` on tool results | S7, S8, S18 (core), S19 (engine) | ⏳ pending |
+| 2 | Build setup: `web/` Vite + React + Tailwind, assets as SPA, `/debug.html`, scripts, Playwright config, fake model `[ask]` | build, `/debug.html`, existing tests | ⏳ pending |
+| 3 | View state: reducer, diff parser, formatters (fixture recorded from the fake model) | S1–S6, S13 (unit), S18 (rows), reducer/diff/contrast edges | ⏳ pending |
+| 4 | Screens: Home, sidebar, session list, delete, not found | S15, S16, S17, list and keyboard edges | ⏳ pending |
+| 5 | Screens: session view (timeline, Changes, approval bar, composer, reconnect, sandbox state) | S9–S14, S19 (browser), scroll edge | ⏳ pending |
+| 6 | Brand: wordmark SVG outlines, PNG, favicon | S20 (no font request) | ⏳ pending |
+| 7 | Docs: README, `limits.md`, ADR notes | — | ⏳ pending |
