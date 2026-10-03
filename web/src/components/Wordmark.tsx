@@ -1,8 +1,4 @@
-// One place for the logo: switch to <img src="/logo.svg" alt="&run"> when the outlined SVG exists.
+// The &run wordmark: DM Sans 700 converted to outlines (web/brand/make-logo.py), so no font is loaded.
 export function Wordmark() {
-  return (
-    <span className="text-[20px] font-bold tracking-[-0.02em]" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-      <span className="text-accent">&amp;</span>run
-    </span>
-  );
+  return <img src="/logo.svg" alt="&run" className="block h-[17px] w-auto" />;
 }

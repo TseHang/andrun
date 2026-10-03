@@ -306,7 +306,7 @@ Not applicable:
 | 3 | View state: reducer, diff parser, formatters (fixture recorded from the fake model) | S1–S6, S13 (unit), S18 (rows), reducer/diff/contrast edges | ✅ done |
 | 4 | Screens: Home, sidebar, session list, delete, not found | S15, S16, S17, list and keyboard edges | ✅ done (S15 last line needs unit 5) |
 | 5 | Screens: session view (timeline, Changes, approval bar, composer, reconnect, sandbox state) | S9–S14, S19 (browser), scroll edge | ✅ done |
-| 6 | Brand: wordmark SVG outlines, PNG, favicon | S20 (no font request) | ⏳ pending |
+| 6 | Brand: wordmark SVG outlines, PNG, favicon | S20 (no font request) | ✅ done (taken by the commander: asset generation) |
 | 7 | Docs: README, `limits.md`, ADR notes | — | ⏳ pending |
 
 Test changes during the build:
