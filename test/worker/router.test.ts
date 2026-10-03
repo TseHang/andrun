@@ -429,6 +429,9 @@ describe("router (Phase 3: P3-c, P3-d)", () => {
     await expectError(await post(f.env, { mode: "review", pr: 13, task: "brief" }, IP_B), 400, /pull request #13 is not open/);
     f.fake.addPull({ number: 16, title: "Fork", headRef: "patch-1", user: "stranger", headRepo: "stranger/andrun-demo" });
     await expectError(await post(f.env, { mode: "review", pr: 16, task: "brief" }, IP_B), 400, /pull requests from forks are not supported/);
+    // Security review: a review must not silently cover only the first page of files.
+    f.fake.addPull({ number: 17, title: "Huge", headRef: "feat/huge", user: "octocat", changedFiles: 140, files: [{ filename: "a.js", status: "added", additions: 1, deletions: 0, patch: "@@ -0,0 +1 @@\n+a" }] });
+    await expectError(await post(f.env, { mode: "review", pr: 17, task: "brief" }, IP_B), 400, /more than 100 files/);
     expect(f.created).toHaveLength(n);
   });
 

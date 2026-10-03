@@ -45,6 +45,18 @@ describe("pull requests (spec D2: list, read)", () => {
     expect((await github.listPulls())[0]).toMatchObject({ author: BOT, mine: false });
   });
 
+  it("another bot's pull request on an agent/ branch is not a My PR", async () => {
+    // Security review: "mine" must mean this App's own bot, not any account ending in [bot].
+    const { fake, github } = setup();
+    fake.addPull({ number: 21, title: "Bump deps", headRef: "agent/deadbeef-1", user: "dependabot[bot]" });
+    fake.addPull({ number: 22, title: "Ours", headRef: "agent/1a2b3c4d-1" });
+    const pulls = await github.listPulls();
+    expect(Object.fromEntries(pulls.map((p) => [p.number, p.mine]))).toEqual({ 21: false, 22: true });
+    expect(fake.requests.filter((r) => r.path === "/app")).toHaveLength(1);
+    await github.listPulls();
+    expect(fake.requests.filter((r) => r.path === "/app")).toHaveLength(1); // the bot's login is looked up once
+  });
+
   it("reads one pull request with its files", async () => {
     const { fake, github } = seeded();
     const pull = await github.getPull(14);

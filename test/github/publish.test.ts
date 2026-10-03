@@ -97,6 +97,20 @@ describe("publish (D9, P4-f)", () => {
     expect(fake.pulls.map((p) => p.state)).toEqual(["closed", "open"]);
   });
 
+  it("a pull request someone else opened on the branch is not pushed to", async () => {
+    // Security review: an existing pull request counts as ours only when this App's bot opened it.
+    const { fake, github } = setup(SEED);
+    const base = fake.refs.get("main")!;
+    const theirs = fake.putCommit({ tree: fake.commits.get(base)!.tree, parents: [base], message: "theirs", author: "octocat" });
+    fake.refs.set(BRANCH, theirs);
+    fake.addPull({ number: 30, title: "Not ours", headRef: BRANCH, user: "octocat" });
+
+    await expect(github.publish(input(fake))).rejects.toThrow(/agent\/1a2b3c4d-1 has a pull request that &run did not open/);
+    expect(fake.refs.get(BRANCH)).toBe(theirs);
+    expect(fake.pulls).toHaveLength(1);
+    expect(fake.writes().filter((w) => /\/git\/(refs|commits)|\/pulls/.test(w))).toEqual([]);
+  });
+
   it("a foreign branch is not overwritten", async () => {
     const { fake, github } = setup(SEED);
     const foreign = fake.putCommit({ tree: fake.putTree({}), parents: [], message: "someone else", author: "someone" });

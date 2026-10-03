@@ -39,6 +39,8 @@ export interface FakePull {
   headRepo?: string;
   /** Overrides the files computed from the trees. */
   files?: FakeFile[];
+  /** Overrides `changed_files`, for a pull request with more files than one page returns. */
+  changedFiles?: number;
   updatedAt: string;
 }
 
@@ -207,7 +209,7 @@ export function createFakeGitHub(seed: { files?: Record<string, string>; modes?:
       ...(detail && {
         additions: files.reduce((n, f) => n + f.additions, 0),
         deletions: files.reduce((n, f) => n + f.deletions, 0),
-        changed_files: files.length,
+        changed_files: p.changedFiles ?? files.length,
       }),
     };
   };
@@ -246,6 +248,11 @@ export function createFakeGitHub(seed: { files?: Record<string, string>; modes?:
       if (!auth || auth.split(".").length !== 3) return err(401, "A JSON web token could not be decoded");
       jwts.push(auth);
       return json({ token: `ghs_fake_${++tokens}`, expires_at: new Date(Date.now() + 3600_000).toISOString() }, 201);
+    }
+
+    // The App itself, asked with the JWT: its slug gives the bot's login (`<slug>[bot]`).
+    if (path === "/app" && method === "GET") {
+      return auth && auth.split(".").length === 3 ? json({ slug: BOT.replace("[bot]", "") }) : err(401, "A JSON web token could not be decoded");
     }
 
     if (!auth) return err(401, "Requires authentication");
