@@ -132,6 +132,8 @@ export class SessionEngine {
     if (this.deleted || !this.store.exists()) return false;
     this.deleted = true;
     this.queued = [];
+    // A write already in flight lands before the router drops the row.
+    await this.indexChain.catch(() => {});
     // The run is not awaited: a model call may never return.
     this.controller?.abort("session deleted");
     await this.deps.sandbox.destroy().catch(() => {});
@@ -241,21 +243,22 @@ export class SessionEngine {
     this.upsertIndex(status);
   }
 
-  /** Not awaited and never thrown into the session (D16); `idle()` waits for it so tests can look. */
+  /**
+   * Not awaited and never thrown into the session (D16); `idle()` waits for it so tests can look.
+   * One write at a time: calls to the WorkspaceDO are not delivered in order, and a late
+   * "running" would overwrite a newer status in the sidebar. A write queued before a delete is skipped.
+   */
   private upsertIndex(status: AgentState["status"]): void {
     const meta = this.deleted ? null : this.store.meta();
     if (!meta) return;
     const row = { id: meta.id, mode: meta.mode, title: meta.title, status, created_at: meta.created_at, updated_at: this.now() };
-    // One write at a time: calls to the WorkspaceDO are not delivered in order, and a late
-    // "running" would overwrite a newer status in the sidebar.
     const tracked: Promise<void> = this.indexChain
-      .then(() => this.deps.index.upsert(row))
+      .then(() => (this.deleted ? undefined : this.deps.index.upsert(row)))
       .catch((err) => console.error("session index upsert failed:", err))
       .finally(() => this.upserts.delete(tracked));
     this.indexChain = tracked;
     this.upserts.add(tracked);
   }
-
 
   /** What the core emits. Its status changes reach the index here; its file changes trigger a reconcile. */
   private onCoreEvent(event: AgentEvent): void {

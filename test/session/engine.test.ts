@@ -1042,3 +1042,33 @@ describe("QA (Phase 3): the session index ends on the latest status", () => {
     expect(applied.at(-1)).toMatchObject({ status: "done" });
   });
 });
+
+describe("review findings (PR): delete and the session index", () => {
+  it("a queued index write cannot bring back a deleted session", async () => {
+    const w = world();
+    const rows = new Map<string, SessionSummary>();
+    let slow = false;
+    const index = {
+      upsert: async (row: SessionSummary) => {
+        const wait = slow;
+        slow = false;
+        await new Promise((r) => setTimeout(r, wait ? 150 : 0));
+        rows.set(row.id, row);
+      },
+    };
+    const engine = w.engine(new ScriptedModelClient(HAPPY()), { index });
+    engine.create({ id: ID, mode: "code", task: TASK });
+    await engine.idle();
+
+    // A slow write is in flight and another is queued behind it when the user deletes.
+    slow = true;
+    const approvalId = engine.snapshot()!.pending!.approvalId;
+    engine.handleFrame(JSON.stringify({ type: "approve", approvalId }), () => {});
+    await new Promise((r) => setTimeout(r, 20));
+    expect(await engine.remove()).toBe(true);
+    rows.delete(ID); // what the router does next: env.workspace.remove(id)
+    await engine.idle();
+    await new Promise((r) => setTimeout(r, 200));
+    expect(rows.has(ID)).toBe(false);
+  });
+});

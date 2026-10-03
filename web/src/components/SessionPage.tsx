@@ -84,7 +84,11 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
   // The sandbox stops a little after the run ends: look again until it has.
   useEffect(() => {
     if (!snap.sandboxRunning || status === "running" || status === "awaiting_approval") return;
-    const t = setInterval(reload, 2000);
+    let tries = 0;
+    const t = setInterval(() => {
+      if (++tries > 15) return clearInterval(t);
+      reload();
+    }, 2000);
     return () => clearInterval(t);
   }, [snap.sandboxRunning, status]);
 

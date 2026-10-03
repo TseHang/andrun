@@ -11,7 +11,7 @@
     "dev": "wrangler dev",
     "dev:web": "vite",
     "e2e": "playwright test",
-    "deploy": "wrangler deploy",
+    "deploy": "vite build && wrangler deploy",
     "fake-model": "tsx test/support/fake-sse-server.ts",
     "smoke": "tsx test/support/smoke.ts"
   },

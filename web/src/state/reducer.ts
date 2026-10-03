@@ -100,13 +100,17 @@ export function markSending(view: SessionView): SessionView {
   return { ...view, sending: true, refused: null };
 }
 
-/** On reconnect: unfinished streamed text goes; the persisted message replaces it (P3-k). */
+/**
+ * On reconnect: unfinished streamed text goes; the persisted message replaces it (P3-k).
+ * A frame lost in the drop never gets an answer, so sending ends and unacknowledged bubbles go;
+ * one that was delivered comes back through the replay as a message.
+ */
 export function dropStreaming(view: SessionView): SessionView {
-  return { ...view, items: view.items.filter((i) => !(i.kind === "assistant" && i.streaming)) };
+  return { ...view, sending: false, items: view.items.filter((i) => !(i.kind === "assistant" && i.streaming) && !(i.kind === "user" && i.pending)) };
 }
 
 export function reduce(view: SessionView, frame: ServerFrame): SessionView {
-  if (frame.type === "rejected") return { ...view, sending: false, refused: frame.reason };
+  if (frame.type === "rejected") return { ...view, sending: false, refused: frame.reason, items: view.items.filter((i) => !(i.kind === "user" && i.pending)) };
   if (frame.seq <= view.lastSeq) return view;
   return { ...apply(withStep(view, frame), frame), lastSeq: frame.seq };
 }
@@ -134,31 +138,42 @@ const openRow = (view: SessionView): StepRow | undefined => allRows(view).filter
 
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
-function patchFiles(patch: string): string[] {
+/** Walks a unified diff: `---`/`+++` is a file header only outside a hunk, where the @@ counts say how many lines remain. */
+function scanPatch(patch: string): { paths: string[]; additions: number; deletions: number } {
   const lines = patch.split("\n");
   const paths: string[] = [];
   const clean = (p: string) => p.split("\t")[0]!.replace(/^[ab]\//, "");
-  for (let i = 0; i < lines.length - 1; i++) {
-    if (!lines[i]!.startsWith("--- ") || !lines[i + 1]!.startsWith("+++ ")) continue;
-    const from = clean(lines[i]!.slice(4));
-    const to = clean(lines[i + 1]!.slice(4));
-    const path = to === "/dev/null" ? from : to;
-    if (path !== "/dev/null" && !paths.includes(path)) paths.push(path);
-  }
-  return paths;
-}
-
-function patchCounts(patch: string): { additions: number; deletions: number } {
-  const lines = patch.split("\n");
   let additions = 0;
   let deletions = 0;
+  let oldLeft = 0;
+  let newLeft = 0;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
-    if (line.startsWith("--- ") && lines[i + 1]?.startsWith("+++ ")) i++;
-    else if (line.startsWith("+")) additions++;
-    else if (line.startsWith("-")) deletions++;
+    if (oldLeft > 0 || newLeft > 0) {
+      if (line.startsWith("-")) {
+        deletions++;
+        oldLeft--;
+      } else if (line.startsWith("+")) {
+        additions++;
+        newLeft--;
+      } else if (!line.startsWith("\\")) {
+        oldLeft--;
+        newLeft--;
+      }
+      continue;
+    }
+    const hunk = /^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@/.exec(line);
+    if (hunk) {
+      oldLeft = hunk[1] === undefined ? 1 : Number(hunk[1]);
+      newLeft = hunk[2] === undefined ? 1 : Number(hunk[2]);
+    } else if (line.startsWith("--- ") && lines[i + 1]?.startsWith("+++ ")) {
+      const from = clean(line.slice(4));
+      const to = clean(lines[++i]!.slice(4));
+      const path = to === "/dev/null" ? from : to;
+      if (path !== "/dev/null" && !paths.includes(path)) paths.push(path);
+    }
   }
-  return { additions, deletions };
+  return { paths, additions, deletions };
 }
 
 function newRow(ev: Extract<AgentEvent, { type: "tool_call" }>): StepRow {
@@ -169,8 +184,9 @@ function newRow(ev: Extract<AgentEvent, { type: "tool_call" }>): StepRow {
   else if (ev.name === "list_files") row.arg = str(args.path) || ".";
   if (ev.name === "apply_patch") {
     const patch = str(args.patch);
-    row.arg = patchFiles(patch).join(", ");
-    Object.assign(row, patchCounts(patch));
+    const { paths, additions, deletions } = scanPatch(patch);
+    row.arg = paths.join(", ");
+    Object.assign(row, { additions, deletions });
   } else if (ev.name === "write_file") {
     const content = str(args.content);
     row.additions = content === "" ? 0 : content.split("\n").length - (content.endsWith("\n") ? 1 : 0);

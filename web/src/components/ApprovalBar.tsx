@@ -7,6 +7,7 @@ const FALLBACK: Record<string, string> = { run_command: "Do not run this command
 
 export function ApprovalBar({ view, gate, send, update }: { view: SessionView; gate: GateView; send: (f: ClientFrame) => boolean; update: (fn: (v: SessionView) => SessionView) => void }) {
   const [comment, setComment] = useState("");
+  const [offline, setOffline] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const text = comment.trim();
   const finish = gate.tool === "finish";
@@ -14,8 +15,9 @@ export function ApprovalBar({ view, gate, send, update }: { view: SessionView; g
   const sending = view.sending;
 
   const fire = (frame: ClientFrame) => {
-    update(markSending);
-    send(frame);
+    const sent = send(frame);
+    setOffline(!sent);
+    if (sent) update(markSending);
   };
   const approve = () => fire({ type: "approve", approvalId: gate.approvalId });
   const reject = (c: string) => fire({ type: "reject", approvalId: gate.approvalId, comment: c });
@@ -42,9 +44,9 @@ export function ApprovalBar({ view, gate, send, update }: { view: SessionView; g
       {gate.command && <div className="mt-2 rounded-lg bg-sidebar px-2.5 py-1.5 font-mono text-xs break-all">{gate.command}</div>}
       {gate.paths && gate.paths.length > 0 && <div className="mt-2 rounded-lg bg-sidebar px-2.5 py-1.5 font-mono text-xs break-all">{gate.paths.join(", ")}</div>}
       {gate.summary && <div className="mt-2 text-[13px]">{gate.summary}</div>}
-      {view.refused && (
+      {(view.refused || offline) && (
         <div role="alert" className="mt-2 text-xs text-failed">
-          {view.refused}
+          {view.refused ?? "Not connected. Try again in a moment."}
         </div>
       )}
       <div className="mt-3 flex items-center gap-2">

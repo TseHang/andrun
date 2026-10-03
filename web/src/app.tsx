@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Status } from "../../src/core/events";
 import type { SessionSummary } from "../../src/session/protocol";
 import { getConfig, listSessions, type Config } from "./api";
@@ -30,6 +30,7 @@ export function App() {
       if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       const a = (e.target as Element).closest("a");
       if (!a || a.target || a.hasAttribute("download") || a.origin !== location.origin) return;
+      if (a.pathname !== "/" && !/^\/s\/[^/]+\/?$/.test(a.pathname)) return;
       e.preventDefault();
       if (a.pathname + a.search !== location.pathname + location.search) navigate(a.pathname + a.search);
     };
@@ -41,13 +42,19 @@ export function App() {
     };
   }, [navigate]);
 
+  // A response older than one already applied is dropped, so overlapping requests cannot undo a newer list.
+  const asked = useRef(0);
+  const applied = useRef(0);
   const refreshList = useCallback(() => {
+    const n = ++asked.current;
     listSessions().then(
       (rows) => {
+        if (n < applied.current) return;
+        applied.current = n;
         setSessions(rows);
         setStale(false);
       },
-      () => setStale(true),
+      () => n >= applied.current && setStale(true),
     );
   }, []);
 

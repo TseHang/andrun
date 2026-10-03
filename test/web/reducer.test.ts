@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { AgentEvent, EventBody } from "../../src/core/events";
 import { RESTORED_NOTE, type ServerFrame } from "../../src/session/protocol";
 import { rowSummary, rowTone } from "../../web/src/state/format";
-import { addPending, initialView, markSending, reduce, type SessionView, type StepRow } from "../../web/src/state/reducer";
+import { addPending, dropStreaming, initialView, markSending, reduce, type SessionView, type StepRow } from "../../web/src/state/reducer";
 
 /** Builds events with increasing seq and ts, like one session's log. */
 function script(start = { seq: 0, ts: 1_700_000_000_000 }) {
@@ -382,5 +382,39 @@ describe("view state (P3-a)", () => {
 
     const resolved = reduce(sending, e({ type: "approval_resolved", approvalId: "a1", approved: true }));
     expect(resolved.sending).toBe(false);
+  });
+});
+
+describe("review findings (PR)", () => {
+  it("a refused message leaves no queued bubble behind", () => {
+    const e = script();
+    const queued = addPending(run([e({ type: "status", status: "running" })]), "also rename the helper");
+    const refused = reduce(queued, { type: "rejected", reason: "no such session" });
+    expect(refused.items.some((i) => i.kind === "user" && i.pending)).toBe(false);
+    expect(refused.refused).toBe("no such session");
+  });
+
+  it("a reconnect clears the sending state and unacknowledged bubbles", () => {
+    const e = script();
+    const v = markSending(addPending(run([e({ type: "status", status: "running" })]), "lost in the drop"));
+    const after = dropStreaming(v);
+    expect(after.sending).toBe(false);
+    expect(after.items.some((i) => i.kind === "user" && i.pending)).toBe(false);
+  });
+
+  it("patch counts and paths ignore '-- ' and '++ ' lines inside a hunk", () => {
+    const e = script();
+    const patch = [
+      "--- a/db/schema.sql",
+      "+++ b/db/schema.sql",
+      "@@ -1,3 +1,3 @@",
+      " create table t (id int);",
+      "--- old comment",
+      "+++ new comment",
+      " select 1;",
+      "",
+    ].join("\n");
+    const v = run([e({ type: "tool_call", callId: "p1", name: "apply_patch", args: { patch }, summary: "db/schema.sql" })]);
+    expect(rows(v)[0]).toMatchObject({ arg: "db/schema.sql", additions: 1, deletions: 1 });
   });
 });

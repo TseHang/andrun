@@ -65,7 +65,7 @@ To use the real model locally, put your ai& key and base URL in `.dev.vars` inst
 
 ```sh
 pnpm exec wrangler secret put AIAND_API_KEY
-pnpm build && pnpm run deploy
+pnpm run deploy
 pnpm smoke https://<your-worker>.workers.dev      # one real session: costs tokens
 ```
 
