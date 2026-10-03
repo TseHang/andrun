@@ -2,7 +2,7 @@
 // App's installation token; reviews use the user's PAT so they are posted as the user.
 
 import { createAppAuth } from "./app-auth";
-import { createRequest } from "./client";
+import { GitHubError, createRequest } from "./client";
 import { publish, type PublishInput, type PublishResult } from "./publish";
 import { defaultBranchHead, getPull, listPulls, listReviewComments, replyToComment, type PullDetail, type PullSummary, type ReviewThread } from "./pulls";
 import { postReview, type ReviewInput } from "./review";
@@ -44,14 +44,21 @@ export function createGitHub(config: GitHubConfig): GitHub {
     request,
     now: config.now ?? Date.now,
   });
-  const { repo, pat } = config;
+  const { repo } = config;
+  // A token is letters, digits and underscores. A secret pasted with a stray character fails in
+  // transit with an error that says nothing about the cause, so it is refused here.
+  const userToken = async () => {
+    const pat = config.pat.trim();
+    if (!/^[A-Za-z0-9_]+$/.test(pat)) throw new GitHubError("GITHUB_PAT is not a valid token: set the secret again", 0);
+    return pat;
+  };
   return {
     defaultBranchHead: async () => defaultBranchHead(request, repo, await auth.token()),
     publish: async (input) => publish(request, repo, await auth.token(), await auth.botLogin(), input),
     listPulls: async () => listPulls(request, repo, await auth.token(), await auth.botLogin()),
     getPull: async (n) => getPull(request, repo, await auth.token(), n),
-    postReview: (input) => postReview(request, repo, pat, input),
+    postReview: async (input) => postReview(request, repo, await userToken(), input),
     listReviewComments: async (n) => listReviewComments(request, repo, await auth.token(), n),
-    replyToComment: (n, commentId, text) => replyToComment(request, repo, pat, n, commentId, text),
+    replyToComment: async (n, commentId, text) => replyToComment(request, repo, await userToken(), n, commentId, text),
   };
 }

@@ -59,6 +59,22 @@ describe("review (D9, P4-m)", () => {
     expect(fake.requests.some((r) => r.path.endsWith("/access_tokens"))).toBe(false); // the App is not involved
   });
 
+  it("a PAT that cannot be a token is refused before any request", async () => {
+    // Found in S21: a secret pasted with a stray character made the request fail in transit (HTTP 520),
+    // which says nothing about the cause. Surrounding whitespace is dropped; anything else is an error.
+    for (const pat of ["github_pat_abc\u200bdef", "github_pat_abc def", '"github_pat_abc"', ""]) {
+      const { fake, github } = setup({}, { pat });
+      await expect(github.postReview({ pr: 14, commitId: "x", verdict: "COMMENT", body: REVIEW_FOOTER, comments: [] })).rejects.toThrow(
+        "GITHUB_PAT is not a valid token: set the secret again",
+      );
+      expect(fake.requests).toEqual([]);
+    }
+    const { fake, github } = setup({}, { pat: "  github_pat_fake\n" });
+    fake.addPull({ number: 14, title: "T", headRef: "agent/1a2b3c4d-1" });
+    await github.postReview({ pr: 14, commitId: fake.refs.get("main")!, verdict: "COMMENT", body: REVIEW_FOOTER, comments: [] });
+    expect(fake.requests.at(-1)!.auth).toBe("github_pat_fake");
+  });
+
   it("GitHub's refusal reaches the caller with its message", async () => {
     const { fake, github } = setup();
     fake.addPull({ number: 15, title: "By the reviewer", headRef: "main", user: HUMAN });
