@@ -48,6 +48,14 @@ export const defaultConfig: AgentConfig = {
   commandTimeoutMs: 120_000,
 };
 
+/** Models a user may pick for a session (P3-c), in display order. */
+export const selectableModels = [
+  "deepseek-ai/deepseek-v4-flash",
+  "deepseek-ai/deepseek-v4-pro",
+  "moonshotai/kimi-k2.7-code",
+  "zai-org/glm-5.3",
+];
+
 export function contextWindowFor(config: AgentConfig, model: string): number {
   return config.contextWindows[model] ?? DEFAULT_CONTEXT_WINDOW;
 }

@@ -388,3 +388,34 @@ describe("loop edge cases", () => {
     expect(s.messages[1]).toEqual({ role: "user", content: "Make the failing test pass." });
   });
 });
+
+describe("S18 (Phase 3, P3-n): tool results carry their size and count", () => {
+  it("read_file and list_files results carry their size and count", async () => {
+    const big = "é".repeat(2500); // 2,500 characters, 5,000 bytes in UTF-8
+    const sandbox = new MemorySandbox({ "big.txt": big, "a.js": "a", "lib/b.js": "b" });
+    const model = new ScriptedModelClient([
+      call("read_file", { path: "big.txt" }),
+      call("list_files", {}),
+      call("finish", { summary: "done" }),
+    ]);
+    const { events, deps } = harness(model, sandbox);
+    await runAgent(start(), profile, deps);
+
+    const callIdOf = (name: string) => events.find((e) => e.type === "tool_call" && e.name === name)!;
+    const resultOf = (name: string) => {
+      const c = callIdOf(name) as Extract<AgentEvent, { type: "tool_call" }>;
+      return events.find((e) => e.type === "tool_output" && e.callId === c.callId && e.stream === "result") as
+        | (Extract<AgentEvent, { type: "tool_output" }> & { meta?: { bytes?: number; files?: number } })
+        | undefined;
+    };
+    const read = resultOf("read_file")!;
+    expect(read.chunk.length).toBeLessThan(big.length); // the UI copy is cut
+    expect(read.meta).toEqual({ bytes: 5000 }); // the size is of the whole file, in bytes
+    expect(resultOf("list_files")!.meta).toEqual({ files: 3 });
+
+    // Nothing extra is sent to the model.
+    const toolMessages = model.requests[2]!.messages.filter((m) => m.role === "tool");
+    expect(toolMessages[0]!.content).toBe(big);
+    for (const m of toolMessages) expect(String(m.content)).not.toMatch(/"bytes"|"meta"/);
+  });
+});

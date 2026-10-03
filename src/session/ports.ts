@@ -64,6 +64,8 @@ export interface SessionMeta {
   sha: string;
   created_at: number;
   updated_at: number;
+  /** The model chosen at create; absent for the config default (and for sessions from before Phase 3). */
+  model?: string;
 }
 
 /** One row of `changes` (ADR D8, P2-e): what a rebuild writes back into a fresh workspace. */

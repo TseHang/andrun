@@ -10,12 +10,11 @@ import { SandboxLostError, type AgentDeps, type AgentState, type ApprovalDecisio
 import { OutputCoalescer } from "./coalesce";
 import { parseClientFrame, titleOf } from "./frames";
 import type { EngineDeps } from "./ports";
-import type { PendingView, ServerFrame, SessionSnapshot } from "./protocol";
+import { RESTORED_NOTE, type PendingView, type ServerFrame, type SessionSnapshot } from "./protocol";
 import { SessionStore } from "./store";
 
 const WATCHDOG_MS = 60_000;
 const COALESCE_WINDOW_MS = 250;
-const RESTORED_NOTE = "The sandbox was restarted and the workspace was restored from saved changes.";
 
 const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
@@ -42,6 +41,7 @@ export class SessionEngine {
   private liveStatus: AgentState["status"] | null = null;
   private reconcileChain: Promise<void> = Promise.resolve();
   private readonly upserts = new Set<Promise<void>>();
+  private indexChain: Promise<void> = Promise.resolve();
 
   constructor(private readonly deps: EngineDeps) {
     this.store = new SessionStore(deps.sql);
@@ -54,7 +54,7 @@ export class SessionEngine {
 
   // ---------- Public API ----------
 
-  create(input: { id: string; mode: "code"; task: string }): void {
+  create(input: { id: string; mode: "code"; task: string; model?: string }): void {
     if (this.store.exists()) throw new Error("session already exists");
     const profile = getProfile(input.mode, this.deps.config);
     const state = createSession({ sessionId: input.id, mode: input.mode, task: input.task }, profile);
@@ -68,6 +68,7 @@ export class SessionEngine {
         sha: this.deps.repo.sha,
         created_at: now,
         updated_at: now,
+        ...(input.model !== undefined && { model: input.model }),
       },
       state,
     );
@@ -80,7 +81,14 @@ export class SessionEngine {
     const meta = this.store.meta();
     const state = this.store.loadState();
     if (!meta || !state) return null;
-    return { id: meta.id, mode: meta.mode, title: meta.title, status: state.status, pending: state.pending ? pendingView(state.pending) : null };
+    return {
+      id: meta.id,
+      mode: meta.mode,
+      title: meta.title,
+      status: state.status,
+      pending: state.pending ? pendingView(state.pending) : null,
+      sandboxRunning: this.deps.sandbox.isRunning(),
+    };
   }
 
   replay(lastSeq: number): AgentEvent[] | null {
@@ -124,6 +132,8 @@ export class SessionEngine {
     if (this.deleted || !this.store.exists()) return false;
     this.deleted = true;
     this.queued = [];
+    // A write already in flight lands before the router drops the row.
+    await this.indexChain.catch(() => {});
     // The run is not awaited: a model call may never return.
     this.controller?.abort("session deleted");
     await this.deps.sandbox.destroy().catch(() => {});
@@ -233,20 +243,20 @@ export class SessionEngine {
     this.upsertIndex(status);
   }
 
-  /** Not awaited and never thrown into the session (D16); `idle()` waits for it so tests can look. */
+  /**
+   * Not awaited and never thrown into the session (D16); `idle()` waits for it so tests can look.
+   * One write at a time: calls to the WorkspaceDO are not delivered in order, and a late
+   * "running" would overwrite a newer status in the sidebar. A write queued before a delete is skipped.
+   */
   private upsertIndex(status: AgentState["status"]): void {
     const meta = this.deleted ? null : this.store.meta();
     if (!meta) return;
     const row = { id: meta.id, mode: meta.mode, title: meta.title, status, created_at: meta.created_at, updated_at: this.now() };
-    let call: Promise<void>;
-    try {
-      call = this.deps.index.upsert(row);
-    } catch (err) {
-      call = Promise.reject(err);
-    }
-    const tracked: Promise<void> = call
+    const tracked: Promise<void> = this.indexChain
+      .then(() => (this.deleted ? undefined : this.deps.index.upsert(row)))
       .catch((err) => console.error("session index upsert failed:", err))
       .finally(() => this.upserts.delete(tracked));
+    this.indexChain = tracked;
     this.upserts.add(tracked);
   }
 
@@ -303,7 +313,8 @@ export class SessionEngine {
 
     const state = this.deleted ? null : store.loadState();
     if (!state) return;
-    const profile = getProfile(state.mode, deps.config);
+    const base = getProfile(state.mode, deps.config);
+    const profile = { ...base, model: store.meta()?.model ?? base.model };
     const agentDeps: AgentDeps = {
       model: deps.model,
       sandbox: deps.sandbox,

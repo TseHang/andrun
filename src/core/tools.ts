@@ -114,7 +114,15 @@ export function validatePath(path: string): string {
 }
 
 export type ToolResult =
-  | { ok: true; output: string; exitCode?: number | null; changedPaths?: string[]; finding?: Omit<Finding, "id"> }
+  | {
+      ok: true;
+      output: string;
+      exitCode?: number | null;
+      changedPaths?: string[];
+      finding?: Omit<Finding, "id">;
+      /** Sizes for the UI only (never sent to the model). */
+      meta?: { bytes?: number; files?: number };
+    }
   | { ok: false; error: string; exitCode?: number | null };
 
 export interface ToolContext {
@@ -167,13 +175,15 @@ async function run(name: ToolName, args: Record<string, unknown>, ctx: ToolConte
       const dir = raw === undefined ? "." : validatePath(raw);
       const files = await sandbox.listFiles(dir === "." ? undefined : dir);
       const list = files.join("\n");
-      if (list.length <= TOOL_OUTPUT_CAP) return { ok: true, output: list };
+      const meta = { files: files.length };
+      if (list.length <= TOOL_OUTPUT_CAP) return { ok: true, output: list, meta };
       const hint = "\n(list truncated: pass a narrower path to see more)";
-      return { ok: true, output: capToolOutput(list, TOOL_OUTPUT_CAP - hint.length) + hint };
+      return { ok: true, output: capToolOutput(list, TOOL_OUTPUT_CAP - hint.length) + hint, meta };
     }
     case "read_file": {
       const path = validatePath(reqString(args, "path"));
-      return { ok: true, output: capToolOutput(await sandbox.readFile(path)) };
+      const content = await sandbox.readFile(path);
+      return { ok: true, output: capToolOutput(content), meta: { bytes: new TextEncoder().encode(content).length } };
     }
     case "write_file": {
       const rawPath = reqString(args, "path");

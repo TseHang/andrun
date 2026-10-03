@@ -7,6 +7,7 @@ const ORIGIN = "https://andrun.example.workers.dev";
 const IP_A = "203.0.113.7";
 const IP_B = "198.51.100.9";
 const UNKNOWN = "99999999-9999-4999-8999-999999999999";
+const REPO = { name: "TseHang/andrun-demo", sha: "0df6f53ec8a51785899d574c43db212513347537" };
 
 /** Allows `max` calls per key, like a Workers Rate Limiting binding inside one period. */
 function limiter(max: number) {
@@ -25,7 +26,7 @@ function limiter(max: number) {
 
 function fakeEnv(over: Partial<RouterEnv> = {}) {
   const sessions = new Map<string, SessionSnapshot>();
-  const created: { id: string; mode: string; task: string }[] = [];
+  const created: { id: string; mode: string; task: string; model?: string }[] = [];
   const touched: string[] = [];
   const indexRemoved: string[] = [];
   const killed: string[] = [];
@@ -40,7 +41,7 @@ function fakeEnv(over: Partial<RouterEnv> = {}) {
       return {
         create: async (input) => {
           created.push(input);
-          sessions.set(id, { id, mode: "code", title: input.task.slice(0, 80), status: "running", pending: null });
+          sessions.set(id, { id, mode: "code", title: input.task.slice(0, 80), status: "running", pending: null, sandboxRunning: false });
         },
         snapshot: async () => sessions.get(id) ?? null,
         remove: async () => sessions.delete(id),
@@ -63,6 +64,7 @@ function fakeEnv(over: Partial<RouterEnv> = {}) {
     killSwitch: false,
     debugEndpoints: true,
     newId: () => `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`,
+    repo: REPO,
     ...over,
   };
   return { env, sessions, created, touched, indexRemoved, killed, index, createKeys: create.keys, deleteKeys: del.keys };
@@ -101,7 +103,7 @@ describe("router (P2-b)", () => {
 
     const got = await handle(req("GET", `/sessions/${id as string}`), f.env);
     expect(got.status).toBe(200);
-    expect(await json(got)).toMatchObject({ id, status: "running", pending: null });
+    expect(await json(got)).toMatchObject({ id, status: "running", pending: null, sandboxRunning: false });
   });
 
   it("lists sessions from the index", async () => {
@@ -221,5 +223,52 @@ describe("router (P2-b)", () => {
     await expectError(await handle(req("POST", `/sessions/${id}/debug/kill-sandbox`), { ...f.env, debugEndpoints: false }), 404);
     await expectError(await handle(req("POST", `/sessions/${id}/debug/kill-sandbox`), { ...f.env, deleteLimiter: limiter(0).binding }), 429);
     expect(f.killed).toEqual([id]);
+  });
+});
+
+describe("router (Phase 3: P3-c, P3-d)", () => {
+  it("config lists repo, models and limits without secrets", async () => {
+    const f = fakeEnv();
+    const res = await handle(req("GET", "/config"), f.env);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toMatch(/application\/json/);
+    const text = await res.text();
+    expect(JSON.parse(text)).toEqual({
+      repo: REPO.name,
+      sha: REPO.sha,
+      models: [
+        { id: "deepseek-ai/deepseek-v4-flash", contextWindow: 1_000_000 },
+        { id: "deepseek-ai/deepseek-v4-pro", contextWindow: 1_000_000 },
+        { id: "moonshotai/kimi-k2.7-code", contextWindow: 262_144 },
+        { id: "zai-org/glm-5.3", contextWindow: 1_000_000 },
+      ],
+      defaultModel: "deepseek-ai/deepseek-v4-flash",
+      maxSteps: 30,
+      maxTokens: 400_000,
+      maxTaskChars: MAX_TASK_CHARS,
+    });
+    expect(text).not.toMatch(/aiand\.com|key|secret|token"/i);
+
+    // Not rate limited, and it never wakes a Durable Object.
+    for (let i = 0; i < 20; i++) expect((await handle(req("GET", "/config"), f.env)).status).toBe(200);
+    expect(f.createKeys).toEqual([]);
+    expect(f.deleteKeys).toEqual([]);
+    expect(f.touched).toEqual([]);
+    await expectError(await handle(req("POST", "/config"), f.env), 404);
+  });
+
+  it("validates the model on create", async () => {
+    const f = fakeEnv({ createLimiter: limiter(100).binding });
+    expect((await post(f.env, { mode: "code", task: "t", model: "deepseek-ai/deepseek-v4-pro" })).status).toBe(201);
+    expect(f.created.at(-1)).toMatchObject({ mode: "code", task: "t", model: "deepseek-ai/deepseek-v4-pro" });
+
+    expect((await post(f.env, { mode: "code", task: "t" })).status).toBe(201);
+    expect(f.created.at(-1)).not.toHaveProperty("model"); // the engine falls back to the config default
+
+    const n = f.created.length;
+    await expectError(await post(f.env, { mode: "code", task: "t", model: "openai/gpt-oss-120b" }), 400, /model/);
+    await expectError(await post(f.env, { mode: "code", task: "t", model: 3 }), 400, /model/);
+    await expectError(await post(f.env, { mode: "code", task: "t", model: "" }), 400, /model/);
+    expect(f.created).toHaveLength(n);
   });
 });

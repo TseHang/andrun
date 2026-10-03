@@ -34,6 +34,8 @@ export type EventBody =
       stream: "stdout" | "stderr" | "result";
       chunk: string;
       exitCode?: number | null;
+      /** On the final `result` of `read_file` (`bytes`, UTF-8 size of the whole file) and `list_files` (`files`, paths returned), before any cut. */
+      meta?: { bytes?: number; files?: number };
     }
   | { type: "file_changed"; path: string; diff: string }
   | {

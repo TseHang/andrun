@@ -5,6 +5,7 @@ import type { ModeName } from "../core/types";
 
 export const MAX_TASK_CHARS = 4000;
 export const TITLE_CHARS = 80;
+export const RESTORED_NOTE = "The sandbox was restarted and the workspace was restored from saved changes.";
 
 /** What a client may send over the session WebSocket. */
 export type ClientFrame =
@@ -40,6 +41,7 @@ export interface SessionSnapshot {
   title: string;
   status: Status;
   pending: PendingView | null;
+  sandboxRunning: boolean;
 }
 
 export type ParsedFrame = { ok: true; frame: ClientFrame } | { ok: false; reason: string };
