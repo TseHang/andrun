@@ -54,6 +54,7 @@ Last updated: 2026-10-02 (end of Phase 2).
 - [ ] Phase 4: a file changed only by a command has no diff in the Changes panel, only line counts at the gate (L3). Emit its diff when a run pauses.
 - [ ] Phase 4: Code sessions start from the pinned `DEMO_SHA`, not the branch head (ADR A8).
 - [ ] Phase 4: PR on approve reads the changed files from the session's `changes` (L6); decide what to do with files over 1 MB (L2) and binary files (L4) before that.
+- [ ] Code mode has no way to just answer a question. A reply without a tool call gets a hidden nudge ("Please call a tool or finish…", `src/core/agent.ts`), and the model takes it as "keep working". Session `bc00d4dc` (task "what you can do", 2026-10-03, real model): it answered, then fixed the demo bug and asked for approval. Henry will change it later. Ideas: one line in `CODE_SYSTEM_PROMPT` ("if the task is only a question, answer it and call finish without changing files"); a nudge that says to finish with the answer when there is nothing to change; maybe show the nudge as a small line in the timeline. Verify with 1–2 real eval cases first (cost: needs Henry's OK).
 - [ ] After merge: connect Workers Builds so `main` deploys automatically (Henry, in the Cloudflare dashboard).
 - [ ] Before sharing the URL publicly: C1 and C3.
 - [ ] Decide on F1 and F2 together: either watch `monitor()` for the whole run, or not at all.
