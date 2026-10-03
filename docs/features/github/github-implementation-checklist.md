@@ -291,7 +291,7 @@ Tests from earlier phases that change meaning (to be recorded in Build Progress)
 ## Build Progress
 | # | Unit | Proves | Status |
 |---|---|---|---|
-| 1 | `src/github/`: App auth, client errors, publish, pulls, review, diff lines | S1, S2, S3, review/diff-line edges, foreign branch | ⏳ pending |
+| 1 | `src/github/`: App auth, client errors, publish, pulls, review, diff lines | S1, S2, S3, review/diff-line edges, foreign branch | ✅ done |
 | 2 | Core + session: review gate, `finish` title, event fields, publish on approve, findings, post review, `file_changed` at pause, guard | S4, S5, S6, S7 (engine), S9, S12, S13, S14, engine edges | ⏳ pending |
 | 3 | Worker: review create, head resolution, `/pulls` routes, index `pr`, config, wiring, wrangler, fake GitHub script | S7 (config), S8, S10, S11, credential edge | ⏳ pending |
 | 4 | Web: reducer, pull request card, approval bar, Pull requests page, sidebar, Home copy | S15, reducer and list edges | ⏳ pending |
