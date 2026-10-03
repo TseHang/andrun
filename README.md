@@ -5,7 +5,8 @@ A Codex-style coding workspace on Cloudflare. You give it a task and a repo. An 
 **Status**:
 - Phase 1 (the agent loop, plus an eval against real models) is done.
 - Phase 2 (Durable Objects, the Cloudflare Sandbox, a debug page over the event stream) is deployed: https://andrun.mengtse-hang.workers.dev
-- Phase 3 (the workspace UI) is next.
+- Phase 3 (the workspace UI: Home, the session view with diffs and the approval bar, a model menu) is built and tested locally on branch `feat/workspace-ui`; not deployed yet.
+- Phase 4 (pull requests and Review mode) is next.
 
 ## Quick start
 
@@ -16,6 +17,7 @@ pnpm install
 pnpm test          # unit + integration tests (no network, no cost)
 pnpm typecheck
 pnpm lint
+pnpm e2e           # browser tests: starts the fake model and wrangler dev itself (needs Docker)
 ```
 
 ### Eval against a real model
@@ -42,10 +44,14 @@ Needs Docker running (the sandbox is a container). No ai& key and no cost: a fak
 ```sh
 cp .dev.vars.example .dev.vars
 pnpm fake-model                      # terminal 1: fake OpenAI-compatible SSE server on :8788
-pnpm dev                             # terminal 2: wrangler dev on :8787, open it for the debug page
+pnpm build && pnpm dev               # terminal 2: build the app, then wrangler dev on :8787 (open it)
 pnpm smoke                           # terminal 3: create → gate → replay → reject → approve → delete
 pnpm smoke --flow kill               # kill the sandbox mid-run → failed → message → rebuilt
 ```
+
+`pnpm dev` serves the last build in `dist/`. While working on the UI, run `pnpm dev:web` as well (Vite on :5173 with hot reload, proxying the API to :8787). The Phase 2 debug page is still at `/debug.html`.
+
+Tasks for the fake model can carry a marker: `[slow]` (8 s per answer), `[fail]` (every request fails), `[ask]` (first runs `rm -rf tmp`, which needs approval).
 
 To use the real model locally, put your ai& key and base URL in `.dev.vars` instead.
 
@@ -53,7 +59,7 @@ To use the real model locally, put your ai& key and base URL in `.dev.vars` inst
 
 ```sh
 pnpm exec wrangler secret put AIAND_API_KEY
-pnpm run deploy
+pnpm build && pnpm run deploy
 pnpm smoke https://<your-worker>.workers.dev      # one real session: costs tokens
 ```
 
@@ -78,7 +84,8 @@ src/core/     the agent: loop, tools, modes, policy, model client, events (no pl
 src/session/  session state machine, SQLite store, wire protocol (no platform imports)
 src/sandbox/  the sandbox adapter over a Cloudflare container
 src/worker/   Worker router and the two Durable Objects (thin shells over src/session)
-public/       the debug page (Phase 2)
+web/          the workspace UI (Vite + React + Tailwind); web/src/state is the event reducer, web/public the logo and the debug page
+e2e/          Playwright browser tests against wrangler dev + the fake model
 eval/         eval runner, local sandbox, YAML cases, fixture repos
 test/         Vitest suites and test doubles
 spike/        throwaway Sandbox SDK 1.0 spike (not part of the app)
@@ -92,6 +99,7 @@ docs/         architecture decision, flow diagram, per-phase checklists
 - [Sandbox 1.0 spike findings](docs/architecture/spike-sandbox-1.0.md)
 - [Phase 1 checklist](docs/features/core-loop/core-loop-implementation-checklist.md)
 - [Phase 2 checklist](docs/features/session-do/session-do-implementation-checklist.md)
+- [Phase 3 checklist](docs/features/workspace-ui/workspace-ui-implementation-checklist.md)
 
 ## Why a loop, not a graph
 

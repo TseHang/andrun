@@ -1,6 +1,6 @@
 # &run Code Workspace UI — Implementation Checklist
 
-**Status**: ✅ Approved (Henry, 2026-10-02)
+**Status**: ✅ Built — Passing locally (2026-10-03). S20 (deployed, real model) not yet run: it needs Henry's OK.
 **Date**: 2026-10-02
 **Architecture**: `docs/architecture/web-codex-architecture-decision.md` → Phase 3
 **Design**: Claude Design canvas, page "v3 aligned", boards 1–5 (Home, Code session running, Approval gate, Done, States and errors): https://claude.ai/artifact/TZezwBinDXnfySoDgTwquD. Page "v2 prototype" is the earlier pass the G-rows below were found in.
@@ -259,19 +259,19 @@ Separately, with the task "[fail] x": a failure card "ai& did not answer" and "F
 **Test**: Runtime — deployed URL, about 3 real sessions. Needs Henry's OK before it is run (Open Questions).
 
 ## Edge Cases
-- [ ] Unknown or later-phase events (`pr_opened`, `review_finding`, `review_posted`, `artifact`) do not break the reducer; they are ignored. — **Test**: `test/web/reducer.test.ts` › "unknown events are ignored"
-- [ ] A frame with `seq` at or below the highest seen is ignored; persisted `seq` gaps are accepted. — **Test**: `test/web/reducer.test.ts` › "duplicate and gapped seq"
-- [ ] A `rejected` frame (the server refused a client frame) clears the bar's sending state and shows its reason; it adds nothing to the timeline. — **Test**: `test/web/reducer.test.ts` › "a refused frame is shown, not stored"
-- [ ] A `file_changed` diff that ends with the store's elision marker is rendered up to the marker with "Diff too large to show in full". — **Test**: `test/web/diff.test.ts` › "elided diff"
-- [ ] Output of 1 MB in one row: the row's output box scrolls inside a fixed height and the page stays responsive. — **Runtime check**: a fake-model run of `yes | head -c 1000000` equivalent, by hand
-- [ ] The timeline follows new rows only while the user is at the bottom; scrolling up stops it. — **Test**: `e2e/code-run.spec.ts` › "scroll position is kept when the user scrolled up"
-- [ ] Delete answered with `429` shows "Too many requests. Try again in 60 seconds." and the session stays. — **Test**: `e2e/sessions.spec.ts` › "delete rate limit"
-- [ ] The session list request fails (network): the sidebar keeps the last list and shows "Could not refresh". — **Test**: `e2e/sessions.spec.ts` › "list failure keeps the last list"
-- [ ] Keyboard: Cmd/Ctrl+Enter runs or sends from a text field; the model menu and delete dialog close on Escape and return focus; every control has a visible focus ring. — **Test**: `e2e/home.spec.ts` › "keyboard"
-- [ ] `prefers-reduced-motion`: spinners and the streaming cursor do not animate. — **Runtime check**: by hand with the OS setting
-- [ ] Accent text on white is at least 4.5:1 (`#c54611`), and white on the accent fill is at least 4.5:1. — **Test**: `test/web/format.test.ts` › "token contrast"
-- [ ] `/debug.html` still works. — **Runtime check**: open it locally and create a session
-- [ ] `pnpm test`, `pnpm typecheck` (now also `tsconfig.web.json`), `pnpm lint` and `pnpm e2e` pass. — **Runtime check**: before the PR
+- [x] Unknown or later-phase events (`pr_opened`, `review_finding`, `review_posted`, `artifact`) do not break the reducer; they are ignored. — **Test**: `test/web/reducer.test.ts` › "unknown events are ignored"
+- [x] A frame with `seq` at or below the highest seen is ignored; persisted `seq` gaps are accepted. — **Test**: `test/web/reducer.test.ts` › "duplicate and gapped seq"
+- [x] A `rejected` frame (the server refused a client frame) clears the bar's sending state and shows its reason; it adds nothing to the timeline. — **Test**: `test/web/reducer.test.ts` › "a refused frame is shown, not stored"
+- [x] A `file_changed` diff that ends with the store's elision marker is rendered up to the marker with "Diff too large to show in full". — **Test**: `test/web/diff.test.ts` › "elided diff"
+- [x] Output of 1 MB in one row: the row's output box scrolls inside a fixed height and the page stays responsive. — **Runtime check**: done 2026-10-03 with 1 MB of stdout fed to the page through Playwright's WebSocket routing: the box stays 320 px high and scrolls, next frame 55 ms after render
+- [x] The timeline follows new rows only while the user is at the bottom; scrolling up stops it. — **Test**: `e2e/code-run.spec.ts` › "scroll position is kept when the user scrolled up"
+- [x] Delete answered with `429` shows "Too many requests. Try again in 60 seconds." and the session stays. — **Test**: `e2e/sessions.spec.ts` › "delete rate limit"
+- [x] The session list request fails (network): the sidebar keeps the last list and shows "Could not refresh". — **Test**: `e2e/sessions.spec.ts` › "list failure keeps the last list"
+- [x] Keyboard: Cmd/Ctrl+Enter runs or sends from a text field; the model menu and delete dialog close on Escape and return focus; every control has a visible focus ring. — **Test**: `e2e/home.spec.ts` › "keyboard"
+- [x] `prefers-reduced-motion`: spinners and the streaming cursor do not animate. — **Runtime check**: done 2026-10-03 with Playwright's reduced-motion emulation: the spinner's computed `animation-name` is `none`
+- [x] Accent text on white is at least 4.5:1 (`#c54611`), and white on the accent fill is at least 4.5:1. — **Test**: `test/web/format.test.ts` › "token contrast"
+- [x] `/debug.html` still works. — **Runtime check**: done 2026-10-03: it redirects to `/debug` (wrangler's default `html_handling`), the page loads, and "Create session" returns 201
+- [x] `pnpm test`, `pnpm typecheck` (now also `tsconfig.web.json`), `pnpm lint` and `pnpm e2e` pass. — **Runtime check**: done 2026-10-03: 158 unit/integration tests, 13 E2E tests, typecheck and lint clean
 
 Not applicable:
 - Auth / PII: no users (spec D3).
@@ -285,8 +285,8 @@ Not applicable:
 - [x] **G23: the task field** shows "Start your work, ship new feature!". It is built as a placeholder in an empty field, not as a task that Run would send: as a task it tells the agent nothing. Say so if you meant a pre-filled task. (Henry, 2026-10-02)
 - [x] **G8 / G10**: the optional `meta` on `tool_output` and `sandboxRunning` in the snapshot are in. (Henry, 2026-10-02)
 - [ ] **Paid checks**: S20 needs about 3 real sessions on `deepseek-v4-flash` (¥0.1–0.3 each). I will ask right before running it. — decide by: Henry, at deploy time
-- [ ] Assumption: Playwright E2E needs Docker running locally, like `pnpm smoke`. There is no CI yet, so E2E is run by hand before the PR. — decide by: during build
-- [ ] Assumption: the wordmark is outlined from DM Sans 700 (SIL Open Font License) with the "&" in `#cf4a12`; the PNG is 1024 px wide on a transparent background. — decide by: during build
+- [x] Assumption (held): Playwright E2E needs Docker running locally, like `pnpm smoke`. There is no CI yet, so E2E is run by hand before the PR. — decide by: during build
+- [x] Assumption (held; opsz 20): the wordmark is outlined from DM Sans 700 (SIL Open Font License) with the "&" in `#cf4a12`; the PNG is 1024 px wide on a transparent background. — decide by: during build
 
 ## Notes for Phase 4 (found while reading boards 5–9; not in this slice)
 - **Identities (Henry, 2026-10-02).** There is no login, so everything &run opens is opened by the bot, and "My PRs" are the pull requests the bot opened. Reviews are posted as TseHang (the PAT). Board 8's sample data (TseHang requesting changes on a pull request TseHang wrote) is a drawing default, not the rule. One consequence to plan for: GitHub refuses Approve and Request changes on a pull request written by the reviewing account, so the pull request with the planted bug for spec test E must not be authored by TseHang.
@@ -307,7 +307,7 @@ Not applicable:
 | 4 | Screens: Home, sidebar, session list, delete, not found | S15, S16, S17, list and keyboard edges | ✅ done (S15 last line needs unit 5) |
 | 5 | Screens: session view (timeline, Changes, approval bar, composer, reconnect, sandbox state) | S9–S14, S19 (browser), scroll edge | ✅ done |
 | 6 | Brand: wordmark SVG outlines, PNG, favicon | S20 (no font request) | ✅ done (taken by the commander: asset generation) |
-| 7 | Docs: README, `limits.md`, ADR notes | — | ⏳ pending |
+| 7 | Docs: README, `limits.md`, ADR notes | — | ✅ done (`limits.md` and the ADR were aligned before the build) |
 
 Test changes during the build:
 - `test/worker/router.test.ts`: the fake session snapshot gained `sandboxRunning: false`. The fake was written before P3-o made the field part of `SessionSnapshot`; the meaning of the tests is unchanged.
