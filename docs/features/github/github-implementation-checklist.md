@@ -294,16 +294,18 @@ Tests from earlier phases that change meaning (to be recorded in Build Progress)
 | 1 | `src/github/`: App auth, client errors, publish, pulls, review, diff lines | S1, S2, S3, review/diff-line edges, foreign branch | ✅ done |
 | 2 | Core + session: review gate, `finish` title, event fields, publish on approve, findings, post review, `file_changed` at pause, guard | S4, S5, S6, S7 (engine), S9, S12, S13, S14, engine edges | ✅ done |
 | 3 | Worker: review create, head resolution, `/pulls` routes, index `pr`, config, wiring, wrangler, fake GitHub script | S7 (config), S8, S10, S11, credential edge | ✅ done |
-| 4 | Web: reducer, pull request card, approval bar, Pull requests page, sidebar, Home copy | S15, reducer and list edges | ⏳ pending |
+| 4 | Web: reducer, pull request card, approval bar, Pull requests page, sidebar, Home copy | S15, reducer and list edges | ✅ done (E2E `pr.spec`, `pulls.spec`, `code-run.spec`, `home.spec` green) |
 | 5 | Web: review start page, review session (tabs, findings panel, verdict bar) | S16, review edges | ⏳ pending |
 | 6 | Eval: review case | S20 | ⏳ pending |
 | 7 | A7 (cut first): review comments, reply, ask the agent to fix | S17, S18, S19 | ⏳ pending |
-| 8 | Docs: ADR amendments, `limits.md`, README | — | ⏳ pending |
+| 8 | Docs: ADR amendments, `limits.md`, README | — | ✅ done (by the commander) |
 
 Test changes during the build:
 - `test/core/policy.test.ts`, `test/core/modes.test.ts`, `test/core/agent.test.ts`: a review's `finish` now asks (P4-b), so the expected outcome is a gate; the multi-call test uses the eval's auto-approve policy to get the same path as before.
 - `test/session/engine.test.ts`, `test/session/workspace.test.ts`: the engine now needs the `github` and `guard` ports; a stub is passed, and the three approve assertions expect `pr_opened` before `approval_resolved`.
 - `test/worker/router.test.ts`: `/config` has `githubWrites` and `reviewBrief`; the invalid-mode case uses `"task"` because `"review"` is now valid.
+- `test/web/reducer.test.ts` › "unknown events are ignored": `pr_opened`, `review_finding` and `review_posted` are drawn now, so only `artifact` and an unknown type remain in it.
+- `e2e/pr.spec.ts`, `e2e/pulls.spec.ts`, `e2e/review.spec.ts`: each test first deletes all sessions, because the fake GitHub numbers pull requests from 12 again after a reset.
 - `e2e/code-run.spec.ts`, `e2e/home.spec.ts`: Approve is "Approve and open PR" and shows the pull request card (L6 closed); Review in the mode switch is a link to `/prs`.
 
 Security review findings handled during the build (added to the tests):
