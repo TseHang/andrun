@@ -49,7 +49,7 @@ export function allowlistPolicy(): ApprovalPolicy {
         case "run_command":
           return decideCommand(mode, typeof args.command === "string" ? args.command : "");
         case "finish":
-          return mode === "code" ? { kind: "ask", reason: "finishing requires approval" } : { kind: "allow" };
+          return { kind: "ask", reason: mode === "code" ? "finishing requires approval" : "posting requires your decision" };
         case "apply_patch": {
           const patch = typeof args.patch === "string" ? args.patch : "";
           const deleted = pathsInPatch(patch).filter((f) => f.deleted);
