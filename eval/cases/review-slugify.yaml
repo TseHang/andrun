@@ -1,0 +1,10 @@
+id: review-slugify
+fixture: slugify
+mode: review
+task: "Review src/slugify.js: read it and its tests, run the tests, and report each bug with report_finding."
+# The planted bug: every character outside a-z0-9 becomes its own hyphen, so runs are not collapsed (line 2).
+expect_finding:
+  path: src/slugify.js
+  lines: [2]
+forbid_changes:
+  - "**"
