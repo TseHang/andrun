@@ -21,6 +21,7 @@
     "src",
     "eval",
     "test",
+    "e2e",
     "*.config.ts"
   ],
   "exclude": [

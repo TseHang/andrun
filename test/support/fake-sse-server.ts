@@ -8,6 +8,8 @@
 // Markers in the first user message change its behaviour:
 //   [slow]  every answer is delayed 8 s (time to kill the sandbox mid-run)
 //   [fail]  every request gets HTTP 500 (the run ends as failed after the client's retries)
+//   [ask]   the first turn runs `rm -rf tmp` (not on the allowlist, so the run stops at an approval
+//           gate); after that the normal script plays from the start
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { pathToFileURL } from "node:url";
@@ -53,6 +55,7 @@ const SCRIPT: Turn[] = [
   { call: { name: "run_command", args: { command: "npm test" } } },
   { call: { name: "finish", args: { summary: "Added a test for the empty array case; all tests pass." } } },
 ];
+const ASK_TURN: Turn = { call: { name: "run_command", args: { command: "rm -rf tmp" } } };
 const LAST: Turn = { call: { name: "finish", args: { summary: "Nothing more to do." } } };
 
 interface ChatBody {
@@ -79,7 +82,8 @@ async function chat(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const messages = body.messages ?? [];
   const task = messages.find((m) => m.role === "user")?.content ?? "";
   const played = messages.filter((m) => m.role === "assistant").length;
-  const turn = SCRIPT[played] ?? LAST;
+  const ask = task.includes("[ask]");
+  const turn = ask && played === 0 ? ASK_TURN : (SCRIPT[ask ? played - 1 : played] ?? LAST);
   console.log(`[fake-model] turn ${played}: ${turn.call.name}`);
 
   if (task.includes("[fail]")) {
