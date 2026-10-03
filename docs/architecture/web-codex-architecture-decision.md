@@ -254,6 +254,8 @@ The questions left open here were decided in the Phase 4 checklist (Henry, 2026-
 | A13 | D10, A8 | The sandbox network stays off. The review agent gets the pull request's patches, numbered with new-file lines, in its first message. `DEMO_SHA` is empty on the deployed Worker; there is no prepared demo task. | 4 |
 | A14 | D16 | The session index has a `pr` column, so the pull request list can link sessions. Every open pull request can be reviewed, also one the bot opened. | 4 |
 
+| A15 | A5, A7 | Replies on a bot-opened pull request are posted by the bot (the App token), not with the PAT: the author answers the reviewer, and the two roles stay apart. The PAT is used only to post reviews. (Henry, 2026-10-03, after S21.) | 4 |
+
 Not built: the product spec's search box and reviewer-written comments (not drawn).
 
 ## Codex Position

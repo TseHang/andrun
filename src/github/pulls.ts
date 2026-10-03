@@ -146,8 +146,8 @@ export async function listReviewComments(request: Request, repo: string, token: 
   return [...threads.values()];
 }
 
-/** Replies in a review comment's thread; `pat` makes the reply the user's own. */
-export async function replyToComment(request: Request, repo: string, pat: string, n: number, commentId: number, text: string): Promise<{ id: number; url: string }> {
-  const res = (await request("POST", `/repos/${repo}/pulls/${n}/comments/${commentId}/replies`, pat, { body: text })) as { id: number; html_url: string };
+/** Replies in a review comment's thread, as the App bot: the pull request's author answers its reviewer. */
+export async function replyToComment(request: Request, repo: string, token: string, n: number, commentId: number, text: string): Promise<{ id: number; url: string }> {
+  const res = (await request("POST", `/repos/${repo}/pulls/${n}/comments/${commentId}/replies`, token, { body: text })) as { id: number; html_url: string };
   return { id: res.id, url: res.html_url };
 }

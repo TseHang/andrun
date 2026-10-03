@@ -13,7 +13,7 @@ This closes `limits.md` L6 and makes spec tests B and E pass on the public URL.
 
 ## Fixed rules (Henry, 2026-10-03)
 - No login. Every pull request &run opens is opened by the **GitHub App bot**. "My PRs" = pull requests the bot opened from a session.
-- Reviews and replies are posted with **Henry's PAT**, as TseHang.
+- Reviews are posted with **Henry's PAT**, as TseHang. Replies on a pull request &run opened are posted by the bot, its author (changed 2026-10-03 after S21; before, replies also used the PAT).
 - The repo is fixed: `TseHang/andrun-demo`. A Code session resolves the default branch's head when it is created (App token). `DEMO_SHA` stays as an optional override (A8).
 - The My PR page (A7) is the first thing to cut. Its scenarios are S17–S19 and are built last.
 - The pull request for test E is opened by the bot, not by TseHang.
@@ -213,10 +213,10 @@ New dependencies: none.
 **Then** `200 {comments:[{id, author, path, line, body, createdAt, replies:[…], answered}]}`. The session page shows a "Review comments" panel with "1 open", each comment with its file and line, and the list row says "1 comment to answer".
 **Test**: API — `test/worker/router.test.ts` › "review comments of a pull request"; E2E — `e2e/my-pr.spec.ts` › "review comments: listed, replied to as TseHang, and fixed by the agent"
 
-### S18 (A7, cut first): Reply as TseHang
+### S18 (A7, cut first): Reply as the bot
 **Given** that page
 **When** I type a reply and click **Reply**
-**Then** `POST /pulls/12/comments/:id/replies {text}` is sent with the PAT; the reply appears under the comment, marked "Posted as TseHang"; the comment counts as answered. The route is refused with `429` by the write limiter and `503` when writes are off; an empty or over-4,000-character text gets `400`.
+**Then** `POST /pulls/12/comments/:id/replies {text}` is sent with the App token; the reply appears under the comment, written by the &run bot; the comment counts as answered. The route is refused with `429` by the write limiter and `503` when writes are off; an empty or over-4,000-character text gets `400`.
 **Test**: API — `test/worker/router.test.ts` › "reply to a review comment"; E2E — the same `e2e/my-pr.spec.ts` test, and "a reply that GitHub refuses is shown and nothing is lost"
 
 ### S19 (A7, cut first): Ask the agent to fix
@@ -336,3 +336,4 @@ Observations (not fixed, not user-visible):
 
 Units: 8 (implementer: 7, commander: 1 for the docs; small fixes after verification by the commander).
 
+Changed after S21 (Henry, 2026-10-03): replies on a pull request &run opened are posted by the bot instead of TseHang, so the author (bot) and the reviewer (TseHang) stay two roles. Tests updated: `test/github/pulls.test.ts`, `test/worker/router.test.ts`, `e2e/my-pr.spec.ts`.

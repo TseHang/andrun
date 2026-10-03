@@ -1,7 +1,7 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
 import { TASK, createSession, deleteAllSessions, gh, sendFrame, ui, waitForStatus } from "./support";
 
-// A7 (S17–S19): on a pull request &run opened, read the review comments, reply as TseHang,
+// A7 (S17–S19): on a pull request &run opened, read the review comments, reply as the bot,
 // and ask the agent to fix one. Runs against the fake GitHub.
 
 test.beforeEach(async ({ request }) => {
@@ -18,12 +18,12 @@ async function openPullRequest(request: APIRequestContext): Promise<string> {
   return id;
 }
 
-test("review comments: listed, replied to as TseHang, and fixed by the agent", async ({ page, request }) => {
+test("review comments: listed, replied to as the bot, and fixed by the agent", async ({ page, request }) => {
   const s = ui(page);
   const id = await openPullRequest(request);
   const first = await gh.addComment({ pull: 12, user: "octocat", path: "src/sum.js", line: 3, body: "Should sum([]) return 0 or throw?" });
   const second = await gh.addComment({ pull: 12, user: "octocat", path: "test/sum.test.js", line: 9, body: "Please add a case for the empty array." });
-  await gh.addComment({ pull: 12, user: "TseHang", path: "test/sum.test.js", line: 9, body: "Will do.", in_reply_to_id: second.id });
+  await gh.addComment({ pull: 12, user: "andrun[bot]", path: "test/sum.test.js", line: 9, body: "Will do.", in_reply_to_id: second.id });
 
   // S17: the list says a comment is waiting, and the session shows the threads.
   await page.goto("/prs");
@@ -40,16 +40,17 @@ test("review comments: listed, replied to as TseHang, and fixed by the agent", a
   await expect(thread(first.id)).toContainText("Should sum([]) return 0 or throw?");
   await expect(thread(second.id)).toContainText("Will do.");
   await expect(thread(second.id)).toContainText("Answered");
-  await expect(panel).toContainText("The &run bot opened this pull request. Replies are posted as TseHang.");
+  await expect(panel).toContainText("The &run bot opened this pull request and posts the replies.");
 
-  // S18: reply as TseHang.
+  // S18: the reply is posted by the bot, the pull request's author.
   await thread(first.id).getByLabel("Reply").fill("Good catch. It should return 0.");
   await thread(first.id).getByRole("button", { name: "Reply", exact: true }).click();
   await expect(thread(first.id)).toContainText("Good catch. It should return 0.");
   await expect(thread(first.id)).toContainText("Answered");
   await expect(panel).toContainText("0 open");
   const replies = (await gh.state()).comments.filter((c) => c.in_reply_to_id === first.id);
-  expect(replies).toMatchObject([{ user: "TseHang", body: "Good catch. It should return 0." }]);
+  expect(replies).toMatchObject([{ user: "andrun[bot]", body: "Good catch. It should return 0." }]);
+  await expect(thread(first.id)).toContainText("Posts as the &run bot");
 
   // S19: ask the agent to fix; the fix lands on the same pull request.
   await thread(second.id).getByRole("button", { name: "Ask the agent to fix" }).click();

@@ -128,12 +128,12 @@ describe("pull requests (spec D2: list, read)", () => {
     await expect(github.listReviewComments(99)).rejects.toMatchObject({ status: 404 });
   });
 
-  it("replies to a review comment with the PAT", async () => {
+  it("replies to a review comment as the bot, the pull request's author", async () => {
     const { fake, github, a } = withComments();
     const reply = await github.replyToComment(12, a.id, "Good catch. It should throw.");
     expect(reply).toEqual({ id: expect.any(Number) as number, url: expect.stringContaining("#discussion_r") as string });
-    expect(fake.comments.at(-1)).toMatchObject({ pull: 12, user: "TseHang", body: "Good catch. It should throw.", in_reply_to_id: a.id });
-    expect(fake.requests.at(-1)).toMatchObject({ method: "POST", auth: "github_pat_fake" });
+    expect(fake.comments.at(-1)).toMatchObject({ pull: 12, user: BOT, body: "Good catch. It should throw.", in_reply_to_id: a.id });
+    expect(fake.requests.at(-1)!.auth).toMatch(/^ghs_/); // the App's token, not the user's PAT
     expect((await github.listReviewComments(12))[0]).toMatchObject({ answered: true });
     await expect(github.replyToComment(12, 424242, "x")).rejects.toMatchObject({ status: 404 });
   });

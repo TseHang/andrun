@@ -490,7 +490,7 @@ describe("router (Phase 3: P3-c, P3-d)", () => {
     const res = await handle(req("POST", path, { body: { text: "  Good catch. It should throw.  " } }), f.env);
     expect(res.status).toBe(201);
     expect(await json(res)).toMatchObject({ id: expect.any(Number) as number, url: expect.stringContaining("#discussion_r") as string });
-    expect(f.fake.comments.at(-1)).toMatchObject({ user: "TseHang", body: "Good catch. It should throw.", in_reply_to_id: f.a.id });
+    expect(f.fake.comments.at(-1)).toMatchObject({ user: BOT, body: "Good catch. It should throw.", in_reply_to_id: f.a.id });
     expect(f.writeKeys).toEqual([IP_A]);
 
     const n = f.fake.comments.length;

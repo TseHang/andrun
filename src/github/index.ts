@@ -1,5 +1,6 @@
-// The GitHub module's entry point: one client for the configured repo. Reads and publishing use the
-// App's installation token; reviews use the user's PAT so they are posted as the user.
+// The GitHub module's entry point: one client for the configured repo. Reads, publishing and replies on
+// the bot's own pull requests use the App's installation token; reviews use the user's PAT so they are
+// posted as the user.
 
 import { createAppAuth } from "./app-auth";
 import { GitHubError, createRequest } from "./client";
@@ -59,6 +60,6 @@ export function createGitHub(config: GitHubConfig): GitHub {
     getPull: async (n) => getPull(request, repo, await auth.token(), n),
     postReview: async (input) => postReview(request, repo, await userToken(), input),
     listReviewComments: async (n) => listReviewComments(request, repo, await auth.token(), n),
-    replyToComment: async (n, commentId, text) => replyToComment(request, repo, await userToken(), n, commentId, text),
+    replyToComment: async (n, commentId, text) => replyToComment(request, repo, await auth.token(), n, commentId, text),
   };
 }
