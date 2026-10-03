@@ -395,6 +395,8 @@ describe("router (Phase 3: P3-c, P3-d)", () => {
     await expectError(await handle(req("GET", "/pulls/99"), f.env), 404);
     await expectError(await handle(req("GET", "/pulls/abc"), f.env), 404);
     await expectError(await handle(req("GET", "/pulls/0"), f.env), 404);
+    // QA: a number GitHub cannot have is refused here, without a GitHub request.
+    await expectError(await handle(req("GET", "/pulls/99999999999999999999"), f.env), 404, /^not found$/);
     await expectError(await handle(req("POST", "/pulls"), f.env), 404);
   });
 
@@ -419,6 +421,7 @@ describe("router (Phase 3: P3-c, P3-d)", () => {
     await expectError(await post(f.env, { mode: "review", task: "brief" }), 400, /pr/);
     await expectError(await post(f.env, { mode: "review", pr: "14", task: "brief" }), 400, /pr/);
     await expectError(await post(f.env, { mode: "review", pr: 1.5, task: "brief" }), 400, /pr/);
+    await expectError(await post(f.env, { mode: "review", pr: 1e30, task: "brief" }, "203.0.113.9"), 400, /pr/);
     await expectError(await post(f.env, { mode: "review", pr: 14, task: " " }), 400, /task/);
     await expectError(await post(f.env, { mode: "review", pr: 99, task: "brief" }, IP_B), 404);
     await expectError(await post(f.env, { mode: "task", task: "brief" }, IP_B), 400, /mode/);

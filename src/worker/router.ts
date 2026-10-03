@@ -50,7 +50,7 @@ async function createSession(request: Request, env: RouterEnv): Promise<Response
     return error(400, `model must be one of: ${selectableModels.join(", ")}`);
   }
 
-  if (mode === "review" && (typeof pr !== "number" || !Number.isInteger(pr) || pr < 1)) return error(400, "pr must be a positive integer");
+  if (mode === "review" && (typeof pr !== "number" || !Number.isSafeInteger(pr) || pr < 1)) return error(400, "pr must be a positive integer");
 
   // The repo is fixed by configuration (P2-h): other fields are ignored.
   const id = env.newId();
@@ -101,7 +101,7 @@ async function listPulls(request: Request, env: RouterEnv): Promise<Response> {
 }
 
 async function getPull(request: Request, env: RouterEnv, n: string): Promise<Response> {
-  if (!/^[1-9]\d*$/.test(n)) return notFound();
+  if (!/^[1-9]\d{0,14}$/.test(n)) return notFound();
   const refused = await limited(env.githubReadLimiter, request);
   if (refused) return refused;
   try {

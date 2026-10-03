@@ -12,7 +12,7 @@ const EMPTY: Record<Tab, string> = {
   "My PRs": "&run has not opened a pull request yet.",
 };
 
-const PILL = "flex h-[30px] w-[116px] items-center justify-center rounded-full font-semibold";
+const PILL = "flex h-[30px] w-[116px] shrink-0 items-center justify-center rounded-full font-semibold";
 
 function reviewState(status: Status | undefined): { text: string; className: string } {
   switch (status) {
@@ -47,7 +47,7 @@ function Row({ pull }: { pull: PullRow }) {
           {pull.mine ? "Opened by &run" : pull.author} · {pull.headRef} · {age(pull.updatedAt)}
         </span>
       </div>
-      <span className={state.className}>{state.text}</span>
+      <span className={`shrink-0 ${state.className}`}>{state.text}</span>
       {codeSession && (
         <a href={`/s/${codeSession.id}`} className={`${PILL} bg-black/6`}>
           View session
