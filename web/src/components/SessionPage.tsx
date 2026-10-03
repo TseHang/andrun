@@ -3,9 +3,13 @@ import type { SessionSnapshot } from "../../../src/session/protocol";
 import { UUID, deleteSession, getSnapshot } from "../api";
 import { useApp } from "../context";
 import { useSession } from "../socket";
+import { ApprovalBar } from "./ApprovalBar";
+import { ChangesPanel } from "./ChangesPanel";
+import { Composer } from "./Composer";
 import { DeleteDialog } from "./DeleteDialog";
 import { SessionHeader } from "./SessionHeader";
 import { Spinner } from "./Spinner";
+import { Timeline } from "./Timeline";
 
 function Notice({ title }: { title: string }) {
   return (
@@ -50,7 +54,8 @@ function Loader({ id }: { id: string }) {
 
 function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload: () => void }) {
   const { navigate, refreshList, reportStatus } = useApp();
-  const { view, reconnecting, deleted } = useSession(id);
+  const { view, send, update, reconnecting, deleted } = useSession(id);
+  const { config } = useApp();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +71,13 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
     refreshList();
   }, [status]);
   useEffect(() => () => reportStatus(id, null), [id]);
+
+  // The sandbox stops a little after the run ends: look again until it has.
+  useEffect(() => {
+    if (!snap.sandboxRunning || status === "running" || status === "awaiting_approval") return;
+    const t = setInterval(reload, 2000);
+    return () => clearInterval(t);
+  }, [snap.sandboxRunning, status]);
 
   const close = useCallback(() => {
     setConfirming(false);
@@ -95,9 +107,15 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
       )}
       <SessionHeader title={snap.title} status={status} header={view.header} onDelete={() => setConfirming(true)} moreRef={more} />
       <div className="relative flex min-h-0 grow">
-        <section aria-label="Timeline" className="min-h-0 min-w-0 grow overflow-y-auto" />
-        <aside aria-label="Changes" className="min-h-0 shrink-0 overflow-y-auto" />
-        <div data-slot="floating-bar" className="pointer-events-none absolute inset-x-0 bottom-0" />
+        <Timeline view={view} status={status} />
+        <ChangesPanel view={view} sandboxRunning={snap.sandboxRunning} sha={config.sha} />
+        <div data-slot="floating-bar" className="pointer-events-none absolute inset-x-0 bottom-0 px-6 pb-5">
+          {view.gate && status === "awaiting_approval" ? (
+            <ApprovalBar view={view} gate={view.gate} send={send} update={update} />
+          ) : (
+            <Composer view={view} running={status === "running"} send={send} update={update} />
+          )}
+        </div>
       </div>
       {confirming && <DeleteDialog busy={busy} error={error} onCancel={close} onConfirm={() => void confirm()} />}
     </main>

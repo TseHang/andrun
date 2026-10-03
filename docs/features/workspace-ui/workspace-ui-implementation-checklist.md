@@ -305,10 +305,13 @@ Not applicable:
 | 2 | Build setup: `web/` Vite + React + Tailwind, assets as SPA, `/debug.html`, scripts, Playwright config, fake model `[ask]` | build, `/debug.html`, existing tests | ✅ done (wrangler's default `html_handling` answers `/debug.html` with a redirect to `/debug`, which serves the page) |
 | 3 | View state: reducer, diff parser, formatters (fixture recorded from the fake model) | S1–S6, S13 (unit), S18 (rows), reducer/diff/contrast edges | ✅ done |
 | 4 | Screens: Home, sidebar, session list, delete, not found | S15, S16, S17, list and keyboard edges | ✅ done (S15 last line needs unit 5) |
-| 5 | Screens: session view (timeline, Changes, approval bar, composer, reconnect, sandbox state) | S9–S14, S19 (browser), scroll edge | ⏳ pending |
+| 5 | Screens: session view (timeline, Changes, approval bar, composer, reconnect, sandbox state) | S9–S14, S19 (browser), scroll edge | ✅ done |
 | 6 | Brand: wordmark SVG outlines, PNG, favicon | S20 (no font request) | ⏳ pending |
 | 7 | Docs: README, `limits.md`, ADR notes | — | ⏳ pending |
 
 Test changes during the build:
 - `test/worker/router.test.ts`: the fake session snapshot gained `sandboxRunning: false`. The fake was written before P3-o made the field part of `SessionSnapshot`; the meaning of the tests is unchanged.
 - `test/web/reducer.test.ts` › "command rows show streamed chunks once…": the expected duration was `1.1 s` (the result's own gap) and is now `1.5 s`. P3-f and S1 define a row's duration as the time from its `tool_call` to its last `tool_output`; the old number contradicted that.
+- `e2e/code-run.spec.ts` › "scroll position is kept…": it now scrolls up after the first command has finished (its expanded output makes the timeline taller than the viewport), not as soon as the row appears. Before, the content could be too short to scroll, and the only way to pass was an oversized bottom padding.
+
+Deviation recorded during the build: P3-o says the snapshot is not polled. After a run ends, the Durable Object stops the container a moment after the last event, and nothing reports that. So the page re-reads `GET /sessions/:id` every 2 s, only while the status is `done` or `failed` and `sandboxRunning` is still `true`. It stops at the first `false`, so an idle session is not kept awake.

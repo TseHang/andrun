@@ -7,6 +7,8 @@ import { dropStreaming, initialView, reduce, type SessionView } from "./state/re
 export interface LiveSession {
   view: SessionView;
   send: (frame: ClientFrame) => boolean;
+  /** Applies a local change to the view; later frames build on it. */
+  update: (fn: (v: SessionView) => SessionView) => void;
   reconnecting: boolean;
   deleted: boolean;
 }
@@ -16,12 +18,20 @@ export function useSession(id: string): LiveSession {
   const [reconnecting, setReconnecting] = useState(false);
   const [deleted, setDeleted] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
+  const currentRef = useRef<{ get: () => SessionView; set: (v: SessionView) => void } | null>(null);
 
   useEffect(() => {
     let stopped = false;
     let delay = 500;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let current = initialView();
+    currentRef.current = {
+      get: () => current,
+      set: (v) => {
+        current = v;
+        setView(v);
+      },
+    };
     setView(current);
     setReconnecting(false);
     setDeleted(false);
@@ -78,5 +88,10 @@ export function useSession(id: string): LiveSession {
     return true;
   }, []);
 
-  return { view, send, reconnecting, deleted };
+  const update = useCallback((fn: (v: SessionView) => SessionView) => {
+    const c = currentRef.current;
+    if (c) c.set(fn(c.get()));
+  }, []);
+
+  return { view, send, update, reconnecting, deleted };
 }

@@ -78,8 +78,8 @@ test("scroll position is kept when the user scrolled up", async ({ page, request
   const s = ui(page);
   const id = await createSession(request, `[slow] ${TASK}`);
   await page.goto(`/s/${id}`);
-  // The first command's output is long enough to scroll.
-  await expect(s.rows("run_command")).toHaveCount(1, { timeout: 60_000 });
+  // The first command's output (expanded, it failed) is long enough to scroll.
+  await expect(s.rows("run_command")).toContainText("exit 1", { timeout: 60_000 });
   const scroll = (to: "top" | "bottom") =>
     s.timeline.evaluate((el, where) => el.scrollTo({ top: where === "top" ? 0 : el.scrollHeight }), to);
   const position = () => s.timeline.evaluate((el) => ({ top: el.scrollTop, bottom: el.scrollHeight - el.clientHeight - el.scrollTop }));
