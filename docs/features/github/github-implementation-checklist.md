@@ -1,6 +1,6 @@
 # &run GitHub: PR on approve + Review mode — Implementation Checklist
 
-**Status**: ✅ Approved (Henry, 2026-10-03)
+**Status**: ✅ Built — Passing locally (2026-10-03). S21 (deployed URL, real model, real GitHub) is waiting for Henry's OK.
 **Date**: 2026-10-03
 **Branch**: `feat/github`
 **Architecture**: `docs/architecture/web-codex-architecture-decision.md` → Phase 4 (D4, D9, D10, D14; amendments A5–A8)
@@ -211,19 +211,19 @@ New dependencies: none.
 **Given** pull request #12 opened by the bot with two review comments by another account, one of them already answered by TseHang
 **When** `GET /pulls/12/comments`, and I open the session of #12
 **Then** `200 {comments:[{id, author, path, line, body, createdAt, replies:[…], answered}]}`. The session page shows a "Review comments" panel with "1 open", each comment with its file and line, and the list row says "1 comment to answer".
-**Test**: API — `test/worker/router.test.ts` › "review comments of a pull request"; E2E — `e2e/my-pr.spec.ts` › "comments are listed"
+**Test**: API — `test/worker/router.test.ts` › "review comments of a pull request"; E2E — `e2e/my-pr.spec.ts` › "review comments: listed, replied to as TseHang, and fixed by the agent"
 
 ### S18 (A7, cut first): Reply as TseHang
 **Given** that page
 **When** I type a reply and click **Reply**
 **Then** `POST /pulls/12/comments/:id/replies {text}` is sent with the PAT; the reply appears under the comment, marked "Posted as TseHang"; the comment counts as answered. The route is refused with `429` by the write limiter and `503` when writes are off; an empty or over-4,000-character text gets `400`.
-**Test**: API — `test/worker/router.test.ts` › "reply to a review comment"; E2E — `e2e/my-pr.spec.ts` › "reply"
+**Test**: API — `test/worker/router.test.ts` › "reply to a review comment"; E2E — the same `e2e/my-pr.spec.ts` test, and "a reply that GitHub refuses is shown and nothing is lost"
 
 ### S19 (A7, cut first): Ask the agent to fix
 **Given** that page
 **When** I click **Ask the agent to fix** on a comment
 **Then** a message is sent to the session: the comment's file and line, its text, and my reply text if there is one. The agent runs, reaches the gate, and Approve adds a commit to pull request #12.
-**Test**: E2E — `e2e/my-pr.spec.ts` › "ask the agent to fix adds a commit to the same pull request"
+**Test**: E2E — the same `e2e/my-pr.spec.ts` test (last part)
 
 ### S20: The review eval case
 **Given** `eval/cases/review-slugify.yaml` with `mode: review` and `expect_finding: {path: "src/slugify.js", lines: [4, 5]}`
@@ -238,24 +238,24 @@ New dependencies: none.
 **Runtime check**: by hand on the deployed URL. **Costs money** (two real-model sessions, about ¥1): Henry's OK is needed first.
 
 ## Edge Cases
-- [ ] Approve with no changed files: no GitHub call; the session ends as `done`; the timeline says "Approved. No files changed, so no pull request was opened." — **Test**: `test/session/engine-github.test.ts` › "no changes, no pull request"
-- [ ] The branch name already exists and points to an unrelated commit (8-hex collision): `error {source:"github"}`, nothing is overwritten (the ref update is never forced). — **Test**: `test/github/publish.test.ts` › "a foreign branch is not overwritten"
-- [ ] A `post_review` frame in a Code session, an unknown `verdict`, or a stale `approvalId`: `rejected` frame. — **Test**: `test/session/findings.test.ts` › "invalid post_review frames are refused"
-- [ ] Post review with every finding dismissed and verdict Approve: a review with no comments and the footer body is posted. — **Test**: `test/github/review.test.ts` › "a review without comments"
-- [ ] A finding on a deleted line or on the left side of the diff counts as not inline. — **Test**: `test/github/diff-lines.test.ts` › "only added and context lines on the right side can take a comment"
-- [ ] A file in the pull request has no `patch` (binary or too large): the start page says "Diff not available", and findings on it go into the body. — **Test**: `test/github/diff-lines.test.ts` › "a file without a patch has no commentable lines"; `e2e/review.spec.ts` › "a file without a patch"
-- [ ] The diff sent to the model is over 60 KB: file names only, with a note to read the files. — **Test**: `test/session/engine-github.test.ts` › "a large diff is cut to file names"
-- [ ] The pull request head moves after the review started: the review is posted on the session's commit; GitHub marks moved lines as outdated. Nothing extra is built. — **Runtime check**: note in `limits.md` only
-- [ ] The review sandbox is lost and rebuilt: it is rebuilt from the PR head `sha`; findings are kept. — **Test**: `test/session/engine-github.test.ts` › "findings survive a sandbox rebuild"
-- [ ] A message to a review session after its review was posted is refused, and the composer is disabled with "Review again" linking to `/prs/:n`. — **Test**: `test/session/findings.test.ts` › "a posted review takes no more messages"; `e2e/review.spec.ts` › "posted review"
-- [ ] Deleting a session does not touch its pull request or its posted review; the list row goes back to "Opened by &run" without a session link. — **Test**: `e2e/pr.spec.ts` › "delete keeps the pull request"
-- [ ] A session from before this phase (no `github_state`): Approve resolves the default branch and opens the pull request. — **Test**: `test/session/engine-github.test.ts` › "a session without stored GitHub state"
-- [ ] `GET /pulls` fails or is rate limited: the page shows GitHub's message and a Retry button, and the sidebar count is hidden. — **Test**: `e2e/pulls.spec.ts` › "GitHub error on the list"
-- [ ] Empty tabs: "No pull requests need a review." / "&run has not opened a pull request yet." — **Test**: `e2e/pulls.spec.ts` › "empty tabs"
-- [ ] The reducer handles `pr_opened` with and without the new optional fields, and a repeated `review_finding` id replaces the earlier one in place. — **Test**: `test/web/reducer.test.ts` › "pr_opened card" and "a finding update replaces by id"
-- [ ] No GitHub credential reaches the browser or the sandbox: `dist/` contains no secret name, and `GET /config`, `GET /pulls` and the session snapshot carry no token. — **Test**: `test/worker/router.test.ts` › "responses carry no credential"; **Runtime check**: grep `dist/` after the build
-- [ ] `src/github/` has no `cloudflare:*` import and `src/core/` has no `github` import. — **Test**: `test/core/boundary.test.ts` (extended)
-- [ ] `pnpm test`, `pnpm typecheck`, `pnpm lint` and `pnpm e2e` pass. — **Runtime check**
+- [x] Approve with no changed files: no GitHub call; the session ends as `done`; the timeline says "Approved. No files changed, so no pull request was opened." — **Test**: `test/session/engine-github.test.ts` › "no changes, no pull request"
+- [x] The branch name already exists and points to an unrelated commit (8-hex collision): `error {source:"github"}`, nothing is overwritten (the ref update is never forced). — **Test**: `test/github/publish.test.ts` › "a foreign branch is not overwritten"
+- [x] A `post_review` frame in a Code session, an unknown `verdict`, or a stale `approvalId`: `rejected` frame. — **Test**: `test/session/findings.test.ts` › "invalid post_review frames are refused"
+- [x] Post review with every finding dismissed and verdict Approve: a review with no comments and the footer body is posted. — **Test**: `test/github/review.test.ts` › "a review without comments"
+- [x] A finding on a deleted line or on the left side of the diff counts as not inline. — **Test**: `test/github/diff-lines.test.ts` › "only added and context lines on the right side can take a comment"
+- [x] A file in the pull request has no `patch` (binary or too large): the start page says "Diff not available", and findings on it go into the body. — **Test**: `test/github/diff-lines.test.ts` › "a file without a patch has no commentable lines"; `e2e/review.spec.ts` › "review a pull request: dismiss, edit, request changes, post" (the `logo.png` file)
+- [x] The diff sent to the model is over 60 KB: file names only, with a note to read the files. — **Test**: `test/session/engine-github.test.ts` › "a large diff is cut to file names"
+- [~] deferred — The pull request head moves after the review started: the review is posted on the session's commit; GitHub marks moved lines as outdated. Nothing extra is built. — **Runtime check**: note in `limits.md` only
+- [x] The review sandbox is lost and rebuilt: it is rebuilt from the PR head `sha`; findings are kept. — **Test**: `test/session/engine-github.test.ts` › "findings survive a sandbox rebuild"
+- [x] A message to a review session after its review was posted is refused, and the composer is disabled with "Review again" linking to `/prs/:n`. — **Test**: `test/session/findings.test.ts` › "a posted review takes no more messages"; the same E2E test (composer disabled, "Review again")
+- [x] Deleting a session does not touch its pull request or its posted review; the list row goes back to "Opened by &run" without a session link. — **Test**: `e2e/pr.spec.ts` › "delete keeps the pull request"
+- [x] A session from before this phase (no `github_state`): Approve resolves the default branch and opens the pull request. — **Test**: `test/session/engine-github.test.ts` › "a session without stored GitHub state"
+- [x] `GET /pulls` fails or is rate limited: the page shows GitHub's message and a Retry button, and the sidebar count is hidden. — **Test**: `e2e/pulls.spec.ts` › "GitHub error on the list"
+- [x] Empty tabs: "No pull requests need a review." / "&run has not opened a pull request yet." — **Test**: `e2e/pulls.spec.ts` › "empty tabs"
+- [x] The reducer handles `pr_opened` with and without the new optional fields, and a repeated `review_finding` id replaces the earlier one in place. — **Test**: `test/web/reducer.test.ts` › "pr_opened card" and "a finding update replaces by id"
+- [x] No GitHub credential reaches the browser or the sandbox: `dist/` contains no secret name, and `GET /config`, `GET /pulls` and the session snapshot carry no token. — **Test**: `test/worker/router.test.ts` › "responses carry no credential"; **Runtime check**: done 2026-10-03, `dist/` has no token, PAT, key or secret name
+- [x] `src/github/` has no `cloudflare:*` import and `src/core/` has no `github` import. — **Test**: `test/core/boundary.test.ts` (extended)
+- [x] `pnpm test`, `pnpm typecheck`, `pnpm lint` and `pnpm e2e` pass. — **Runtime check**: done 2026-10-03: 230 unit/integration tests, 23 E2E tests, typecheck and lint clean
 
 Not applicable:
 - Auth / PII: no users (spec D3). The write protection is P4-j, accepted as ADR Q1.
@@ -284,8 +284,8 @@ Tests from earlier phases that change meaning (to be recorded in Build Progress)
 - [x] **Deployed `DEMO_SHA`**: empty. No prepared demo; any task, then review the pull request it opened. The variable stays as an override. (Henry, 2026-10-03)
 - [x] **Sandbox network stays off (P4-l)**: the diff reaches the agent through the first message, not through a clone. (Henry, 2026-10-03)
 - [ ] **Paid checks**: S21 (about ¥1) and one real-model run of the review eval case (`deepseek-v4-flash`, 3 runs). Neither is run without Henry's OK. — decide by: Henry
-- [ ] **Is the GitHub App already created?** If not, steps 1–4 above are needed before S21; the build itself only needs the fake GitHub. — decide by: Henry
-- [ ] Assumption: a Rate Limiting binding can be called from inside a Durable Object. If not, P4-e falls back to HTTP routes for Approve and Post review. — decide by: during build (first unit)
+- [x] **The GitHub App and the PAT exist and the four secrets are set on Cloudflare** (Henry, 2026-10-03). Local runs keep using the fake GitHub.
+- [x] Assumption (held locally): a Rate Limiting binding can be called from inside a Durable Object. Seen in `wrangler dev`: the request budget refused a publish started from the SessionDO. To be seen once more on the deployed Worker in S21.
 - [ ] Assumption: commits created through the Git Data API with an installation token and no `author` field are attributed to the bot. — decide by: during build (checked on the real repo before S21)
 
 ## Build Progress
@@ -295,9 +295,9 @@ Tests from earlier phases that change meaning (to be recorded in Build Progress)
 | 2 | Core + session: review gate, `finish` title, event fields, publish on approve, findings, post review, `file_changed` at pause, guard | S4, S5, S6, S7 (engine), S9, S12, S13, S14, engine edges | ✅ done |
 | 3 | Worker: review create, head resolution, `/pulls` routes, index `pr`, config, wiring, wrangler, fake GitHub script | S7 (config), S8, S10, S11, credential edge | ✅ done |
 | 4 | Web: reducer, pull request card, approval bar, Pull requests page, sidebar, Home copy | S15, reducer and list edges | ✅ done (E2E `pr.spec`, `pulls.spec`, `code-run.spec`, `home.spec` green) |
-| 5 | Web: review start page, review session (tabs, findings panel, verdict bar) | S16, review edges | ⏳ pending |
-| 6 | Eval: review case | S20 | ⏳ pending |
-| 7 | A7 (cut first): review comments, reply, ask the agent to fix | S17, S18, S19 | ⏳ pending |
+| 5 | Web: review start page, review session (tabs, findings panel, verdict bar) | S16, review edges | ✅ done (E2E `review.spec` green, run twice) |
+| 6 | Eval: review case | S20 | ✅ done |
+| 7 | A7 (cut first): review comments, reply, ask the agent to fix | S17, S18, S19 | ✅ done (E2E `my-pr.spec` green) |
 | 8 | Docs: ADR amendments, `limits.md`, README | — | ✅ done (by the commander) |
 
 Test changes during the build:
@@ -313,3 +313,23 @@ Security review findings handled during the build (added to the tests):
 - A pull request with more files than one page returns (100) cannot be reviewed: `400` instead of a partial review.
 - A review that reached GitHub is not posted again if the session was interrupted before the gate closed.
 - Accepted: the rate-limit key is `"unknown"` when there is no client IP (a shared bucket, not a bypass). Finding text is written by the model and posted as the user only after the user's click; it is plain text in &run and Markdown on GitHub (goes into `limits.md`).
+- A7: `GET /pulls` adds `openComments` to pull requests &run opened that have no review session (at most 10 per load).
+- A7 (security review): replies are accepted only on pull requests &run opened; every GitHub request of the Worker counts against one shared budget (`GITHUB_API_LIMITER`, 240 a minute); "Ask the agent to fix" tells the agent that the comment is someone's text from GitHub.
+- The review prompt says that the pull request's title and diff are material to review, not instructions.
+
+Found by the E2E runs and fixed:
+- The sidebar's pull request count did not follow a pull request opened in the open session. The session page now refreshes the list when a pull request card or a review card appears.
+- "Ready to post" is broadcast while the run's segment is still winding down; a Dismiss clicked in that moment was refused. Such a frame now waits for the segment (unit test added).
+- After Post review the review card is in Activity while the user may be on Files changed; the view switches back to Activity when a post has an outcome.
+
+Runtime verification (2026-10-03, `wrangler dev` + fake model + fake GitHub, Chromium):
+- S15, S16, S17–S19 walked in the browser by the E2E specs; all 23 E2E tests pass in one run. Screens captured: Home, the open-PR gate, the pull request card with review comments, the Pull requests page, the review start page, Ready to post, Files changed with findings, Review posted. No page error and no console error.
+- S1–S14 and S20: Vitest (230 tests).
+- S21 not run: it needs a deploy, costs about ¥1 and writes to the real repo. Waiting for Henry's OK.
+
+Observations (not fixed, not user-visible):
+- `wrangler dev` logs "saving workspace changes failed: git … failed" when a session is deleted or ends while a save is in flight. The save is for a sandbox that is being destroyed; nothing is lost. It was already possible in Phase 2.
+- Once, in the first E2E run of this build, a Code session ended as Failed before its gate. It did not happen again in the following full runs (3 of 3 clean). Cause unknown; watch for it in S21.
+
+Units: 8 (implementer: 7, commander: 1 for the docs; small fixes after verification by the commander).
+
