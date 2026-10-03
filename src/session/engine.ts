@@ -41,6 +41,7 @@ export class SessionEngine {
   private liveStatus: AgentState["status"] | null = null;
   private reconcileChain: Promise<void> = Promise.resolve();
   private readonly upserts = new Set<Promise<void>>();
+  private indexChain: Promise<void> = Promise.resolve();
 
   constructor(private readonly deps: EngineDeps) {
     this.store = new SessionStore(deps.sql);
@@ -245,17 +246,16 @@ export class SessionEngine {
     const meta = this.deleted ? null : this.store.meta();
     if (!meta) return;
     const row = { id: meta.id, mode: meta.mode, title: meta.title, status, created_at: meta.created_at, updated_at: this.now() };
-    let call: Promise<void>;
-    try {
-      call = this.deps.index.upsert(row);
-    } catch (err) {
-      call = Promise.reject(err);
-    }
-    const tracked: Promise<void> = call
+    // One write at a time: calls to the WorkspaceDO are not delivered in order, and a late
+    // "running" would overwrite a newer status in the sidebar.
+    const tracked: Promise<void> = this.indexChain
+      .then(() => this.deps.index.upsert(row))
       .catch((err) => console.error("session index upsert failed:", err))
       .finally(() => this.upserts.delete(tracked));
+    this.indexChain = tracked;
     this.upserts.add(tracked);
   }
+
 
   /** What the core emits. Its status changes reach the index here; its file changes trigger a reconcile. */
   private onCoreEvent(event: AgentEvent): void {

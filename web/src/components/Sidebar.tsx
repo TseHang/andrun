@@ -34,6 +34,7 @@ export function Sidebar({ sessions, stale, path, live }: Props) {
       </div>
       <div className="flex min-h-0 grow flex-col gap-px overflow-y-auto">
         <div className="px-2.5 pb-1 text-[11px] font-semibold text-text-secondary">Recent</div>
+        {sessions.length === 0 && <div className="px-2.5 py-1.5 text-text-tertiary">No sessions yet</div>}
         {sessions.map((s) => {
           const status = live && live.id === s.id ? live.status : s.status;
           return (

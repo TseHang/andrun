@@ -45,6 +45,13 @@ body {
   outline-offset: 2px;
 }
 
+/* Text fields show focus through their own fill or container (focus-within), not a ring:
+   browsers match :focus-visible on every click into a field. */
+textarea:focus-visible,
+input:focus-visible {
+  outline: none;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);

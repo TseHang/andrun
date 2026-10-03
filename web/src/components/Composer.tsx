@@ -39,7 +39,7 @@ export function Composer({ view, running, send, update }: { view: SessionView; r
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder={running ? "Redirect the agent" : "Send a message to continue"}
-        className="min-w-0 grow bg-transparent py-1 text-[14px] outline-none"
+        className="h-9 min-w-0 grow rounded-[10px] bg-black/5 px-3 text-[14px] transition-[background-color,box-shadow] focus:bg-white focus:shadow-[0_0_0_1px_rgba(0,0,0,0.2)]"
       />
       {running && <span className="shrink-0 text-xs text-text-tertiary">Added at the next step</span>}
       <button type="submit" disabled={!text.trim()} className="h-9 shrink-0 cursor-pointer rounded-[10px] bg-black/6 px-4 text-[13px] font-semibold text-text disabled:cursor-default disabled:bg-black/4 disabled:text-text-tertiary">

@@ -51,6 +51,12 @@ pnpm smoke --flow kill               # kill the sandbox mid-run → failed → m
 
 `pnpm dev` serves the last build in `dist/`. While working on the UI, run `pnpm dev:web` as well (Vite on :5173 with hot reload, proxying the API to :8787). The Phase 2 debug page is still at `/debug.html`.
 
+Each local session leaves a `workerd-andrun-…` container in Docker, and `wrangler dev` does not always remove them when it stops. To clear them (with `wrangler dev` stopped):
+
+```sh
+docker ps -aq --filter name=workerd-andrun- | xargs docker rm -f
+```
+
 Tasks for the fake model can carry a marker: `[slow]` (8 s per answer), `[fail]` (every request fails), `[ask]` (first runs `rm -rf tmp`, which needs approval).
 
 To use the real model locally, put your ai& key and base URL in `.dev.vars` instead.

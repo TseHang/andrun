@@ -60,7 +60,7 @@ export function ApprovalBar({ view, gate, send, update }: { view: SessionView; g
             }
           }}
           placeholder={finish ? "Ask for changes instead" : "Tell the agent what to do instead"}
-          className="min-w-0 grow rounded-full bg-fill px-3.5 py-1.5 text-[13px] outline-none"
+          className="h-9 min-w-0 grow rounded-[10px] bg-black/5 px-3 text-[14px] transition-[background-color,box-shadow] focus:bg-white focus:shadow-[0_0_0_1px_rgba(0,0,0,0.2)]"
         />
         <button type="button" disabled={secondaryDisabled} onClick={secondary} className="shrink-0 rounded-full bg-fill px-3.5 py-1.5 text-[13px] font-medium disabled:opacity-40">
           {gate.secondary}

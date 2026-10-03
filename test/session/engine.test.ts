@@ -1014,3 +1014,31 @@ describe("Phase 3: model per session (P3-d) and sandbox state (P3-o)", () => {
     expect(approved.engine.snapshot()).toMatchObject({ status: "done", sandboxRunning: false });
   });
 });
+
+describe("QA (Phase 3): the session index ends on the latest status", () => {
+  it("index upserts are applied in order even when one is slow", async () => {
+    const w = world();
+    const applied: SessionSummary[] = [];
+    let slowNext = false;
+    // One slow write (a cold WorkspaceDO, a busy network): calls to another Durable Object are not ordered.
+    const index = {
+      upsert: async (row: SessionSummary) => {
+        const slow = slowNext;
+        slowNext = false;
+        await new Promise((r) => setTimeout(r, slow ? 150 : 0));
+        applied.push(row);
+      },
+    };
+    const engine = w.engine(new ScriptedModelClient(HAPPY()), { index });
+    engine.create({ id: ID, mode: "code", task: TASK });
+    await engine.idle();
+    const approvalId = engine.snapshot()!.pending!.approvalId;
+    expect(applied.at(-1)).toMatchObject({ status: "awaiting_approval" });
+
+    // Approving a finish moves the session through running to done within a few milliseconds.
+    slowNext = true;
+    await send(engine, { type: "approve", approvalId });
+    expect(engine.snapshot()).toMatchObject({ status: "done" });
+    expect(applied.at(-1)).toMatchObject({ status: "done" });
+  });
+});

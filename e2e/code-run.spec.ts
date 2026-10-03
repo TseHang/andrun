@@ -34,6 +34,10 @@ test("run, watch, approve", async ({ page }) => {
   const id = page.url().split("/s/")[1]!;
   await expect(s.sidebar.locator(`a[href="/s/${id}"]`)).toContainText("Done");
   await expect(s.sandbox).toHaveText("Stopped · starts again with your next message", { timeout: 20_000 }); // S19
+
+  // QA: once the page is left, the row comes from the session index, which must also say Done.
+  await page.goto("/");
+  await expect(s.sidebar.locator(`a[href="/s/${id}"]`)).toContainText("Done");
 });
 
 test("reject with a comment loops back to the gate", async ({ page, request }) => {

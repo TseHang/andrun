@@ -30,7 +30,7 @@ export function Home({ sessions }: { sessions: SessionSummary[] }) {
     <main className="flex min-w-0 grow flex-col items-center gap-14 overflow-y-auto px-12 pb-10 pt-[132px]">
       <div className="flex w-[720px] flex-col gap-5">
         <h1 className="m-0 text-[30px] font-bold leading-[1.15] tracking-[-0.022em]">What do you want to run?</h1>
-        <div className="relative z-[2] flex flex-col gap-2.5 rounded-2xl bg-white py-3.5 pl-4 pr-3 pb-3 shadow-[0_0_0_1px_rgba(0,0,0,0.08),0_2px_6px_rgba(0,0,0,0.04),0_12px_32px_rgba(0,0,0,0.07)]">
+        <div className="relative z-[2] flex flex-col gap-2.5 rounded-2xl bg-white py-3.5 pl-4 pr-3 pb-3 shadow-[0_0_0_1px_rgba(0,0,0,0.08),0_2px_6px_rgba(0,0,0,0.04),0_12px_32px_rgba(0,0,0,0.07)] transition-shadow focus-within:shadow-[0_0_0_1px_rgba(0,0,0,0.2),0_2px_6px_rgba(0,0,0,0.05),0_12px_32px_rgba(0,0,0,0.1)]">
           <label htmlFor="task" className="sr-only">
             Task
           </label>
