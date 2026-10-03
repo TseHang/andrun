@@ -1,0 +1,56 @@
+import type { SessionSummary } from "../../../src/session/protocol";
+import type { Status } from "../../../src/core/events";
+import { useApp } from "../context";
+import { STATUS_COLOR, StatusLabel } from "./StatusLabel";
+import { Wordmark } from "./Wordmark";
+
+interface Props {
+  sessions: SessionSummary[];
+  stale: boolean;
+  path: string;
+  live: { id: string; status: Status } | null;
+}
+
+export function Sidebar({ sessions, stale, path, live }: Props) {
+  const { config } = useApp();
+  const openId = /^\/s\/([^/]+)/.exec(path)?.[1];
+  return (
+    <nav aria-label="Workspace" className="flex w-[248px] shrink-0 flex-col gap-[18px] border-r border-black/8 bg-sidebar px-2.5 py-3.5">
+      <div className="flex items-center justify-between pl-2.5 pt-0.5">
+        <a href="/" aria-label="&run home" className="rounded-md">
+          <Wordmark />
+        </a>
+        <a href="/" aria-label="New session" className="flex size-8 items-center justify-center rounded-lg text-accent">
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M11.5 2.5l2 2L7 11l-2.5.5L5 9l6.5-6.5z" />
+            <path d="M13 9.5v3a1 1 0 01-1 1H3.5a1 1 0 01-1-1V4a1 1 0 011-1h3" />
+          </svg>
+        </a>
+      </div>
+      <div className="flex flex-col">
+        <a href="/" aria-current={path === "/" ? "page" : undefined} className={`flex h-8 items-center rounded-lg px-2.5 font-medium ${path === "/" ? "bg-black/6" : ""}`}>
+          Sessions
+        </a>
+      </div>
+      <div className="flex min-h-0 grow flex-col gap-px overflow-y-auto">
+        <div className="px-2.5 pb-1 text-[11px] font-semibold text-text-secondary">Recent</div>
+        {sessions.map((s) => {
+          const status = live && live.id === s.id ? live.status : s.status;
+          return (
+            <a
+              key={s.id}
+              href={`/s/${s.id}`}
+              aria-current={openId === s.id ? "page" : undefined}
+              className={`flex flex-col gap-px rounded-lg px-2.5 py-1.5 ${openId === s.id ? "bg-black/6" : ""}`}
+            >
+              <span className="truncate font-medium">{s.title}</span>
+              <StatusLabel status={status} className={`text-[11px] ${STATUS_COLOR[status]}`} />
+            </a>
+          );
+        })}
+      </div>
+      {stale && <div className="px-2.5 text-[11px] text-text-secondary">Could not refresh</div>}
+      <div className="px-2.5 font-mono text-[11px] text-text-secondary">{config.repo}</div>
+    </nav>
+  );
+}
