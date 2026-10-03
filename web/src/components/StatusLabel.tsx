@@ -10,7 +10,7 @@ export const STATUS_TEXT: Record<Status, string> = {
   budget_exceeded: "Budget exceeded",
 };
 
-const DOT: Record<Status, string> = {
+export const DOT: Record<Status, string> = {
   idle: "bg-text-tertiary",
   running: "bg-accent",
   awaiting_approval: "bg-accent",
@@ -27,6 +27,9 @@ export const STATUS_COLOR: Record<Status, string> = {
   failed: "text-failed",
   budget_exceeded: "text-failed",
 };
+
+/** Sidebar text colour: only "Awaiting approval" is coloured; the dot carries the rest. */
+export const LIST_COLOR = (s: Status) => (s === "awaiting_approval" ? "text-accent-text" : "text-text-secondary");
 
 /** Dot (a spinner while running) and the status text, as shown in lists. */
 export function StatusLabel({ status, className = "" }: { status: Status; className?: string }) {

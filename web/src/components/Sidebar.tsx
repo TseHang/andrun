@@ -1,7 +1,7 @@
 import type { SessionSummary } from "../../../src/session/protocol";
 import type { Status } from "../../../src/core/events";
 import { useApp } from "../context";
-import { STATUS_COLOR, StatusLabel } from "./StatusLabel";
+import { LIST_COLOR, StatusLabel } from "./StatusLabel";
 import { Wordmark } from "./Wordmark";
 
 interface Props {
@@ -44,7 +44,7 @@ export function Sidebar({ sessions, stale, path, live }: Props) {
               className={`flex flex-col gap-px rounded-lg px-2.5 py-1.5 ${openId === s.id ? "bg-black/6" : ""}`}
             >
               <span className="truncate font-medium">{s.title}</span>
-              <StatusLabel status={status} className={`text-[11px] ${STATUS_COLOR[status]}`} />
+              <StatusLabel status={status} className={`text-[11px] ${LIST_COLOR(status)}`} />
             </a>
           );
         })}

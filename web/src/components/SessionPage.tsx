@@ -72,6 +72,15 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
   }, [status]);
   useEffect(() => () => reportStatus(id, null), [id]);
 
+  // The sandbox comes up while the run starts: re-read the snapshot whenever a setup step finishes.
+  const setups = view.items.reduce((n, i) => n + (i.kind === "steps" ? i.rows.filter((r) => r.name === "sandbox_setup" && r.done).length : 0), 0);
+  const seen = useRef(setups);
+  useEffect(() => {
+    if (seen.current === setups) return;
+    seen.current = setups;
+    reload();
+  }, [setups]);
+
   // The sandbox stops a little after the run ends: look again until it has.
   useEffect(() => {
     if (!snap.sandboxRunning || status === "running" || status === "awaiting_approval") return;
@@ -109,7 +118,7 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
       <div className="relative flex min-h-0 grow">
         <Timeline view={view} status={status} />
         <ChangesPanel view={view} sandboxRunning={snap.sandboxRunning} sha={config.sha} />
-        <div data-slot="floating-bar" className="pointer-events-none absolute inset-x-0 bottom-0 px-6 pb-5">
+        <div data-slot="floating-bar" className="pointer-events-none absolute bottom-5 left-7 right-5">
           {view.gate && status === "awaiting_approval" ? (
             <ApprovalBar view={view} gate={view.gate} send={send} update={update} />
           ) : (

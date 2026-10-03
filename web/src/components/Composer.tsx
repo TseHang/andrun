@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { ClientFrame } from "../../../src/session/protocol";
 import { addPending, type SessionView } from "../state/reducer";
 
-const BAR = "pointer-events-auto mx-auto flex max-w-[860px] items-center gap-3 rounded-2xl border border-black/10 bg-white/80 px-4 py-2.5 shadow-lg backdrop-blur-xl";
+const BAR = "pointer-events-auto flex items-center gap-3 rounded-2xl border border-black/10 bg-white/80 px-4 py-2.5 shadow-lg backdrop-blur-xl";
 
 export function Composer({ view, running, send, update }: { view: SessionView; running: boolean; send: (f: ClientFrame) => boolean; update: (fn: (v: SessionView) => SessionView) => void }) {
   const [text, setText] = useState("");
@@ -42,7 +42,7 @@ export function Composer({ view, running, send, update }: { view: SessionView; r
         className="min-w-0 grow bg-transparent py-1 text-[14px] outline-none"
       />
       {running && <span className="shrink-0 text-xs text-text-tertiary">Added at the next step</span>}
-      <button type="submit" disabled={!text.trim()} className="shrink-0 rounded-full bg-accent px-3.5 py-1.5 text-[13px] font-medium text-white disabled:opacity-40">
+      <button type="submit" disabled={!text.trim()} className="h-9 shrink-0 cursor-pointer rounded-[10px] bg-black/6 px-4 text-[13px] font-semibold text-text disabled:cursor-default disabled:bg-black/4 disabled:text-text-tertiary">
         Send
       </button>
     </form>

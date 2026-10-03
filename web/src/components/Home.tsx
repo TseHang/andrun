@@ -3,8 +3,9 @@ import type { SessionSummary } from "../../../src/session/protocol";
 import { createSession } from "../api";
 import { useApp } from "../context";
 import { relativeTime } from "../state/format";
+import { Spinner } from "./Spinner";
 import { ModelMenu } from "./ModelMenu";
-import { STATUS_COLOR, StatusLabel } from "./StatusLabel";
+import { DOT, STATUS_TEXT } from "./StatusLabel";
 
 export function Home({ sessions }: { sessions: SessionSummary[] }) {
   const { config, navigate, refreshList } = useApp();
@@ -89,8 +90,9 @@ export function Home({ sessions }: { sessions: SessionSummary[] }) {
           <div className="px-1 pb-2 text-xs font-semibold text-text-secondary">Recent</div>
           {sessions.map((s) => (
             <a key={s.id} href={`/s/${s.id}`} className="flex h-11 items-center gap-3 border-t border-black/8 px-1">
+              {s.status === "running" ? <Spinner size={8} /> : <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${DOT[s.status]}`} />}
               <span className="min-w-0 grow truncate text-sm">{s.title}</span>
-              <StatusLabel status={s.status} className={`text-xs ${STATUS_COLOR[s.status]}`} />
+              <span className={`text-xs ${s.status === "awaiting_approval" ? "text-accent-text" : s.status === "failed" || s.status === "budget_exceeded" ? "text-failed" : "text-text-secondary"}`}>{STATUS_TEXT[s.status]}</span>
               <span className="w-8 text-right text-xs text-text-tertiary">{relativeTime(s.updated_at, Date.now())}</span>
             </a>
           ))}

@@ -18,7 +18,7 @@ function Row({ row }: { row: StepRow }) {
         onClick={() => setToggled(!open)}
         className="flex w-full min-w-0 cursor-pointer items-center gap-2 px-3 py-1.5 text-left font-mono text-xs"
       >
-        <span className="shrink-0 font-semibold">{row.name}</span>
+        <span className="shrink-0">{row.name}</span>
         <span className="min-w-0 grow truncate text-text-secondary">{row.arg}</span>
         {row.done ? (
           <span className={`shrink-0 ${TONE[rowTone(row)]}`}>{rowSummary(row)}</span>

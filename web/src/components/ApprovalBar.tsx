@@ -29,7 +29,7 @@ export function ApprovalBar({ view, gate, send, update }: { view: SessionView; g
   return (
     <form
       aria-label="Approval"
-      className="pointer-events-auto mx-auto max-w-[860px] rounded-2xl border border-black/10 bg-white/80 p-4 shadow-lg backdrop-blur-xl"
+      className="pointer-events-auto rounded-2xl border border-black/10 bg-white/80 p-4 shadow-lg backdrop-blur-xl"
       onSubmit={(e) => {
         e.preventDefault();
         if (text && !secondaryDisabled) secondary();

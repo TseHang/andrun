@@ -4,7 +4,7 @@ import { useApp } from "../context";
 import { formatCost, formatTokens } from "../state/format";
 import type { SessionView } from "../state/reducer";
 import { Spinner } from "./Spinner";
-import { STATUS_COLOR, STATUS_TEXT } from "./StatusLabel";
+import { DOT, STATUS_COLOR, STATUS_TEXT } from "./StatusLabel";
 
 interface Props {
   title: string;
@@ -46,6 +46,7 @@ export function SessionHeader({ title, status, header, onDelete, moreRef }: Prop
       <h1 className="m-0 min-w-0 truncate text-[15px] font-semibold tracking-[-0.01em]">{title}</h1>
       <span data-testid="session-status" className={`flex shrink-0 items-center gap-1.5 font-medium ${STATUS_COLOR[status]}`}>
         {status === "running" && <Spinner />}
+        {(status === "awaiting_approval" || status === "done" || status === "failed" || status === "budget_exceeded") && <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${DOT[status]}`} />}
         {STATUS_TEXT[status]}
       </span>
       <span className="grow" />

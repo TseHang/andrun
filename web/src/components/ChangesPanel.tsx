@@ -36,12 +36,19 @@ export function ChangesPanel({ view, sandboxRunning, sha }: { view: SessionView;
   return (
     <aside
       aria-label="Changes"
-      className={`min-h-0 min-w-0 shrink-0 overflow-y-auto border-l border-black/10 px-5 pt-4 pb-32 ${wide ? "w-[min(520px,45%)]" : "w-[400px]"}`}
+      className={`min-h-0 min-w-0 shrink-0 overflow-y-auto border-l border-black/10 px-5 pt-4 pb-44 ${wide ? "w-[min(520px,45%)]" : "w-[400px]"}`}
     >
       <div className="mb-3 flex items-baseline justify-between">
         <h2 className="text-[15px] font-semibold">Changes</h2>
         <span className="text-xs text-text-secondary">
-          {totals.files === 0 ? "None yet" : `${totals.files} ${totals.files === 1 ? "file" : "files"} · +${totals.additions} −${totals.deletions}`}
+          {totals.files === 0 ? (
+            "None yet"
+          ) : (
+            <>
+              {`${totals.files} ${totals.files === 1 ? "file" : "files"} · `}
+              <span className="text-done-text">+{totals.additions}</span> <span className="text-failed">−{totals.deletions}</span>
+            </>
+          )}
         </span>
       </div>
       {view.testPaths.length > 0 && (
