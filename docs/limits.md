@@ -56,7 +56,7 @@ Last updated: 2026-10-03 (Phase 4).
 | C3 | `POST /sessions/:id/debug/kill-sandbox` is public while `DEBUG_ENDPOINTS="1"`. It gives no more power than the public delete. | Set `DEBUG_ENDPOINTS="0"` after the demo. |
 | C4 | Anyone with the URL sees and can delete every session (one shared workspace, spec D3). | Out of scope for this version. |
 
-| C6 | **The App's GitHub quota (5,000 requests an hour) can be used up by visitors.** Reads are limited to 60 a minute per IP and all GitHub requests of the Worker to 240 a minute in total, which bounds a burst but not an hour. When the quota is gone, GitHub's rate-limit message is shown and pull requests and reviews stop working until it resets. The list counts review comments for at most 10 pull requests per load. | A short cache for the pull request list; a login. |
+| C6 | **The App's GitHub quota (5,000 requests an hour) can be used up by visitors.** Reads are limited to 60 a minute per IP, and the Worker's GitHub requests to 240 a minute for the public routes and 240 a minute for the sessions (separate budgets, so list requests cannot block an approve). That bounds a burst but not an hour, and one visitor can use up the routes' budget for the others for that minute. When the quota is gone, GitHub's rate-limit message is shown and pull requests and reviews stop working until it resets. The list counts review comments for at most 10 pull requests per load. | A short cache for the pull request list; a login. |
 | C7 | **A reply is posted as TseHang by anyone with the URL**, only on pull requests &run opened. "Ask the agent to fix" gives the agent a comment that someone wrote on GitHub; the result still stops at the approval gate. | A login. |
 
 ## Open observations (cause not confirmed)

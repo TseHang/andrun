@@ -59,7 +59,7 @@ export class SessionDO extends DurableObject<Env> {
       model: new OpenAICompatModelClient({ baseUrl: env.AIAND_BASE_URL, apiKey: env.AIAND_API_KEY }),
       config: defaultConfig,
       repo: { name: env.DEMO_REPO, sha: env.DEMO_SHA },
-      github: githubFor(env),
+      github: githubFor(env, "sessions"),
       guard: {
         githubWrite: async (ip) => {
           if (env.GITHUB_WRITES !== "1" || env.KILL_SWITCH === "1") return "GitHub writes are disabled";

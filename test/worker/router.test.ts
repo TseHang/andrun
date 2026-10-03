@@ -505,6 +505,12 @@ describe("router (Phase 3: P3-c, P3-d)", () => {
     await expectError(await handle(req("POST", "/pulls/13/comments/1/replies", { body: { text: "x" } }), f.env), 400, /only for pull requests &run opened/);
     expect(f.fake.comments).toHaveLength(n);
 
+    // Security review: the comment must belong to the pull request that was checked.
+    const foreign = f.fake.addComment({ pull: 13, user: "octocat", path: "a.js", line: 1, body: "On someone else's pull request." });
+    await expectError(await handle(req("POST", `/pulls/12/comments/${foreign.id}/replies`, { body: { text: "x" } }), f.env), 404);
+    expect(f.fake.requests.filter((r) => r.method === "POST" && r.path.includes(`/comments/${foreign.id}/replies`))).toEqual([]);
+    expect(f.fake.comments).toHaveLength(n + 1);
+
     // The kill switch and the write limiter (D14).
     const off = withComments({ githubWrites: false });
     await expectError(await handle(req("POST", `/pulls/12/comments/${off.a.id}/replies`, { body: { text: "x" } }), off.env), 503, /GitHub writes are disabled/);

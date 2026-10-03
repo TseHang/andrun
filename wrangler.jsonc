@@ -42,7 +42,8 @@
     { "name": "DELETE_LIMITER", "namespace_id": "1002", "simple": { "limit": 10, "period": 60 } },
     { "name": "GITHUB_WRITE_LIMITER", "namespace_id": "1003", "simple": { "limit": 10, "period": 60 } },
     { "name": "GITHUB_READ_LIMITER", "namespace_id": "1004", "simple": { "limit": 60, "period": 60 } },
-    // Not per IP: a budget for all requests this Worker sends to GitHub. One approve is about 12 requests,
+    // Not per IP: a budget for the requests this Worker sends to GitHub, one for the public routes and one
+    // for the sessions (so list requests cannot block an approve). One approve is about 12 requests,
     // so the budget leaves room for bursts; it bounds abuse, it does not keep it under the App's 5,000 an hour (limits.md C6).
     { "name": "GITHUB_API_LIMITER", "namespace_id": "1005", "simple": { "limit": 240, "period": 60 } }
   ],

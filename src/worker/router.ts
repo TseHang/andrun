@@ -159,6 +159,8 @@ async function postReply(request: Request, env: RouterEnv, n: string, id: string
     const pull = (await env.github.listPulls()).find((p) => p.number === Number(n));
     if (!pull) return notFound();
     if (!pull.mine) return error(400, "replies are only for pull requests &run opened");
+    // The check above is about pull request `n`, so the comment must be one of its threads.
+    if (!(await env.github.listReviewComments(pull.number)).some((t) => t.id === Number(id))) return notFound();
     return json(await env.github.replyToComment(Number(n), Number(id), text), 201);
   } catch (err) {
     return githubFailure(err);
