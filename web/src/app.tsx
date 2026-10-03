@@ -108,7 +108,7 @@ export function App() {
   if (!ctx) return null;
 
   const sessionId = /^\/s\/([^/]+)\/?$/.exec(path)?.[1];
-  const reviewNumber = /^\/prs\/(\d+)\/?$/.exec(path)?.[1];
+  const reviewNumber = /^\/prs\/([^/]+)\/?$/.exec(path)?.[1];
   return (
     <App_.Provider value={ctx}>
       <div className="flex h-screen min-w-[1024px] overflow-hidden bg-white">

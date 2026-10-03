@@ -32,22 +32,26 @@ export async function listSessions(): Promise<SessionSummary[]> {
 
 export type CreateResult = { ok: true; id: string } | { ok: false; error: string };
 
-export async function createSession(task: string, model: string): Promise<CreateResult> {
+async function create(body: object): Promise<CreateResult> {
   try {
     const res = await fetch("/sessions", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ mode: "code", task, model }),
+      body: JSON.stringify(body),
     });
     if (res.status === 201) return { ok: true, id: ((await res.json()) as { id: string }).id };
     if (res.status === 429) return { ok: false, error: `Too many new sessions. Try again in ${res.headers.get("retry-after") ?? 60} seconds.` };
     if (res.status === 503) return { ok: false, error: "New sessions are turned off. Existing sessions still work." };
-    const body = (await res.json().catch(() => null)) as { error?: string } | null;
-    return { ok: false, error: body?.error ?? "Could not start the session." };
+    const err = (await res.json().catch(() => null)) as { error?: string } | null;
+    return { ok: false, error: err?.error ?? "Could not start the session." };
   } catch {
     return { ok: false, error: "Could not start the session." };
   }
 }
+
+export const createSession = (task: string, model: string): Promise<CreateResult> => create({ mode: "code", task, model });
+
+export const createReview = (pr: number, task: string, model: string): Promise<CreateResult> => create({ mode: "review", pr, task, model });
 
 /** The snapshot, null when the session does not exist; throws on other failures. */
 export async function getSnapshot(id: string): Promise<SessionSnapshot | null> {
@@ -88,4 +92,38 @@ export async function listPulls(): Promise<PullRow[]> {
   if (res.status === 429) throw new Error("Too many requests. Try again in 60 seconds.");
   const body = (await res.json().catch(() => null)) as { error?: string } | null;
   throw new Error(body?.error ?? "Could not load pull requests.");
+}
+
+export interface PullFile {
+  path: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  patch: string | null;
+}
+
+export interface PullDetail {
+  number: number;
+  title: string;
+  author: string;
+  headRef: string;
+  baseRef: string;
+  headSha: string;
+  state: "open" | "closed";
+  fork: boolean;
+  url: string;
+  additions: number;
+  deletions: number;
+  changedFiles: number;
+  files: PullFile[];
+}
+
+/** One pull request with its diff, "not_found" for a 404; throws with the message to show. */
+export async function getPull(n: number): Promise<PullDetail | "not_found"> {
+  const res = await fetch(`/pulls/${n}`);
+  if (res.ok) return (await res.json()) as PullDetail;
+  if (res.status === 404) return "not_found";
+  if (res.status === 429) throw new Error("Too many requests. Try again in 60 seconds.");
+  const body = (await res.json().catch(() => null)) as { error?: string } | null;
+  throw new Error(body?.error ?? "Could not load the pull request.");
 }

@@ -159,8 +159,10 @@ export class SessionEngine {
     const { frame } = parsed;
     const ip = ctx?.ip ?? "unknown";
 
-    // Answered at once, never deferred: while the core runs, it owns the event sequence (P4-d).
-    if (frame.type === "finding") return this.editFinding(state, frame, reply);
+    // While the core runs it owns the event sequence, so an edit is refused at once, not queued (P4-d).
+    if (frame.type === "finding" && this.inflight && (this.liveStatus ?? state.status) === "running") {
+      return reply({ type: "rejected", reason: "You can edit findings when the agent has finished." });
+    }
 
     // The gate (or the end of a run) is broadcast while its segment is still saving changes; a frame
     // that arrives in that window waits for the segment instead of being refused.
@@ -173,6 +175,7 @@ export class SessionEngine {
       return;
     }
 
+    if (frame.type === "finding") return this.editFinding(state, frame, reply);
     if (frame.type === "post_review") return this.postReview(state, frame, reply, ip);
 
     if (frame.type === "message") {

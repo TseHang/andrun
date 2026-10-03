@@ -10,11 +10,12 @@ interface Props {
   title: string;
   status: Status;
   header: SessionView["header"];
+  review: boolean;
   onDelete: () => void;
   moreRef: React.RefObject<HTMLButtonElement | null>;
 }
 
-export function SessionHeader({ title, status, header, onDelete, moreRef }: Props) {
+export function SessionHeader({ title, status, header, review, onDelete, moreRef }: Props) {
   const { config } = useApp();
   const [open, setOpen] = useState(false);
   const menu = useRef<HTMLDivElement>(null);
@@ -47,9 +48,10 @@ export function SessionHeader({ title, status, header, onDelete, moreRef }: Prop
       <span data-testid="session-status" className={`flex shrink-0 items-center gap-1.5 font-medium ${STATUS_COLOR[status]}`}>
         {status === "running" && <Spinner />}
         {(status === "awaiting_approval" || status === "done" || status === "failed" || status === "budget_exceeded") && <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${DOT[status]}`} />}
-        {STATUS_TEXT[status]}
+        {review && status === "awaiting_approval" ? "Ready to post" : STATUS_TEXT[status]}
       </span>
       <span className="grow" />
+      {review && <span className="shrink-0 text-text-secondary">Read-only review</span>}
       <span className="shrink-0 text-text-secondary">
         Step {header.step} of {config.maxSteps}
       </span>

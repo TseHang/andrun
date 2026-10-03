@@ -63,6 +63,26 @@ describe("findings (S13, P4-c, P4-d)", () => {
     await engine.idle();
   });
 
+  it("a finding frame sent the moment the gate appears waits for the run to wind down", async () => {
+    // Found by the E2E run: "Ready to post" is broadcast while the segment is still saving changes.
+    // A click in that window must not be refused as "the agent is running".
+    const w = world({ tarball: fixtureTarball(SLUGIFY_FIXTURE) });
+    const replies: unknown[] = [];
+    let id: string | undefined;
+    const engine: ReturnType<typeof w.engine> = w.engine(new ScriptedModelClient(REVIEW_SCRIPT()), {
+      broadcast: (frame) => {
+        if (frame.type === "review_finding") id ??= frame.id;
+        if (frame.type === "status" && frame.status === "awaiting_approval") {
+          engine.handleFrame(JSON.stringify({ type: "finding", id, dismissed: true }), (f) => replies.push(f));
+        }
+      },
+    });
+    engine.create({ id: ID, mode: "review", task: BRIEF, sha: w.fake.refs.get("main")!, pr: { number: 14, title: "T", files: PR_FILES } });
+    await engine.idle();
+    expect(replies).toEqual([]);
+    expect(findings(w.events())[0]).toMatchObject({ id, dismissed: true });
+  });
+
   it("invalid post_review frames are refused", async () => {
     const r = await reviewAtGate();
     expect(await send(r.engine, { type: "post_review", approvalId: r.approvalId, verdict: "MERGE" })).toMatchObject([{ type: "rejected" }]);
