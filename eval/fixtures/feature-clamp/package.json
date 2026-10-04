@@ -1,0 +1,6 @@
+{
+  "name": "feature-clamp",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test" }
+}

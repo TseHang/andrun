@@ -25,6 +25,8 @@ const state = (over: Partial<AgentState> = {}): AgentState => ({
   ],
   step: 0,
   tokensUsed: 0,
+  turnCost: 0,
+  turnTokens: 0,
   nextSeq: 1,
   failures: null,
   nudged: false,
@@ -148,5 +150,23 @@ describe("SessionStore (ADR D8)", () => {
     ]);
     store.removeChange("old.txt");
     expect(store.changes().map((c) => c.path)).toEqual(["big.bin", "src/sum.js"]);
+  });
+
+  it("a store without turn counters loads as a fresh turn", () => {
+    // A session stored before the turn limit (HI-h) has only the `session` table's columns, which are never altered (P4-p).
+    const { db, store } = fresh();
+    store.create(meta, state());
+    expect(db.tables().sort()).toEqual(["changes", "events", "messages", "pending_approval", "session"]);
+    expect(store.loadState()).toMatchObject({ turnCost: 0, turnTokens: 0 });
+
+    // The counters are kept in a table of their own, created on first write.
+    store.saveState(state({ step: 3, turnCost: 12.5, turnTokens: 480_000 }), 2000);
+    expect(new SessionStore(db.sql).loadState()).toMatchObject({ step: 3, turnCost: 12.5, turnTokens: 480_000 });
+    expect(db.tables()).toHaveLength(6);
+    expect(db.sql.exec<{ name: string }>("SELECT name FROM pragma_table_info('session')").map((c) => c.name)).not.toContain("turn_cost");
+
+    // A new turn sets them back to zero.
+    store.saveState(state({ step: 3, turnCost: 0, turnTokens: 0 }), 3000);
+    expect(new SessionStore(db.sql).loadState()).toMatchObject({ turnCost: 0, turnTokens: 0 });
   });
 });

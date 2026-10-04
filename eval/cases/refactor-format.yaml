@@ -1,0 +1,14 @@
+id: refactor-format
+fixture: refactor-format
+mode: code
+task: "src/report.js formats a price the same way in two places. Move that into a function formatPrice(amount) exported from a new file src/format.js and use it in both places. The behavior must not change."
+check:
+  cmd: >-
+    npm test && node -e "import('./src/format.js').then((m) => { if (m.formatPrice(1234.5) !== '\$1,234.50') process.exit(1); })" && test "$(grep -c toLocaleString src/report.js)" = "0"
+  expect_exit: 0
+expect_changes:
+  - "src/format.js"
+  - "src/report.js"
+forbid_changes:
+  - "test/**"
+  - "package.json"

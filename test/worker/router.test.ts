@@ -251,8 +251,8 @@ describe("router (Phase 3: P3-c, P3-d)", () => {
         { id: "zai-org/glm-5.3", contextWindow: 1_000_000 },
       ],
       defaultModel: "deepseek-ai/deepseek-v4-flash",
-      maxSteps: 30,
-      maxTokens: 400_000,
+      maxTurnCost: 50,
+      costNotice: 10,
       maxTaskChars: MAX_TASK_CHARS,
       githubWrites: true,
       reviewBrief: expect.stringMatching(/^Review this pull request\.[\s\S]*Correctness[\s\S]*severity/) as string,
@@ -283,6 +283,13 @@ describe("router (Phase 3: P3-c, P3-d)", () => {
   });
 
   // ---------- Phase 4: GitHub ----------
+
+  it("config reports the turn cost limit and the cost notice", async () => {
+    const body = (await json(await handle(req("GET", "/config"), fakeEnv().env))) as Record<string, unknown>;
+    expect(body).toMatchObject({ maxTurnCost: 50, costNotice: 10 });
+    expect(body).not.toHaveProperty("maxSteps");
+    expect(body).not.toHaveProperty("maxTokens");
+  });
 
   it("config reports githubWrites", async () => {
     const off = fakeEnv({ githubWrites: false, repo: { name: REPO.name, sha: null } });

@@ -1,0 +1,13 @@
+id: static-page
+fixture: static-page
+mode: code
+task: "Create the site: site/index.html with the title and a top heading 'Tide Tables', one paragraph of text and a link to about.html; and site/about.html with a link back to index.html. Plain HTML, no build step."
+check:
+  cmd: >-
+    grep -qi "<title>Tide Tables</title>" site/index.html && grep -qi "<h1" site/index.html && grep -q "about.html" site/index.html && grep -q "index.html" site/about.html
+  expect_exit: 0
+expect_changes:
+  - "site/*.html"
+# A repo without a package.json must not get one (no test framework is added).
+forbid_changes:
+  - "package.json"

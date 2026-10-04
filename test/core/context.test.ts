@@ -45,6 +45,26 @@ describe("S9: context stays inside the window (D17)", () => {
     expect(toolMsg.content.length).toBeLessThanOrEqual(TOOL_OUTPUT_CAP);
   });
 
+  it("an old update_plan call keeps its plan when tool results are stubbed", () => {
+    const plan = [
+      { step: "Read the code", status: "completed" },
+      { step: "Make the change", status: "in_progress" },
+    ];
+    const planCall: ChatMessage = {
+      role: "assistant",
+      content: null,
+      tool_calls: [{ id: "p0", type: "function", function: { name: "update_plan", arguments: JSON.stringify({ plan }) } }],
+    };
+    const rest = bigConversation(12, 7000);
+    const messages: ChatMessage[] = [rest[0]!, rest[1]!, planCall, { role: "tool", tool_call_id: "p0", content: "Plan updated" }, ...rest.slice(2)];
+    const contextWindow = Math.ceil(estimateTokens(messages) / 0.75);
+    const out = compactForRequest(messages, { contextWindow });
+
+    expect(out[2]).toEqual(planCall); // older than the last 6 steps, and still whole
+    expect(out.filter((m) => m.role === "tool" && m.content.includes("elided")).length).toBeGreaterThan(0);
+    expect(estimateTokens(out)).toBeLessThan(0.7 * contextWindow);
+  });
+
   it("compacts old tool results above 70%", () => {
     const messages = bigConversation(12, 7000);
     const contextWindow = Math.ceil(estimateTokens(messages) / 0.75);

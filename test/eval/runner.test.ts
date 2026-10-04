@@ -4,9 +4,12 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { loadCases, runEval, type EvalResult } from "../../eval/run";
 import { defaultConfig } from "../../src/core/config";
+import { REPO_CONTEXT_HEADER } from "../../src/core/repo-context";
 import { ScriptedModelClient, call } from "../support/scripted-model";
 
 const ROOT = join(import.meta.dirname, "../..");
+const FIX_THE_TEST = ["cli-flag", "empty-array", "multi-file", "slugify", "sum-off-by-one"];
+const ALL_CASES = [...FIX_THE_TEST, "add-tests", "feature-clamp", "refactor-format", "review-clean", "review-slugify", "static-page"].sort();
 const FIXTURES = join(ROOT, "eval/fixtures");
 const CASES = join(ROOT, "eval/cases");
 
@@ -38,7 +41,7 @@ const cheat = () =>
       path: "test/sum.test.js",
       content: 'import { test } from "node:test";\ntest("ok", () => {});\n',
     }),
-    call("run_command", { command: "rm -rf tmp-nothing" }), // needs approval → auto-approved in eval
+    call("run_command", { command: "rm -rf tmp-nothing" }),
     call("finish", { summary: "Tests pass." }),
   ]);
 
@@ -82,10 +85,10 @@ afterEach(() => {
 describe("S12: eval runner writes a trajectory and scores honestly", () => {
   it("loads the seeded cases", async () => {
     const cases = await loadCases(CASES);
-    expect(cases.map((c) => c.id).sort()).toEqual(["cli-flag", "empty-array", "multi-file", "review-slugify", "slugify", "sum-off-by-one"]);
+    expect(cases.map((c) => c.id).sort()).toEqual(ALL_CASES);
     for (const c of cases) {
-      // The review case (Phase 4) is checked in the S20 describe below.
-      if (c.mode === "code") expect(c).toMatchObject({ check: { cmd: "npm test", expect_exit: 0 }, forbid_changes: ["test/**", "package.json"] });
+      // The review case (Phase 4) is checked in the S20 describe below, the cases of HI-i in the last one.
+      if (FIX_THE_TEST.includes(c.id)) expect(c).toMatchObject({ check: { cmd: "npm test", expect_exit: 0 }, forbid_changes: ["test/**", "package.json"] });
       expect(existsSync(join(FIXTURES, c.fixture))).toBe(true);
     }
     expect(await loadCases(CASES, "sum-off-by-one")).toHaveLength(1);
@@ -115,7 +118,7 @@ describe("S12: eval runner writes a trajectory and scores honestly", () => {
     expect(good.auto_approved).toBe(1); // the finish gate
     expect(good.tokens_in).toBeGreaterThan(0);
     expect(bad).toMatchObject({ run: 2, pass: false, edited_tests: true });
-    expect(bad.auto_approved).toBe(2); // rm + finish
+    expect(bad.auto_approved).toBe(1); // only the finish gate: Code mode asks for no command (HI-j)
 
     for (const r of [1, 2]) {
       const file = join(outDir, `sum-off-by-one-${r}.jsonl`);
@@ -228,5 +231,151 @@ describe("S20: the review case (spec §10)", () => {
     await expect(loadCases(dir)).rejects.toThrow(/expect_finding/);
     writeFileSync(join(dir, "bad.yaml"), "id: bad\nfixture: slugify\nmode: code\ntask: fix it\nforbid_changes: []\n");
     await expect(loadCases(dir)).rejects.toThrow(/check/);
+  });
+});
+
+describe("HI-i: cases beyond 'fix the test'", () => {
+  const finish = () => call("finish", { summary: "Done." });
+  const write = (path: string, content: string) => call("write_file", { path, content });
+
+  const FORMAT_JS = [
+    "export function formatPrice(amount) {",
+    '  return "$" + amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });',
+    "}",
+    "",
+  ].join("\n");
+  const REPORT_JS = [
+    'import { formatPrice } from "./format.js";',
+    "",
+    "export function invoiceLine(item) {",
+    "  return `${item.name} x${item.quantity}: ${formatPrice(item.price * item.quantity)}`;",
+    "}",
+    "",
+    "export function invoiceTotal(items) {",
+    "  return `Total: ${formatPrice(items.reduce((sum, item) => sum + item.price * item.quantity, 0))}`;",
+    "}",
+    "",
+  ].join("\n");
+  const RANGE_TEST = [
+    'import { test } from "node:test";',
+    'import assert from "node:assert/strict";',
+    'import { range } from "../src/range.js";',
+    "",
+    'test("range", () => {',
+    "  assert.deepEqual(range(0, 3), [0, 1, 2]);",
+    "  assert.deepEqual(range(3, 0, -1), [3, 2, 1]);",
+    "  assert.deepEqual(range(2, 2), []);",
+    "  assert.throws(() => range(0, 1, 0), RangeError);",
+    "});",
+    "",
+  ].join("\n");
+  const page = (body: string) => `<!doctype html>\n<html lang="en">\n<head><meta charset="utf-8"><title>Tide Tables</title></head>\n<body>\n${body}\n</body>\n</html>\n`;
+
+  /** A correct change for each new Code case. */
+  const CORRECT: Record<string, () => ScriptedModelClient> = {
+    "feature-clamp": () =>
+      new ScriptedModelClient([
+        call("read_file", { path: "src/math.js" }),
+        call("run_command", { command: "printf '\\nexport function clamp(value, min, max) {\\n  return Math.min(Math.max(value, min), max);\\n}\\n' >> src/math.js" }),
+        call("run_command", { command: "npm test" }),
+        finish(),
+      ]),
+    "refactor-format": () => new ScriptedModelClient([write("src/format.js", FORMAT_JS), write("src/report.js", REPORT_JS), call("run_command", { command: "npm test" }), finish()]),
+    "add-tests": () => new ScriptedModelClient([write("test/range.test.js", RANGE_TEST), call("run_command", { command: "npm test" }), finish()]),
+    "static-page": () =>
+      new ScriptedModelClient([
+        call("run_command", { command: "mkdir -p site" }),
+        write("site/index.html", page('<h1>Tide Tables</h1>\n<p>High and low water, day by day.</p>\n<a href="about.html">About</a>')),
+        write("site/about.html", page('<h1>About</h1>\n<a href="index.html">Back</a>')),
+        finish(),
+      ]),
+  };
+
+  async function evalRuns(caseId: string, scripts: (() => ScriptedModelClient)[], over: Record<string, unknown> = {}) {
+    const [found] = await loadCases(CASES, caseId);
+    const outDir = mkdtempSync(join(tmpdir(), "andrun-eval-"));
+    dirs.push(outDir);
+    const models: ScriptedModelClient[] = [];
+    const results = await runEval({
+      cases: [{ ...found!, ...over }],
+      runs: scripts.length,
+      makeModel: (_c, run) => {
+        const model = scripts[run - 1]!();
+        models.push(model);
+        return model;
+      },
+      outDir,
+      fixturesDir: FIXTURES,
+      config: defaultConfig,
+    });
+    return { results, models };
+  }
+
+  it("scores feature, refactor, add-tests, static-page and clean-review cases", async () => {
+    const cases = await loadCases(CASES);
+    expect(cases.map((c) => c.id).sort()).toEqual(ALL_CASES);
+    expect(cases).toHaveLength(11);
+    expect(cases.find((c) => c.id === "add-tests")).toMatchObject({ mode: "code", expect_changes: ["test/**"], forbid_changes: ["src/**", "package.json"] });
+    expect(cases.find((c) => c.id === "review-clean")).toMatchObject({ mode: "review", expect_no_findings: true });
+    expect(cases.find((c) => c.id === "static-page")!.max_steps).toBeUndefined();
+
+    // Every new Code case fails on the untouched fixture and passes on a correct change.
+    for (const id of Object.keys(CORRECT)) {
+      const { results, models } = await evalRuns(id, [() => new ScriptedModelClient([finish()]), CORRECT[id]!]);
+      expect(results.map((r) => r.pass), id).toEqual([false, true]);
+      expect(results[1], id).toMatchObject({ outcome: "finished", edited_tests: false, tool_errors: 0 });
+      // The eval run starts from the same repo context as a session (HI-e).
+      const first = models[1]!.requests[0]!.messages;
+      expect(first.map((m) => m.role), id).toEqual(["system", "user", "user"]);
+      expect(first[2]!.content!.startsWith(REPO_CONTEXT_HEADER), id).toBe(true);
+    }
+
+    // The static page case has no package.json: adding one fails the run.
+    const added = await evalRuns("static-page", [
+      () =>
+        new ScriptedModelClient([
+          call("run_command", { command: "mkdir -p site" }),
+          write("site/index.html", page('<h1>Tide Tables</h1>\n<a href="about.html">About</a>')),
+          write("site/about.html", page('<a href="index.html">Back</a>')),
+          write("package.json", '{ "name": "site", "scripts": { "test": "vitest" } }\n'),
+          finish(),
+        ]),
+    ]);
+    expect(added.results[0]).toMatchObject({ pass: false, changed_files: expect.arrayContaining(["package.json"]) as string[] });
+
+    // expect_changes: a change that passes the check is still a fail when no file matches a glob.
+    const patch = call("apply_patch", { patch: FIX_PATCH });
+    const withTest = await evalRuns(
+      "sum-off-by-one",
+      [
+        () => new ScriptedModelClient([patch, finish()]),
+        () => new ScriptedModelClient([patch, write("test/empty.test.js", 'import { test } from "node:test";\ntest("ok", () => {});\n'), finish()]),
+      ],
+      { expect_changes: ["test/**"], forbid_changes: ["package.json"] },
+    );
+    expect(withTest.results.map((r) => r.pass)).toEqual([false, true]);
+    expect(withTest.results[0]).toMatchObject({ outcome: "finished", changed_files: ["src/sum.js"] });
+
+    // The clean review passes with no findings and fails with one.
+    const review = await evalRuns("review-clean", [
+      () => new ScriptedModelClient([call("read_file", { path: "src/chunk.js" }), call("run_command", { command: "npm test" }), call("finish", { summary: "No problems found." })]),
+      () => new ScriptedModelClient([call("report_finding", { path: "src/chunk.js", line: 5, severity: "low", text: "Could use a while loop." }), call("finish", { summary: "One finding." })]),
+    ]);
+    expect(review.results.map((r) => r.pass)).toEqual([true, false]);
+    expect(review.results[0]).toMatchObject({ outcome: "finished", changed_files: [] });
+  });
+
+  it("the new fields are validated", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "andrun-cases-"));
+    dirs.push(dir);
+    const base = "id: bad\nfixture: slugify\ntask: do it\nforbid_changes: []\n";
+    writeFileSync(join(dir, "bad.yaml"), `${base}mode: code\ncheck: { cmd: npm test, expect_exit: 0 }\nexpect_changes: src\n`);
+    await expect(loadCases(dir)).rejects.toThrow(/expect_changes/);
+    writeFileSync(join(dir, "bad.yaml"), `${base}mode: code\ncheck: { cmd: npm test, expect_exit: 0 }\nexpect_no_findings: true\n`);
+    await expect(loadCases(dir)).rejects.toThrow(/expect_no_findings/);
+    writeFileSync(join(dir, "bad.yaml"), `${base}mode: review\nexpect_no_findings: true\nexpect_finding: { path: src/slugify.js, lines: [2] }\n`);
+    await expect(loadCases(dir)).rejects.toThrow(/expect_no_findings/);
+    writeFileSync(join(dir, "bad.yaml"), `${base}mode: review\nexpect_no_findings: true\n`);
+    expect(await loadCases(dir)).toHaveLength(1);
   });
 });

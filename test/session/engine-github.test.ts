@@ -320,3 +320,33 @@ describe("Review: draft, gate, post (S11, S12, S14)", () => {
     expect(engine.snapshot()).toMatchObject({ sha: head, status: "awaiting_approval" });
   });
 });
+
+describe("Harness improvement: finish handling is the profile's (HI-d)", () => {
+  it("finish handling follows the profile's onFinish", async () => {
+    // open_pr: Approve opens the pull request, and the session keeps taking messages (round 2 adds a commit, G9).
+    const g = await codeAtGate(HAPPY(), {}, [
+      call("write_file", { path: "test/empty.test.js", content: "// empty\n" }),
+      call("finish", { summary: "Added a test.", title: "Add a test" }),
+    ]);
+    expect(await send(g.engine, { type: "approve", approvalId: g.approvalId })).toEqual([]);
+    expect(g.engine.snapshot()).toMatchObject({ status: "done", pr: { number: 12 } });
+    expect(await send(g.engine, { type: "message", text: "also add a test" })).toEqual([]);
+    expect(g.engine.snapshot()!.status).toBe("awaiting_approval");
+    await send(g.engine, { type: "approve", approvalId: g.engine.snapshot()!.pending!.approvalId });
+    expect(g.fake.pulls).toHaveLength(1);
+    expect(ofType(g.events(), "pr_opened").map((e) => e.updated ?? false)).toEqual([false, true]);
+    expect(g.engine.snapshot()!.status).toBe("done");
+
+    // draft_review: Approve is not how a review ends, and a posted review takes no more messages.
+    const r = await reviewAtGate();
+    expect(await send(r.engine, { type: "approve", approvalId: r.approvalId })).toEqual([{ type: "rejected", reason: "Choose a verdict and post the review." }]);
+    expect(r.engine.snapshot()).toMatchObject({ status: "awaiting_approval", pending: { approvalId: r.approvalId } });
+    expect(await send(r.engine, { type: "post_review", approvalId: r.approvalId, verdict: "COMMENT" })).toEqual([]);
+    expect(ofType(r.events(), "review_posted")).toHaveLength(1);
+    expect(await send(r.engine, { type: "message", text: "one more look" })).toEqual([
+      { type: "rejected", reason: "This review was posted. Start a new review from Pull requests." },
+    ]);
+    // A Code session never accepts post_review.
+    expect(await send(g.engine, { type: "post_review", approvalId: "x", verdict: "COMMENT" })).toEqual([{ type: "rejected", reason: "post_review is only for review sessions" }]);
+  });
+});
