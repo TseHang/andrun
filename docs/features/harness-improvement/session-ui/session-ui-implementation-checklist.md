@@ -150,7 +150,7 @@ A command longer than 60 characters is cut with `…`.
 
 ### S12: The composer shows Stop only while running, and says when a message is read
 **Given** the composer rendered with `running = true`
-**Then** it has a button named `Stop`, and the hint `The agent reads your message after its current step`
+**Then** it has a button named `Stop`, and the hint `The agent reads your message after its current step` (under the input, once a message is typed)
 **And given** `running = false`, **then** there is no `Stop` button and no such hint
 **And** a user item with `pending: true` shows `Queued · read after the current step` under the bubble
 **Test**: Unit — `test/web/render.test.tsx` › "the composer shows Stop and the queue hint only while running"

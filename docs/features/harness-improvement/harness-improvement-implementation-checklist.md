@@ -110,7 +110,7 @@ Constraint found while reading: `publishChanges` takes the first user message as
 ### S7: Finish handling follows `profile.onFinish`, with the behavior unchanged
 **Given** a Code session and a Review session, each at its finish gate
 **When** Approve is sent to both, the review is then posted, and a message is sent to each
-**Then** Code: the pull request opens, the session is `done`, the message starts a new turn and the next Approve adds a commit to the same pull request. Review: Approve is refused with "Choose a verdict and post the review."; after `post_review` the message is refused with "This review was posted. Start a new review from Pull requests."
+**Then** Code: the pull request opens, the session is `done`, the message starts a new turn and the next Approve adds a commit to the same pull request. Review: Approve is refused with "Choose a verdict and post the review."; after `post_review` the message is refused with "This review was posted. Start a new review from Pull requests." (changed by ADR A24: the message starts a new turn)
 **Test**: API — `test/session/engine-github.test.ts` › "finish handling follows the profile's onFinish"
 
 ### S8: The model starts with the repo's context
