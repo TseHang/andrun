@@ -7,6 +7,7 @@ import {
   activityLabel,
   firstLine,
   isPreviewable,
+  severityLabel,
   usageLine,
   changeTotals,
   contrastRatio,
@@ -126,6 +127,12 @@ describe("Session UI: usage line, activity label, previewable paths", () => {
     expect(firstLine('node -e "\nconst fs = require(\'fs\');\nconsole.log(1);\n"')).toBe('node -e " …');
     expect(firstLine("\n  npm test  \n")).toBe("npm test");
     expect(firstLine("")).toBe("");
+  });
+
+  it("severity labels", () => {
+    expect(severityLabel("high")).toBe("High · Fix before merging");
+    expect(severityLabel("medium")).toBe("Medium · Worth fixing");
+    expect(severityLabel("low")).toBe("Low · Optional");
   });
 
   it("previewable paths", () => {

@@ -1,5 +1,5 @@
 // Small pure formatters for the UI (no DOM).
-import type { PlanStep } from "../../../src/core/events";
+import type { PlanStep, Severity } from "../../../src/core/events";
 import { STOP_REASON } from "../../../src/core/types";
 import type { ChangeView, SessionView, StepRow, Usage } from "./reducer";
 
@@ -133,4 +133,15 @@ export function activityLabel(view: SessionView): string | null {
 /** Whether the file can be shown in the preview: HTML pages. */
 export function isPreviewable(path: string): boolean {
   return /\.html?$/i.test(path);
+}
+
+const SEVERITY_LABEL: Record<Severity, string> = {
+  high: "High · Fix before merging",
+  medium: "Medium · Worth fixing",
+  low: "Low · Optional",
+};
+
+/** A finding's severity with what it means: the word is always there, colour only adds to it. */
+export function severityLabel(severity: Severity): string {
+  return SEVERITY_LABEL[severity];
 }

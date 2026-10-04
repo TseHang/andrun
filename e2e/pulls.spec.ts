@@ -8,7 +8,7 @@ test.beforeEach(async ({ request }) => {
 
 test("empty tabs", async ({ page }) => {
   await page.goto("/prs");
-  await expect(page.getByRole("heading", { name: "Pull requests" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Review PRs" })).toBeVisible();
   await expect(page.getByText("TseHang/andrun-demo, live from GitHub")).toBeVisible();
   await expect(page.getByText("No open pull requests.")).toBeVisible();
   await page.getByRole("tab", { name: "Needs review" }).click();
@@ -23,12 +23,13 @@ test("the list shows who wrote each pull request and what can be done", async ({
   await gh.addPull({ number: 13, title: "Add a --json flag to the CLI", headRef: "feat/json-flag", user: "octocat" });
   await page.goto("/prs");
 
-  await expect(s.sidebar.getByRole("link", { name: /Pull requests/ })).toContainText("2");
+  await expect(s.sidebar.getByRole("link", { name: /Review PRs/ })).toContainText("2");
   await expect(page.locator("[data-pr]")).toHaveCount(2);
   await expect(s.prRow(13)).toContainText("octocat");
   await expect(s.prRow(13)).toContainText("feat/json-flag");
   await expect(s.prRow(13)).toContainText("Needs review");
-  await expect(s.prRow(13).getByRole("link", { name: "Start review" })).toHaveAttribute("href", "/prs/13");
+  await expect(s.prRow(13).getByRole("link", { name: "Review with &run" })).toHaveAttribute("href", "/prs/13");
+  await expect(s.prRow(13).getByRole("link", { name: "Start review" })).toHaveCount(0);
   await expect(s.prRow(14)).toContainText("Opened by &run"); // instead of the bot's login
   await expect(s.prRow(14)).toContainText("Needs review");
 
@@ -47,7 +48,7 @@ test("GitHub error on the list", async ({ page }) => {
   await page.goto("/prs");
   const alert = page.getByRole("alert");
   await expect(alert).toContainText("GitHub answered 502");
-  await expect(s.sidebar.getByRole("link", { name: /Pull requests/ })).toHaveText("Pull requests"); // no count
+  await expect(s.sidebar.getByRole("link", { name: /Review PRs/ })).toHaveText("Review PRs"); // no count
   await expect(page.locator("[data-pr]")).toHaveCount(0);
 
   await gh.reset();

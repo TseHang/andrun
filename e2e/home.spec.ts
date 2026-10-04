@@ -17,8 +17,9 @@ test("the picked model is sent and shown", async ({ page }) => {
   await expect(model).toHaveText(/deepseek-v4-pro/);
 
   const mode = page.getByRole("group", { name: "Mode" });
-  // Phase 4 enables Review: a review starts from a pull request, so the switch leads to the list (G6).
-  await expect(mode.getByRole("link", { name: "Review" })).toHaveAttribute("href", "/prs");
+  // A review starts from a pull request (Review PRs in the sidebar), so the switch has no Review.
+  await expect(mode.getByRole("button", { name: "Code" })).toHaveAttribute("aria-pressed", "true");
+  await expect(mode.getByText("Review")).toHaveCount(0);
   await expect(mode.getByRole("button", { name: "Task" })).toBeDisabled();
 
   await page.getByLabel("Task").fill("make the failing test pass");
@@ -95,4 +96,35 @@ test("keyboard", async ({ page }) => {
   });
   expect(ring.tag).toBe("BUTTON");
   expect(ring.outline || ring.shadow).toBe(true);
+});
+
+test("navigation: Code and Review PRs, review sessions are tagged", async ({ page }) => {
+  const s = ui(page);
+  const CODE = "11111111-1111-4111-8111-111111111111";
+  const REVIEW = "22222222-2222-4222-8222-222222222222";
+  await page.route("**/sessions", async (route) => {
+    if (route.request().method() !== "GET") return route.continue();
+    await route.fulfill({
+      json: [
+        { id: CODE, mode: "code", title: "Fix the loop bound", status: "done", created_at: 2, updated_at: 2 },
+        { id: REVIEW, mode: "review", title: "Review PR #14: Add slugify helper", status: "awaiting_approval", created_at: 1, updated_at: 1, pr: 14 },
+      ],
+    });
+  });
+  await page.goto("/");
+
+  await expect(s.sidebar.getByRole("link", { name: "Code", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(s.sidebar.getByRole("link", { name: /^Review PRs/ })).toHaveAttribute("href", "/prs");
+  await expect(s.sidebar.getByRole("link", { name: "Sessions" })).toHaveCount(0);
+  await expect(s.sidebar.getByRole("link", { name: /Pull requests/ })).toHaveCount(0);
+
+  for (const list of [s.sidebar, page.getByRole("region", { name: "Recent sessions" })]) {
+    await expect(list.locator(`a[href="/s/${REVIEW}"] [data-tag="review"]`)).toHaveText("Review");
+    await expect(list.locator(`a[href="/s/${CODE}"] [data-tag]`)).toHaveCount(0);
+  }
+
+  await s.sidebar.getByRole("link", { name: /^Review PRs/ }).click();
+  await expect(page).toHaveURL(/\/prs$/);
+  await expect(s.sidebar.getByRole("link", { name: /^Review PRs/ })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { name: "Review PRs" })).toBeVisible();
 });

@@ -98,6 +98,7 @@ export const seedReviewPull = () =>
   gh.addPull({
     number: 14,
     title: "Add slugify helper",
+    body: "## Why\n\nWe need **slugs** for the URLs.",
     headRef: "agent/1a2b3c4d-1",
     files: [
       { filename: "src/slugify.js", status: "added", additions: 6, deletions: 0, patch: SLUGIFY_PATCH },
@@ -117,7 +118,10 @@ export const ui = (page: Page) => ({
   sandbox: page.getByTestId("sandbox-state"),
   prCard: page.getByTestId("pr-card"),
   reviewCard: page.getByTestId("review-card"),
-  findings: page.getByRole("complementary", { name: "Findings" }),
+  findings: page.getByRole("region", { name: "Findings" }),
+  files: page.getByRole("complementary", { name: "Files changed" }),
+  overview: page.getByRole("region", { name: "Pull request" }),
+  startCard: page.getByRole("region", { name: "&run review" }),
   postBar: page.getByRole("form", { name: "Post review" }),
   prRow: (n: number) => page.locator(`[data-pr="${n}"]`),
   rows: (name?: string) => page.locator(name ? `[data-step-name="${name}"]` : "[data-step-name]"),

@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { Status } from "../../../src/core/events";
 import type { ClientFrame } from "../../../src/session/protocol";
 import type { FindingView, SessionView } from "../state/reducer";
-import { SEVERITY } from "./PatchView";
+import { FindingHeader } from "./PatchView";
 
 const BADGE = "rounded-full bg-fill px-2 py-px text-[11px] text-text-secondary";
 const ACTION = "h-7 cursor-pointer rounded-lg px-2.5 font-medium text-text-secondary disabled:cursor-default disabled:opacity-40";
@@ -14,7 +14,8 @@ function countText(findings: FindingView[], running: boolean): string {
   return dismissed > 0 ? `${kept} kept, ${dismissed} dismissed` : `${kept} kept`;
 }
 
-export function FindingsPanel({ view, status, send, onJump }: { view: SessionView; status: Status; send: (f: ClientFrame) => boolean; onJump: (path: string, line: number) => void }) {
+/** The review's findings as posts from &run, which the human edits, dismisses or restores before posting. */
+export function Findings({ view, status, send, onJump }: { view: SessionView; status: Status; send: (f: ClientFrame) => boolean; onJump: (path: string, line: number) => void }) {
   const [editing, setEditing] = useState<{ id: string; draft: string } | null>(null);
   const running = status === "running";
   const editable = status === "awaiting_approval" && !view.posted;
@@ -27,7 +28,7 @@ export function FindingsPanel({ view, status, send, onJump }: { view: SessionVie
   };
 
   return (
-    <aside aria-label="Findings" className="flex w-[340px] shrink-0 flex-col gap-3 overflow-y-auto border-l border-black/8 p-5">
+    <section aria-label="Findings" className="mt-6 flex flex-col gap-3">
       <div className="flex items-baseline gap-2">
         <h2 className="m-0 text-[15px] font-semibold tracking-[-0.01em]">Findings</h2>
         {(running || findings.length > 0) && <span className="text-text-secondary">{countText(findings, running)}</span>}
@@ -36,12 +37,11 @@ export function FindingsPanel({ view, status, send, onJump }: { view: SessionVie
       {!running && findings.length === 0 && <p className="m-0 text-text-secondary">No findings.</p>}
       <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
         {findings.map((f) => {
-          const sev = SEVERITY[f.severity];
           const where = `${f.path}:${f.line}`;
           return (
-            <li key={f.id} data-finding={f.id} className={`flex flex-col gap-1.5 rounded-xl p-3 shadow-[0_0_0_1px_rgba(0,0,0,0.08)] ${f.dismissed ? "bg-sidebar text-text-tertiary" : ""}`}>
+            <li key={f.id} data-finding={f.id} className={`flex flex-col gap-2 rounded-2xl p-3.5 shadow-[0_0_0_1px_rgba(0,0,0,0.08)] ${f.dismissed ? "bg-sidebar text-text-tertiary" : ""}`}>
+              <FindingHeader severity={f.severity} muted={f.dismissed} />
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <span className={`text-xs font-semibold ${f.dismissed ? "" : sev.className}`}>{sev.label}</span>
                 {f.inline ? (
                   <a
                     href={`#${where}`}
@@ -84,7 +84,7 @@ export function FindingsPanel({ view, status, send, onJump }: { view: SessionVie
                 </>
               ) : (
                 <>
-                  <p className="m-0 break-words whitespace-pre-wrap">{f.text}</p>
+                  <p className={`m-0 break-words whitespace-pre-wrap ${f.dismissed ? "line-through" : ""}`}>{f.text}</p>
                   <div className="flex gap-1">
                     {f.dismissed ? (
                       <button type="button" disabled={!editable} onClick={() => send({ type: "finding", id: f.id, dismissed: false })} className={ACTION}>
@@ -108,6 +108,6 @@ export function FindingsPanel({ view, status, send, onJump }: { view: SessionVie
         })}
       </ul>
       {running && <p className="m-0 text-xs text-text-secondary">Still reading. More findings may appear.</p>}
-    </aside>
+    </section>
   );
 }

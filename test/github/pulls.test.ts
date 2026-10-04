@@ -72,14 +72,56 @@ describe("pull requests (spec D2: list, read)", () => {
       additions: 2,
       deletions: 0,
       changedFiles: 2,
+      body: "",
     });
     expect(pull.files).toEqual([
       { path: "src/slugify.js", status: "added", additions: 2, deletions: 0, patch: PATCH },
       { path: "logo.png", status: "added", additions: 0, deletions: 0, patch: null },
     ]);
+    fake.pulls.find((p) => p.number === 13)!.body = "## Why\n\nWe need **flags**.";
+    expect(await github.getPull(13)).toMatchObject({ body: "## Why\n\nWe need **flags**." });
+    (fake.pulls.find((p) => p.number === 12) as { body: string | null }).body = null; // GitHub sends null for an empty description
+    expect(await github.getPull(12)).toMatchObject({ body: "" });
     expect(await github.getPull(16)).toMatchObject({ fork: true });
     expect(await github.getPull(11)).toMatchObject({ state: "closed" });
     await expect(github.getPull(99)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("reads a file at the pull request's head commit", async () => {
+    const odd = "docs/a b #1 é.html";
+    const { fake, github } = setup({
+      files: { "README.md": "# demo\n", "index.html": "<h1>hi é</h1>\n", [odd]: "<p>ok</p>\n", "empty.html": "", "big.html": "x".repeat(1_000_001) },
+    });
+    fake.addPull({ number: 30, title: "Page", headRef: "feat/page" });
+    fake.addPull({ number: 31, title: "From a fork", headRef: "patch-1", user: "stranger", headRepo: "stranger/andrun-demo" });
+    const sha = fake.refs.get("main")!;
+
+    expect(await github.getPullFile(30, "index.html")).toBe("<h1>hi é</h1>\n");
+    expect(fake.requests.at(-1)!.path).toBe(`/repos/TseHang/andrun-demo/contents/index.html?ref=${sha}`);
+    // A path with spaces, # and non-ASCII characters is escaped segment by segment.
+    expect(await github.getPullFile(30, odd)).toBe("<p>ok</p>\n");
+    expect(fake.requests.at(-1)!.path).toBe(`/repos/TseHang/andrun-demo/contents/docs/a%20b%20%231%20%C3%A9.html?ref=${sha}`);
+
+    expect(await github.getPullFile(30, "empty.html")).toBe(""); // an empty file is a file
+    expect(await github.getPullFile(30, "missing.html")).toBeNull();
+    expect(await github.getPullFile(30, "docs")).toBeNull(); // a directory
+    expect(await github.getPullFile(30, "big.html")).toBeNull(); // GitHub sends no content over 1 MB
+
+    // A path that would leave /contents/ is refused without a contents request.
+    const count = fake.requests.length;
+    for (const bad of ["../../pulls/30", "docs/../../../git/refs", "./index.html", "/index.html", "docs//a.html", "docs/"]) {
+      expect(await github.getPullFile(30, bad), bad).toBeNull();
+    }
+    expect(fake.requests.slice(count).some((r) => !/\/pulls\/30$/.test(r.path))).toBe(false);
+
+    // A fork's pull request: nothing is read (Henry, 2026-10-04).
+    const before = fake.requests.length;
+    expect(await github.getPullFile(31, "index.html")).toBeNull();
+    expect(fake.requests.slice(before).some((r) => r.path.includes("/contents/"))).toBe(false);
+
+    await expect(github.getPullFile(99, "index.html")).rejects.toMatchObject({ status: 404 });
+    fake.fail({ path: /\/contents\//, status: 502 });
+    await expect(github.getPullFile(30, "index.html")).rejects.toMatchObject({ status: 502 });
   });
 
   it("resolves the default branch and its head", async () => {

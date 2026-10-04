@@ -386,6 +386,7 @@ describe("router (Phase 3: P3-c, P3-d)", () => {
 
   it("reads one pull request for the review start page", async () => {
     const f = withPulls();
+    f.fake.pulls.find((p) => p.number === 14)!.body = "## Why\n\nWe need **slugs**.";
     const res = await handle(req("GET", "/pulls/14"), f.env);
     expect(res.status).toBe(200);
     expect(await json(res)).toMatchObject({
@@ -400,6 +401,7 @@ describe("router (Phase 3: P3-c, P3-d)", () => {
       deletions: 0,
       changedFiles: 1,
       url: "https://github.com/TseHang/andrun-demo/pull/14",
+      body: "## Why\n\nWe need **slugs**.",
       files: [{ path: "src/slugify.js", status: "added", additions: 2, deletions: 0, patch: "@@ -0,0 +1,2 @@\n+a\n+b" }],
     });
     await expectError(await handle(req("GET", "/pulls/99"), f.env), 404);
@@ -408,6 +410,44 @@ describe("router (Phase 3: P3-c, P3-d)", () => {
     // QA: a number GitHub cannot have is refused here, without a GitHub request.
     await expectError(await handle(req("GET", "/pulls/99999999999999999999"), f.env), 404, /^not found$/);
     await expectError(await handle(req("POST", "/pulls"), f.env), 404);
+  });
+
+  it("reads a file of a pull request at its head commit", async () => {
+    const f = withPulls();
+    f.fake.pulls.find((p) => p.number === 14)!.contents = { "index.html": "<h1>hi</h1>\n" };
+    f.fake.addPull({ number: 16, title: "From a fork", headRef: "patch-1", user: "stranger", headRepo: "stranger/andrun-demo", contents: { "index.html": "<h1>fork</h1>" } });
+
+    const res = await handle(req("GET", "/pulls/14/files?path=index.html"), f.env);
+    expect(res.status).toBe(200);
+    expect(await json(res)).toEqual({ path: "index.html", content: "<h1>hi</h1>\n" });
+    expect(f.fake.requests.at(-1)!.path).toBe(`/repos/TseHang/andrun-demo/contents/index.html?ref=${f.fake.refs.get("main")}`);
+    expect(f.touched).toEqual([]); // no session Durable Object is woken
+    expect(f.readKeys).toEqual([IP_A]);
+
+    await expectError(await handle(req("GET", "/pulls/14/files"), f.env), 404, /^no such file$/);
+    await expectError(await handle(req("GET", "/pulls/14/files?path="), f.env), 404, /^no such file$/);
+    await expectError(await handle(req("GET", "/pulls/14/files?path=missing.html"), f.env), 404, /^no such file$/);
+    // Only HTML pages are served: the rest of the repo is not readable through the preview (code review).
+    const asked = f.fake.requests.length;
+    for (const other of ["README.md", ".env", "src/slugify.js", "index.html.txt", "html"]) {
+      await expectError(await handle(req("GET", `/pulls/14/files?path=${other}`), f.env), 404, /^no such file$/);
+    }
+    expect(f.fake.requests.length).toBe(asked); // refused before any GitHub request
+    await expectError(await handle(req("GET", "/pulls/16/files?path=index.html"), f.env), 404, /^no such file$/); // a fork
+    await expectError(await handle(req("GET", "/pulls/99/files?path=index.html"), f.env), 404);
+    await expectError(await handle(req("GET", "/pulls/abc/files?path=index.html"), f.env), 404, /^not found$/);
+    await expectError(await handle(req("GET", "/pulls/14/files/extra?path=index.html"), f.env), 404, /^not found$/);
+    await expectError(await handle(req("GET", "/pulls/14/other?path=index.html"), f.env), 404, /^not found$/);
+    await expectError(await handle(req("POST", "/pulls/14/files?path=index.html"), f.env), 404);
+
+    f.fake.fail({ path: /\/contents\//, status: 502 });
+    await expectError(await handle(req("GET", "/pulls/14/files?path=index.html"), f.env), 502, /GitHub.*502/);
+
+    const limited = withPulls({ githubReadLimiter: limiter(1).binding });
+    expect((await handle(req("GET", "/pulls/14"), limited.env)).status).toBe(200);
+    const refused = await handle(req("GET", "/pulls/14/files?path=README.md"), limited.env);
+    await expectError(refused, 429);
+    expect(refused.headers.get("retry-after")).toBe("60");
   });
 
   it("review sessions are created from an open pull request", async () => {
