@@ -256,6 +256,16 @@ The questions left open here were decided in the Phase 4 checklist (Henry, 2026-
 
 | A15 | A5, A7 | Two roles, kept apart: the **bot** is the coder (opens pull requests, pushes commits, and will answer comments on its pull requests); **TseHang** is the reviewer (the PAT is used only to post reviews). The second identity exists because an account cannot review its own pull request. The My PR page (A7) was built and then taken out of Phase 4 (git tag `my-pr-a7`); it comes back after its design is settled. (Henry, 2026-10-03.) | 4 |
 
+Harness improvement, Slice A (Henry, 2026-10-04; `docs/features/harness-improvement/`):
+
+| # | Changes | What | Phase |
+|---|---|---|---|
+| A16 | D2 | The step limit and the session token budget are gone. One safety limit per turn, in money: ¥50 of model calls at list price (4,000,000 tokens for a model with no price). A turn runs from a user message to the next time the agent stops for the user; Approve and Reject continue the turn. `budget_exceeded` takes a message and starts a new turn. `maxSteps` stays as an optional setting for eval cases. The session's total cost is shown, in red above ¥10. | HI-A |
+| A17 | spec §6 | In Code mode every command runs without asking. `finish` and a patch that deletes files still ask. Review is unchanged. Reason: the sandbox has no network and no secrets, is thrown away, and nothing leaves it without Approve. | HI-A |
+| A18 | D4 | `onFinish` is read by the session engine: `open_pr` publishes on Approve and keeps taking messages, `draft_review` ends at `post_review`, `answer` ends the run. New Code tool `update_plan`. | HI-A |
+| A19 | D7 | New event `plan_updated {plan: [{step, status}]}`. The plan is not in the loop state: it stays in the assistant message's tool call, which compaction never changes (D17). | HI-A |
+| A20 | D17 | `read_file` takes `offset` and `limit`. A read over the 8 KB cap returns whole lines and a note with the next `offset`, instead of head plus tail. After the sandbox is first set up, one user message with the repo's `AGENTS.md` (Code only), `package.json` scripts and top-level entries follows the task. | HI-A |
+
 Not built: the product spec's search box and reviewer-written comments (not drawn).
 
 ## Codex Position

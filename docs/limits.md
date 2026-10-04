@@ -50,9 +50,9 @@ Last updated: 2026-10-03 (Phase 4).
 
 | # | Limit | Possible fix |
 |---|---|---|
-| C1 | **Spend has a rate limit but no hard ceiling.** 5 new sessions per minute per IP, each up to 400k tokens. `KILL_SWITCH="1"` is the stop. Accepted for now (Henry, 2026-10-01). Revisit before the URL is shared publicly. | A cap on concurrently running sessions, or a daily session cap, in the WorkspaceDO. |
+| C1 | **Spend has a rate limit but no hard ceiling.** 5 new sessions per minute per IP. A session has no budget: each turn stops at ¥50 (list price), and a message starts another turn. `KILL_SWITCH="1"` is the stop. Accepted for now (Henry, 2026-10-01). Revisit before the URL is shared publicly. | A cap on concurrently running sessions, or a daily session cap, in the WorkspaceDO. |
 | C5 | **Anyone with the URL can open pull requests as the bot and post reviews as TseHang** (ADR Q1, accepted). Limits: 10 GitHub writes per minute per IP, 60 pull request reads per minute per IP. `GITHUB_WRITES="0"` or `KILL_SWITCH="1"` turns the writes off. | A passcode or login. |
-| C2 | The budget is **per session**. A message sent after `budget_exceeded` is accepted and shown, but the new turn stops again at once. | Say so in the UI; or a per-turn budget. |
+| C2 | **Closed (harness improvement, 2026-10-04).** The limit is per turn: ¥50 of model calls at list price, or 4,000,000 tokens for a model with no price. A message after `budget_exceeded` starts a new turn with a fresh limit. The header shows the session's total cost, in red above ¥10. | — |
 | C3 | `POST /sessions/:id/debug/kill-sandbox` is public while `DEBUG_ENDPOINTS="1"`. It gives no more power than the public delete. | Set `DEBUG_ENDPOINTS="0"` after the demo. |
 | C4 | Anyone with the URL sees and can delete every session (one shared workspace, spec D3). | Out of scope for this version. |
 
