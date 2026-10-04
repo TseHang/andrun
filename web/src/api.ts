@@ -127,3 +127,11 @@ export async function getPull(n: number): Promise<PullDetail | "not_found"> {
   const body = (await res.json().catch(() => null)) as { error?: string } | null;
   throw new Error(body?.error ?? "Could not load the pull request.");
 }
+
+/** A changed file's saved content, null when there is none; throws on other failures. */
+export async function getFile(id: string, path: string): Promise<string | null> {
+  const res = await fetch(`/sessions/${id}/files?path=${encodeURIComponent(path)}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`file ${res.status}`);
+  return ((await res.json()) as { path: string; content: string }).content;
+}

@@ -229,7 +229,7 @@ Not applicable: auth (the app has none); rate limiting on the file route (it rea
 | 0 | Acceptance tests, test setup for render tests, fake-model markers, the two dependencies | all scenarios fail for the right reason | ✅ done |
 | 1 | Backend: `stopped` event, `stop` frame, core + engine stop; `fileContent`, DO RPC, `GET /sessions/:id/files` | S7–S10, S17, stop and file edge cases | ✅ done |
 | 2 | Web state + conversation: reducer `stopped`, `usageLine`, `activityLabel`, `isPreviewable`; Markdown, marker, usage line, indicator, Stop, hints, plan card above the composer | S1–S6, S11, S12, S14 (render) | ✅ done |
-| 3 | Changes panel: collapsible file cards, hide/show panel, HTML preview | S15, S16, S18 (E2E only) | ⏳ pending |
+| 3 | Changes panel: collapsible file cards, hide/show panel, HTML preview | S15, S16, S18 (E2E only) | ✅ done |
 | 4 | E2E run and runtime check | S13–S16, S18, runtime edge cases | ⏳ pending |
 
 ### Build notes
@@ -237,3 +237,4 @@ Not applicable: auth (the app has none); rate limiting on the file route (it rea
 - `e2e/home.spec.ts` read the model name from the usage line to show the chosen model was used. The line no longer has it; the spec keeps its check of the create request's `model` and now matches the new line format.
 - One E2E was added beyond the list: `e2e/session-ui.spec.ts` › "an agent reply is rendered as markdown, with the & marker".
 - Test fixed after unit 2: "raw HTML in a reply is not rendered as elements" forbade the string `onclick=` anywhere in the output, which also forbids showing the HTML as text (what S2 asks for). It now forbids a `div` element carrying `onclick` and checks the tags are shown escaped. The implementer's tag-stripping plugin, written to satisfy the wrong assertion, was removed.
+- Added after the commit security check: a markdown image in a reply would be fetched by the browser on render, so a reply could send data out in the image URL. Images are rendered as links (`test/web/render.test.tsx` › "an image in a reply is a link, never loaded by the page").

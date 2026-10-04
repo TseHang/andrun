@@ -80,6 +80,16 @@ describe("Session UI: the conversation (slice B)", () => {
     expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
   });
 
+  it("an image in a reply is a link, never loaded by the page", () => {
+    const html = timeline(reply("Here: ![chart](https://evil.example/pixel.png?q=secret) and ![](https://evil.example/2.png)"));
+    expect(html).not.toMatch(/<img/i);
+    expect(html).not.toMatch(/src=/i);
+    const link = /<a [^>]*>chart<\/a>/.exec(html)?.[0] ?? "";
+    expect(link).toContain('href="https://evil.example/pixel.png?q=secret"');
+    expect(link).toContain('target="_blank"');
+    expect(html).toMatch(/<a [^>]*>image<\/a>/);
+  });
+
   it("a javascript: link has no href", () => {
     const html = timeline(reply("[click](javascript:alert(1)) and [ok](https://example.com)"));
     expect(html).not.toMatch(/href="\s*javascript:/i);

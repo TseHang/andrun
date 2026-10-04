@@ -35,6 +35,13 @@ const COMPONENTS: Components = {
       </div>
     );
   },
+  // An image would be fetched as soon as the reply renders, which lets a reply send data out in the URL.
+  // It is shown as a link the user can choose to open.
+  img: ({ src, alt }) => (
+    <a href={typeof src === "string" ? src : undefined} target="_blank" rel="noreferrer" className="text-accent-text">
+      {alt || "image"}
+    </a>
+  ),
   th: styled("th", "border border-black/10 px-2.5 py-1 text-left font-semibold"),
   td: styled("td", "border border-black/10 px-2.5 py-1"),
 };

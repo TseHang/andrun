@@ -1,21 +1,41 @@
+import { useState } from "react";
 import type { SessionView } from "../state/reducer";
 import { parseDiff } from "../state/diff";
-import { changeTotals } from "../state/format";
+import { changeTotals, isPreviewable } from "../state/format";
 import { DiffView } from "./DiffView";
+import { HtmlPreview } from "./HtmlPreview";
 
-function Card({ change }: { change: SessionView["changes"][number] }) {
+const SMALL_BUTTON = "shrink-0 cursor-pointer rounded-full bg-fill px-2.5 py-0.5 text-xs font-medium";
+
+function Card({ sessionId, change }: { sessionId: string; change: SessionView["changes"][number] }) {
+  const [open, setOpen] = useState(true);
+  const [preview, setPreview] = useState(false);
   const isNew = change.diff !== null && parseDiff(change.diff).isNew;
+  const canPreview = change.diff !== null && isPreviewable(change.path);
   return (
-    <div className="mb-3 overflow-hidden rounded-xl border border-black/10">
-      <div className="flex items-center gap-2 bg-sidebar px-3 py-2 font-mono text-xs">
-        <span className="min-w-0 grow truncate font-semibold">{change.path}</span>
-        <span className="shrink-0 text-text-secondary">{isNew ? `new file · +${change.additions}` : `+${change.additions} −${change.deletions}`}</span>
+    <div data-file={change.path} className="mb-3 overflow-hidden rounded-xl border border-black/10">
+      <div className="flex items-center gap-2 bg-sidebar pr-3 font-mono text-xs">
+        <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex min-w-0 grow cursor-pointer items-center gap-2 py-2 pl-3 text-left">
+          <svg aria-hidden="true" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" className={`shrink-0 text-text-secondary ${open ? "rotate-90" : ""}`}>
+            <path d="M3.5 1.5 7 5l-3.5 3.5" />
+          </svg>
+          <span className="min-w-0 grow truncate font-semibold">{change.path}</span>
+          <span className="shrink-0 text-text-secondary">{isNew ? `new file · +${change.additions}` : `+${change.additions} −${change.deletions}`}</span>
+        </button>
+        {canPreview && (
+          <button type="button" onClick={() => setPreview(!preview)} className={SMALL_BUTTON}>
+            {preview ? "Diff" : "Preview"}
+          </button>
+        )}
       </div>
-      {change.diff === null ? (
-        <div className="px-3 py-2.5 text-xs text-text-secondary">Changed by a command. Diff not available.</div>
-      ) : (
-        <DiffView diff={change.diff} />
-      )}
+      {open &&
+        (change.diff === null ? (
+          <div className="px-3 py-2.5 text-xs text-text-secondary">Changed by a command. Diff not available.</div>
+        ) : canPreview && preview ? (
+          <HtmlPreview sessionId={sessionId} path={change.path} version={change.diff} />
+        ) : (
+          <DiffView diff={change.diff} />
+        ))}
     </div>
   );
 }
@@ -29,7 +49,7 @@ function InfoRow({ label, children, testId }: { label: string; children: string;
   );
 }
 
-export function ChangesPanel({ view, sandboxRunning, sha }: { view: SessionView; sandboxRunning: boolean; sha: string }) {
+export function ChangesPanel({ id, view, sandboxRunning, sha, onHide }: { id: string; view: SessionView; sandboxRunning: boolean; sha: string; onHide: () => void }) {
   const totals = changeTotals(view.changes);
   const wide = view.changes.length > 0 || view.gate !== null;
   const last = view.lastCommand;
@@ -40,7 +60,8 @@ export function ChangesPanel({ view, sandboxRunning, sha }: { view: SessionView;
     >
       <div className="mb-3 flex items-baseline justify-between">
         <h2 className="text-[15px] font-semibold">Changes</h2>
-        <span className="text-xs text-text-secondary">
+        <span className="flex items-baseline gap-3 text-xs text-text-secondary">
+          <span>
           {totals.files === 0 ? (
             "None yet"
           ) : (
@@ -49,6 +70,10 @@ export function ChangesPanel({ view, sandboxRunning, sha }: { view: SessionView;
               <span className="text-done-text">+{totals.additions}</span> <span className="text-failed">−{totals.deletions}</span>
             </>
           )}
+          </span>
+          <button type="button" onClick={onHide} className={SMALL_BUTTON}>
+            Hide changes
+          </button>
         </span>
       </div>
       {view.testPaths.length > 0 && (
@@ -63,7 +88,7 @@ export function ChangesPanel({ view, sandboxRunning, sha }: { view: SessionView;
           <div className="mt-1 text-xs text-text-secondary">Diffs appear here as the agent edits files.</div>
         </div>
       ) : (
-        view.changes.map((c) => <Card key={c.path} change={c} />)
+        view.changes.map((c) => <Card key={c.path} sessionId={id} change={c} />)
       )}
       {last && (
         <div className="mb-4 text-xs break-words text-text-secondary">
