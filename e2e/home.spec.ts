@@ -28,7 +28,7 @@ test("the picked model is sent and shown", async ({ page }) => {
   ]);
   expect(req.postDataJSON()).toEqual({ mode: "code", task: "make the failing test pass", model: "deepseek-ai/deepseek-v4-pro" });
 
-  await expect(ui(page).timeline.getByText(/deepseek-v4-pro · [\d,]+ in · [\d,]+ out · \d+\.\d s/).first()).toBeVisible({ timeout: 60_000 });
+  await expect(ui(page).timeline.getByText(/^[\d.]+k? in · [\d.]+k? out · \d+\.\ds$/).first()).toBeVisible({ timeout: 60_000 });
 });
 
 test("429, 503 and 400 are shown without losing the task", async ({ page }) => {

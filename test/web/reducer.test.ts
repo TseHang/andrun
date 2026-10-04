@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { AgentEvent, EventBody, PlanStep } from "../../src/core/events";
 import { RESTORED_NOTE, type ServerFrame } from "../../src/session/protocol";
-import { planNote, rowSummary, rowTone } from "../../web/src/state/format";
+import { activityLabel, planNote, rowSummary, rowTone } from "../../web/src/state/format";
 import { addPending, dropStreaming, initialView, markSending, reduce, type SessionView, type StepRow } from "../../web/src/state/reducer";
 
 /** Builds events with increasing seq and ts, like one session's log. */
@@ -662,5 +662,41 @@ describe("Conversational flow: questions and waiting", () => {
       g({ type: "status", status: "awaiting_input" }, { step: 1 }),
     ]);
     expect(kinds(asked)).toEqual(["question"]);
+  });
+});
+
+describe("Session UI: a stopped run (UI-a)", () => {
+  it("stopped closes open rows and adds a notice", () => {
+    const ev = script();
+    const running = run([
+      ev({ type: "status", status: "running" }),
+      ev({ type: "message", id: "u1", role: "user", text: "go" }),
+      ev({ type: "tool_call", callId: "c1", name: "run_command", args: { command: "npm test" }, summary: "Run npm test" }, { step: 1 }),
+      ev({ type: "message_delta", id: "m2", text: "Let me" }, { step: 2 }),
+    ]);
+    expect(rows(running)[0]!.done).toBe(false);
+    expect(running.items.some((i) => i.kind === "assistant" && i.streaming)).toBe(true);
+
+    const v = run([ev({ type: "stopped" }), ev({ type: "status", status: "awaiting_input" })], running);
+    expect(v.status).toBe("awaiting_input");
+    expect(rows(v)[0]).toMatchObject({ done: true, expanded: false });
+    // Deltas are not persisted: the half-written reply goes, so a replay shows the same timeline.
+    expect(v.items.some((i) => i.kind === "assistant")).toBe(false);
+    expect(v.items.at(-1)).toMatchObject({ kind: "notice", title: "Stopped", message: "Changes so far are kept. Send a message to continue." });
+    // One notice only: not also "The agent stopped without a reply."
+    expect(v.items.filter((i) => i.kind === "notice")).toHaveLength(1);
+    expect(activityLabel(v)).toBeNull();
+
+    // The persisted log (no deltas) replays to the same timeline.
+    const replay = script();
+    const replayed = run([
+      replay({ type: "status", status: "running" }),
+      replay({ type: "message", id: "u1", role: "user", text: "go" }),
+      replay({ type: "tool_call", callId: "c1", name: "run_command", args: { command: "npm test" }, summary: "Run npm test" }, { step: 1 }),
+      replay({ type: "stopped" }),
+      replay({ type: "status", status: "awaiting_input" }),
+    ]);
+    expect(kinds(replayed)).toEqual(kinds(v));
+    expect(kinds(v)).toEqual(["user", "steps", "notice"]);
   });
 });

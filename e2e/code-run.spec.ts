@@ -71,9 +71,9 @@ test("a redirect is queued and then injected", async ({ page, request }) => {
   await s.composer.getByRole("button", { name: "Send" }).click();
   const bubble = s.timeline.getByText("also rename the helper", { exact: true });
   await expect(bubble).toBeVisible({ timeout: 1000 });
-  await expect(s.timeline.getByText("Queued for the next step")).toBeVisible({ timeout: 1000 });
+  await expect(s.timeline.getByText("Queued · read after the current step")).toBeVisible({ timeout: 1000 });
 
-  await expect(s.timeline.getByText("Queued for the next step")).toHaveCount(0, { timeout: 60_000 });
+  await expect(s.timeline.getByText("Queued · read after the current step")).toHaveCount(0, { timeout: 60_000 });
   await expect(bubble).toHaveCount(1);
 });
 

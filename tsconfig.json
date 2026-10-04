@@ -25,6 +25,7 @@
     "*.config.ts"
   ],
   "exclude": [
+    "test/**/*.tsx",
     "src/worker/index.ts",
     "src/worker/env.ts",
     "src/worker/github.ts",
