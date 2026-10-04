@@ -11,7 +11,7 @@ import { Composer } from "./Composer";
 import { DeleteDialog } from "./DeleteDialog";
 import { PlanCard } from "./PlanCard";
 import { QuestionCard } from "./QuestionCard";
-import { PostBar, PostedBar } from "./ReviewBars";
+import { PostBar } from "./ReviewBars";
 import { ReviewBody } from "./ReviewSession";
 import { SessionHeader } from "./SessionHeader";
 import { Spinner } from "./Spinner";
@@ -68,7 +68,7 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
   const more = useRef<HTMLButtonElement>(null);
   const status = view.status ?? snap.status;
   const review = snap.mode === "review";
-  const session = { id, code: snap.mode === "code", baseBranch: snap.baseBranch };
+  const session = { id, code: snap.mode === "code", baseBranch: snap.baseBranch, pr: snap.pr?.number ?? null };
 
   // Re-read the snapshot (sandboxRunning) and the list after each status change.
   const first = useRef(true);
@@ -142,9 +142,7 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
           <PlanCard plan={view.plan} active={status === "running"} />
         </div>
       )}
-      {review && view.posted ? (
-        <PostedBar pr={snap.pr?.number ?? null} />
-      ) : view.gate && status === "awaiting_approval" ? (
+      {view.gate && status === "awaiting_approval" ? (
         review && view.gate.tool === "finish" ? (
           <PostBar view={view} gate={view.gate} send={send} update={update} />
         ) : (

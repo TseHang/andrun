@@ -168,7 +168,7 @@ Data flow: page → `GET /pulls/:n` (now with `body`) → `PullOverview`. Previe
 - [x] `prefers-reduced-motion: reduce`: the verdict switch and the fold arrows change without a transition — **Test**: `e2e/review.spec.ts` › inside S14's test with `page.emulateMedia({ reducedMotion: "reduce" })`, computed `transition-duration` is `0s`
 - [x] Zero findings: the Findings section says "No findings." and the post bar reads "0 inline comments, 0 notes in the summary" — **Test**: `test/web/render.test.tsx` › "no findings"
 - [~] deferred — code path read, not exercised in the browser: The diff fails to load in a review session: the panel shows the message; the main column and the post bar still work — **Runtime check**: block `/pulls/:n` in the browser
-- [x] After posting: the "This review was posted" bar and "Review again" still show under the main column — **Test**: S10's test (existing assertions)
+- [x] ~~After posting: the "This review was posted" bar and "Review again" still show under the main column~~ Replaced by ADR A24: the composer returns and "Review again" is in the posted card — **Test**: S10's test
 - [x] Regression: Code session layout, Changes panel and its preview are unchanged — **Test**: `e2e/session-ui.spec.ts`, `e2e/code-run.spec.ts` (existing, unchanged)
 
 Not applicable: auth (none in the app), pagination (the files request is capped at 100 as before), real-time reconnect (unchanged, covered by `e2e/reconnect.spec.ts`).

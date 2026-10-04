@@ -14,11 +14,11 @@ function countText(findings: FindingView[], running: boolean): string {
   return dismissed > 0 ? `${kept} kept, ${dismissed} dismissed` : `${kept} kept`;
 }
 
-/** The review's findings as posts from &run, which the human edits, dismisses or restores before posting. */
+/** The review's findings as posts from &run, which the human edits, dismisses or restores before posting. A posted finding is fixed. */
 export function Findings({ view, status, send, onJump }: { view: SessionView; status: Status; send: (f: ClientFrame) => boolean; onJump: (path: string, line: number) => void }) {
   const [editing, setEditing] = useState<{ id: string; draft: string } | null>(null);
   const running = status === "running";
-  const editable = status === "awaiting_approval" && !view.posted;
+  const atGate = status === "awaiting_approval";
   const findings = view.findings;
 
   const save = (f: FindingView) => {
@@ -38,6 +38,7 @@ export function Findings({ view, status, send, onJump }: { view: SessionView; st
       <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
         {findings.map((f) => {
           const where = `${f.path}:${f.line}`;
+          const editable = atGate && !f.posted;
           return (
             <li key={f.id} data-finding={f.id} className={`flex flex-col gap-2 rounded-2xl p-3.5 shadow-[0_0_0_1px_rgba(0,0,0,0.08)] ${f.dismissed ? "bg-sidebar text-text-tertiary" : ""}`}>
               <FindingHeader severity={f.severity} muted={f.dismissed} />
@@ -60,6 +61,7 @@ export function Findings({ view, status, send, onJump }: { view: SessionView; st
                   </>
                 )}
                 {f.edited && <span className={BADGE}>Edited</span>}
+                {f.posted && <span className={BADGE}>Posted</span>}
               </div>
               {editing?.id === f.id ? (
                 <>

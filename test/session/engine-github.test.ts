@@ -337,15 +337,12 @@ describe("Harness improvement: finish handling is the profile's (HI-d)", () => {
     expect(ofType(g.events(), "pr_opened").map((e) => e.updated ?? false)).toEqual([false, true]);
     expect(g.engine.snapshot()!.status).toBe("done");
 
-    // draft_review: Approve is not how a review ends, and a posted review takes no more messages.
+    // draft_review: Approve is not how a review ends; a posted review takes more messages (findings.test.ts).
     const r = await reviewAtGate();
     expect(await send(r.engine, { type: "approve", approvalId: r.approvalId })).toEqual([{ type: "rejected", reason: "Choose a verdict and post the review." }]);
     expect(r.engine.snapshot()).toMatchObject({ status: "awaiting_approval", pending: { approvalId: r.approvalId } });
     expect(await send(r.engine, { type: "post_review", approvalId: r.approvalId, verdict: "COMMENT" })).toEqual([]);
     expect(ofType(r.events(), "review_posted")).toHaveLength(1);
-    expect(await send(r.engine, { type: "message", text: "one more look" })).toEqual([
-      { type: "rejected", reason: "This review was posted. Start a new review from Pull requests." },
-    ]);
     // A Code session never accepts post_review.
     expect(await send(g.engine, { type: "post_review", approvalId: "x", verdict: "COMMENT" })).toEqual([{ type: "rejected", reason: "post_review is only for review sessions" }]);
   });

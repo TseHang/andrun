@@ -224,6 +224,13 @@ test("review a pull request: dismiss, edit, request changes, post", async ({ pag
   await expect(s.postBar).toContainText("Posts to GitHub as TseHang");
   expect((await gh.state()).reviews).toEqual([]);
 
+  // The review's own words come from the reviewer, who may start from &run's summary.
+  const body = s.postBar.getByLabel("Review comment");
+  await expect(body).toHaveValue("");
+  await body.fill("Please fix the hyphens first.");
+  await s.postBar.getByRole("button", { name: "Use &run's summary" }).click();
+  await expect(body).toHaveValue("Please fix the hyphens first.\n\nFour findings; the main one is repeated spaces.");
+
   // The verdict is a three-part switch; the main button says what it will do.
   const verdict = s.postBar.getByRole("radiogroup", { name: "Verdict" });
   const option = (name: string) => verdict.getByRole("radio", { name, exact: true });
@@ -268,17 +275,43 @@ test("review a pull request: dismiss, edit, request changes, post", async ({ pag
   ]);
   expect(review.comments[0]!.body).toContain("Collapse runs of whitespace into one hyphen.");
   expect(review.comments[1]!.body).toContain("Leading and trailing hyphens are kept.");
+  expect(review.body).toMatch(/^Please fix the hyphens first\.\n\nFour findings; the main one is repeated spaces\.\n\n/);
   expect(review.body).toContain("README still shows the old name makeSlug.");
   expect(review.body).not.toContain("Consider a default export");
   expect(Object.keys(state.refs)).toEqual(["main"]); // the review changed nothing in the repo
   expect(state.writes.filter((w) => !w.includes("/reviews"))).toEqual([]);
 
-  // A posted review is closed: the composer is off and a new review starts from the pull request.
-  await expect(page.getByLabel("Message to the agent")).toBeDisabled();
-  await expect(page.getByRole("link", { name: "Review again" })).toHaveAttribute("href", "/prs/14");
+  // Posting does not close the review: what was posted is fixed, and the agent takes more messages.
+  await expect(s.reviewCard.getByRole("link", { name: "Review again" })).toHaveAttribute("href", "/prs/14");
+  await expect(finding("Collapse runs of whitespace")).toContainText("Posted");
+  await expect(finding("Collapse runs of whitespace").getByRole("button", { name: "Edit" })).toBeDisabled();
+  await expect(finding("Consider a default export")).not.toContainText("Posted");
   await page.reload();
   await expect(s.reviewCard).toContainText("Review posted · Request changes");
   await expect(s.findings).toContainText("3 kept, 1 dismissed");
+  await expect(finding("Collapse runs of whitespace")).toContainText("Posted");
+
+  const message = s.composer.getByLabel("Message to the agent");
+  await expect(message).toBeEnabled();
+  await message.fill("Look at the README once more.");
+  await s.composer.getByRole("button", { name: "Send" }).click();
+  await expect(s.timeline).toContainText("Look at the README once more.");
+  await expect(s.status).toHaveText("Ready to post", { timeout: 120_000 });
+
+  // The second review carries only what is new: here nothing, so a Comment needs the reviewer's words.
+  await expect(s.postBar).toContainText("0 inline comments, 0 notes in the summary");
+  await expect(s.postBar.getByRole("button", { name: "Post comments" })).toBeDisabled();
+  await expect(s.postBar).toContainText("Write a comment or keep a finding to post this review.");
+  await s.postBar.getByLabel("Review comment").fill("Fixed in the follow-up, thanks.");
+  await s.postBar.getByRole("button", { name: "Post comments" }).click();
+  await expect(s.reviewCard).toHaveCount(2);
+  await expect(page.getByRole("link", { name: "Review again" })).toHaveCount(1); // only the latest card says how to go on
+  await expect(s.reviewCard.last()).toContainText("Review posted · Comment");
+  await expect(s.status).toHaveText("Done");
+  const again = (await gh.state()).reviews;
+  expect(again).toHaveLength(2);
+  expect(again[1]).toMatchObject({ event: "COMMENT", comments: [] });
+  expect(again[1]!.body).toMatch(/^Fixed in the follow-up, thanks\./);
 
   await page.goto("/prs");
   await expect(s.prRow(14)).toContainText("Reviewed");

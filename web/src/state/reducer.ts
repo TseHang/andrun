@@ -73,6 +73,8 @@ export interface FindingView {
   inline: boolean;
   dismissed: boolean;
   edited: boolean;
+  /** On GitHub already: a later review of this session leaves it out. */
+  posted: boolean;
 }
 
 export interface SessionView {
@@ -395,12 +397,14 @@ function apply(view: SessionView, ev: AgentEvent): SessionView {
         inline: ev.inline ?? true,
         dismissed: ev.dismissed ?? false,
         edited: ev.edited ?? false,
+        posted: view.findings.find((f) => f.id === ev.id)?.posted ?? false,
       };
       const has = view.findings.some((f) => f.id === ev.id);
       return { ...view, findings: has ? view.findings.map((f) => (f.id === ev.id ? finding : f)) : [...view.findings, finding] };
     }
     case "review_posted":
-      return { ...view, posted: { url: ev.url, verdict: ev.verdict }, items: [...view.items, { key: `rp:${ev.seq}`, kind: "review_posted", url: ev.url, verdict: ev.verdict }] };
+      // A review carries every kept finding that is not on GitHub yet.
+      return { ...view, posted: { url: ev.url, verdict: ev.verdict }, findings: view.findings.map((f) => (f.dismissed ? f : { ...f, posted: true })), items: [...view.items, { key: `rp:${ev.seq}`, kind: "review_posted", url: ev.url, verdict: ev.verdict }] };
     case "plan_updated":
       return { ...view, plan: ev.plan.length > 0 ? ev.plan : null };
     case "stopped": {

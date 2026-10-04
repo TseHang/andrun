@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { ScriptedModelClient } from "../support/scripted-model";
+import { REVIEW_FOOTER } from "../../src/github";
+import { ScriptedModelClient, call } from "../support/scripted-model";
 import { fixtureTarball } from "../support/tarball";
 import { BRIEF, ID, PR_FILES, REVIEW_SCRIPT, SLUGIFY_FIXTURE, codeAtGate, containers, findings, ofType, reviewAtGate, send, world } from "./github-world";
 
@@ -96,27 +97,75 @@ describe("findings (S13, P4-c, P4-d)", () => {
     expect(g.engine.snapshot()!.status).toBe("awaiting_approval");
   });
 
+  it("the reviewer's comment is posted at the top of the review body", async () => {
+    const r = await reviewAtGate();
+    expect(await send(r.engine, { type: "post_review", approvalId: r.approvalId, verdict: "COMMENT", comment: 42 })).toMatchObject([{ type: "rejected" }]);
+    expect(await send(r.engine, { type: "post_review", approvalId: r.approvalId, verdict: "COMMENT", comment: "x".repeat(4001) })).toMatchObject([{ type: "rejected" }]);
+    expect(await send(r.engine, { type: "post_review", approvalId: r.approvalId, verdict: "COMMENT", comment: "  Please fix the hyphens first.  " })).toEqual([]);
+    expect(r.fake.reviews).toHaveLength(1);
+    expect(r.fake.reviews[0]!.body).toMatch(/^Please fix the hyphens first\.\n\n/);
+    expect(r.fake.reviews[0]!.body.endsWith(REVIEW_FOOTER)).toBe(true);
+  });
+
+  it("a review that says nothing is refused, except an approval", async () => {
+    const r = await reviewAtGate();
+    for (const f of findings(r.events())) await send(r.engine, { type: "finding", id: f.id, dismissed: true });
+    const refused = [{ type: "rejected", reason: "Write a comment or keep a finding to post this review." }];
+    expect(await send(r.engine, { type: "post_review", approvalId: r.approvalId, verdict: "COMMENT" })).toEqual(refused);
+    expect(await send(r.engine, { type: "post_review", approvalId: r.approvalId, verdict: "REQUEST_CHANGES", comment: "   " })).toEqual(refused);
+    expect(r.fake.reviews).toEqual([]);
+    expect(r.engine.snapshot()!.status).toBe("awaiting_approval");
+
+    expect(await send(r.engine, { type: "post_review", approvalId: r.approvalId, verdict: "COMMENT", comment: "Nothing to add." })).toEqual([]);
+    expect(r.fake.reviews[0]).toMatchObject({ event: "COMMENT", body: `Nothing to add.\n\n${REVIEW_FOOTER}`, comments: [] });
+  });
+
   it("a review that was posted is not posted twice", async () => {
     // Security review: the review reached GitHub, but the session was interrupted before the gate closed.
     const r = await reviewAtGate();
-    r.store().saveGithubState({ posted: { url: "https://github.com/TseHang/andrun-demo/pull/14#pullrequestreview-1", verdict: "COMMENT" } });
+    const url = "https://github.com/TseHang/andrun-demo/pull/14#pullrequestreview-1";
+    r.store().saveGithubState({ posted: { url, verdict: "COMMENT", approvalId: r.approvalId } });
     expect(await send(r.engine, { type: "post_review", approvalId: r.approvalId, verdict: "COMMENT" })).toEqual([]);
     expect(r.fake.reviews).toEqual([]); // GitHub is not asked again
     expect(ofType(r.events(), "review_posted")).toEqual([]);
     expect(r.engine.snapshot()!.status).toBe("done");
+
+    // A record from before gates were stored (no approvalId) is this gate's too.
+    const old = await reviewAtGate({ extra: [call("finish", { summary: "Nothing new." })] });
+    old.store().saveGithubState({ posted: { url, verdict: "COMMENT" } });
+    expect(await send(old.engine, { type: "post_review", approvalId: old.approvalId, verdict: "COMMENT" })).toEqual([]);
+    expect(old.fake.reviews).toEqual([]);
+    // A message after it opens the next round: the old findings count as posted, and the next post goes out.
+    await send(old.engine, { type: "message", text: "anything else?" });
+    const next = old.engine.snapshot()!.pending!.approvalId;
+    expect(await send(old.engine, { type: "post_review", approvalId: next, verdict: "COMMENT", comment: "No." })).toEqual([]);
+    expect(old.fake.reviews).toHaveLength(1);
+    expect(old.fake.reviews[0]).toMatchObject({ body: `No.\n\n${REVIEW_FOOTER}`, comments: [] });
   });
 
-  it("a posted review takes no more messages", async () => {
-    const r = await reviewAtGate();
+  it("a posted review stays open: the next review carries only what is new", async () => {
+    const r = await reviewAtGate({
+      extra: [call("report_finding", { path: "src/slugify.js", line: 3, severity: "medium", text: "Digits are dropped." }), call("finish", { summary: "One more finding." })],
+    });
     await send(r.engine, { type: "post_review", approvalId: r.approvalId, verdict: "COMMENT" });
     expect(r.engine.snapshot()!.status).toBe("done");
     const [a] = findings(r.events());
-    const before = r.events().length;
 
-    expect(await send(r.engine, { type: "message", text: "look again" })).toEqual([{ type: "rejected", reason: "This review was posted. Start a new review from Pull requests." }]);
-    expect(await send(r.engine, { type: "finding", id: a!.id, dismissed: true })).toMatchObject([{ type: "rejected" }]);
-    expect(r.events()).toHaveLength(before);
+    // What is on GitHub cannot be edited any more.
+    expect(await send(r.engine, { type: "finding", id: a!.id, dismissed: true })).toEqual([{ type: "rejected", reason: "This finding was posted." }]);
+
+    // A message sends the agent back in; its finish asks again.
+    expect(await send(r.engine, { type: "message", text: "look at digits too" })).toEqual([]);
+    const second = r.engine.snapshot()!;
+    expect(second.status).toBe("awaiting_approval");
+    expect(second.pending!.approvalId).not.toBe(r.approvalId);
+    expect(await send(r.engine, { type: "finding", id: a!.id, dismissed: true })).toEqual([{ type: "rejected", reason: "This finding was posted." }]);
+
+    expect(await send(r.engine, { type: "post_review", approvalId: second.pending!.approvalId, verdict: "REQUEST_CHANGES", comment: "One more." })).toEqual([]);
+    expect(r.fake.reviews).toHaveLength(2);
+    expect(r.fake.reviews[1]).toMatchObject({ event: "REQUEST_CHANGES", body: `One more.\n\n${REVIEW_FOOTER}` });
+    expect(r.fake.reviews[1]!.comments.map((c) => c.body)).toEqual(["**Medium:** Digits are dropped."]);
+    expect(ofType(r.events(), "review_posted")).toHaveLength(2);
     expect(r.engine.snapshot()!.status).toBe("done");
-    expect(r.fake.reviews).toHaveLength(1);
   });
 });

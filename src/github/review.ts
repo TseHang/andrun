@@ -30,12 +30,13 @@ export interface ReviewInput {
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-export function buildReview(findings: ReviewFinding[]): { body: string; comments: ReviewComment[] } {
+/** `comment` is the reviewer's own text; it opens the body. */
+export function buildReview(findings: ReviewFinding[], comment = ""): { body: string; comments: ReviewComment[] } {
   const kept = findings.filter((f) => !f.dismissed);
   const comments = kept.filter((f) => f.inline).map((f) => ({ path: f.path, line: f.line, body: `**${capitalise(f.severity)}:** ${f.text}` }));
   const notes = kept.filter((f) => !f.inline).map((f) => `- **${capitalise(f.severity)}** \`${f.path}:${f.line}\`: ${f.text}`);
   const parts = notes.length > 0 ? ["Notes that are not on a changed line:", notes.join("\n")] : [];
-  return { body: [...parts, REVIEW_FOOTER].join("\n\n"), comments };
+  return { body: [...(comment ? [comment] : []), ...parts, REVIEW_FOOTER].join("\n\n"), comments };
 }
 
 export async function postReview(request: Request, repo: string, pat: string, input: ReviewInput): Promise<{ url: string }> {

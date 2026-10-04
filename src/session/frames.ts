@@ -1,6 +1,6 @@
 // Validation of frames received from the browser (P2-b). Platform-free.
 
-import { MAX_FINDING_CHARS, MAX_TASK_CHARS, TITLE_CHARS, type ParsedFrame } from "./protocol";
+import { MAX_FINDING_CHARS, MAX_REVIEW_COMMENT_CHARS, MAX_TASK_CHARS, TITLE_CHARS, type ParsedFrame } from "./protocol";
 
 const bad = (reason: string): ParsedFrame => ({ ok: false, reason });
 const nonEmpty = (v: unknown): v is string => typeof v === "string" && v.length > 0;
@@ -41,10 +41,14 @@ export function parseClientFrame(raw: string | ArrayBuffer): ParsedFrame {
       }
       return { ok: true, frame: { type: "finding", id: f.id, ...(text !== undefined && { text }), ...(f.dismissed !== undefined && { dismissed: f.dismissed }) } };
     }
-    case "post_review":
+    case "post_review": {
       if (!nonEmpty(f.approvalId)) return bad("post_review needs an approvalId");
       if (f.verdict !== "COMMENT" && f.verdict !== "APPROVE" && f.verdict !== "REQUEST_CHANGES") return bad("verdict must be COMMENT, APPROVE or REQUEST_CHANGES");
-      return { ok: true, frame: { type: "post_review", approvalId: f.approvalId, verdict: f.verdict } };
+      if (f.comment !== undefined && typeof f.comment !== "string") return bad("comment must be text");
+      const comment = f.comment?.trim() ?? "";
+      if (comment.length > MAX_REVIEW_COMMENT_CHARS) return bad(`comment is longer than ${MAX_REVIEW_COMMENT_CHARS} characters`);
+      return { ok: true, frame: { type: "post_review", approvalId: f.approvalId, verdict: f.verdict, ...(comment && { comment }) } };
+    }
     default:
       return bad("unknown frame type");
   }

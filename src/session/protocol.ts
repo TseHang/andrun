@@ -16,6 +16,9 @@ Skip style and formatting.
 Give each finding a file, a line and a severity.`;
 export const TITLE_CHARS = 80;
 export const MAX_FINDING_CHARS = 4000;
+export const MAX_REVIEW_COMMENT_CHARS = 4000;
+/** Why a Comment or Request changes review with no comment and no finding is refused. */
+export const EMPTY_REVIEW = "Write a comment or keep a finding to post this review.";
 export const RESTORED_NOTE = "The sandbox was restarted and the workspace was restored from saved changes.";
 
 /** What a client may send over the session WebSocket. */
@@ -25,7 +28,8 @@ export type ClientFrame =
   | { type: "message"; text: string }
   | { type: "stop" }
   | { type: "finding"; id: string; text?: string; dismissed?: boolean }
-  | { type: "post_review"; approvalId: string; verdict: ReviewVerdict };
+  /** `comment` is the reviewer's own text: the top of the review body on GitHub. */
+  | { type: "post_review"; approvalId: string; verdict: ReviewVerdict; comment?: string };
 
 /** What the server sends: a §5 event, or a refusal of a client frame (never persisted, no `seq`). */
 export type ServerFrame = AgentEvent | { type: "rejected"; reason: string };

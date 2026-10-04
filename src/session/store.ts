@@ -46,7 +46,10 @@ export interface GitHubState {
   round?: number;
   baseBranch?: string;
   review?: { number: number; title: string; lines: Record<string, number[]> };
-  posted?: { url: string; verdict: string };
+  /** The last review posted from this session, and the gate it closed. */
+  posted?: { url: string; verdict: string; approvalId?: string };
+  /** Findings already on GitHub: a later review of the same session leaves them out. */
+  postedFindings?: string[];
 }
 
 interface FindingRow {
