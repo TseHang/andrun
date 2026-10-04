@@ -2,8 +2,11 @@
 // Writes one JSONL trajectory per run (§5 events + a final result line) and a summary table.
 // A case (eval/cases/*.yaml) has id, fixture, mode, task, forbid_changes and optional max_steps, plus:
 //   code case:   check { cmd, expect_exit }, which must exit as expected after the run.
-//   review case: expect_finding { path, lines }, a review_finding on that path and one of those lines
-//                (spec §10); no file may change; check is optional.
+//   review case: exactly one of expect_finding { path, lines } (a review_finding on that path and one of
+//                those lines, spec §10) or expect_no_findings: true (no review_finding at all);
+//                no file may change; check is optional.
+// Either mode may not use the other's fields; code cases may add:
+//   expect_changes: a list of globs; for every glob at least one changed file must match it.
 
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
@@ -27,6 +30,8 @@ export interface EvalCase {
   task: string;
   check?: { cmd: string; expect_exit: number };
   expect_finding?: { path: string; lines: number[] };
+  expect_changes?: string[];
+  expect_no_findings?: boolean;
   forbid_changes: string[];
   max_steps?: number;
 }
@@ -70,7 +75,31 @@ function validateCase(file: string, raw: unknown): EvalCase {
   const expect = c["expect_finding"] as Record<string, unknown> | null | undefined;
   if (c["mode"] === "code") {
     if (expect !== undefined) throw invalid(file, `"expect_finding" is only for review cases`);
+    if (c["expect_no_findings"] !== undefined) throw invalid(file, `"expect_no_findings" is only for review cases`);
   } else {
+    if (c["expect_no_findings"] !== undefined && c["expect_no_findings"] !== true) {
+      throw invalid(file, `"expect_no_findings" must be true`);
+    }
+    if (c["expect_no_findings"] === true) {
+      if (expect !== undefined) throw invalid(file, `a review case takes "expect_finding" or "expect_no_findings", not both`);
+    } else {
+      validateExpectFinding(file, expect);
+    }
+  }
+  const changes = c["expect_changes"];
+  if (changes !== undefined && (!Array.isArray(changes) || !changes.every((g) => typeof g === "string"))) {
+    throw invalid(file, `"expect_changes" must be a list of glob strings`);
+  }
+  const forbid = c["forbid_changes"];
+  if (!Array.isArray(forbid) || !forbid.every((g) => typeof g === "string")) {
+    throw invalid(file, `"forbid_changes" must be a list of glob strings`);
+  }
+  if (c["max_steps"] !== undefined && typeof c["max_steps"] !== "number") throw invalid(file, `"max_steps" must be a number`);
+  return raw as EvalCase;
+}
+
+function validateExpectFinding(file: string, expect: Record<string, unknown> | null | undefined): void {
+  {
     const lines = expect?.["lines"];
     if (
       !expect ||
@@ -79,15 +108,9 @@ function validateCase(file: string, raw: unknown): EvalCase {
       lines.length === 0 ||
       !lines.every((n) => Number.isInteger(n) && n > 0)
     ) {
-      throw invalid(file, `a review case needs "expect_finding" with a string "path" and a non-empty list of positive integer "lines"`);
+      throw invalid(file, `a review case needs "expect_finding" with a string "path" and a non-empty list of positive integer "lines", or "expect_no_findings: true"`);
     }
   }
-  const forbid = c["forbid_changes"];
-  if (!Array.isArray(forbid) || !forbid.every((g) => typeof g === "string")) {
-    throw invalid(file, `"forbid_changes" must be a list of glob strings`);
-  }
-  if (c["max_steps"] !== undefined && typeof c["max_steps"] !== "number") throw invalid(file, `"max_steps" must be a number`);
-  return raw as EvalCase;
 }
 
 export async function loadCases(dir: string, filter?: string): Promise<EvalCase[]> {
@@ -234,11 +257,13 @@ async function runOne(
     const checkOk = !c.check || check?.exitCode === c.check.expect_exit;
     const want = c.expect_finding;
     const found = !want || findings.some((f) => f.path === want.path && want.lines.includes(f.line));
-    const untouched = !want || (changed.length === 0 && diff.exitCode === 0);
+    const noFindings = !c.expect_no_findings || findings.length === 0;
+    const wantChanges = !c.expect_changes || c.expect_changes.every((g) => changed.some((f) => picomatch(g)(f)));
+    const untouched = c.mode !== "review" || (changed.length === 0 && diff.exitCode === 0);
 
     return result({
       outcome: outcome.kind,
-      pass: outcome.kind === "finished" && checkOk && found && untouched && !editedTests,
+      pass: outcome.kind === "finished" && checkOk && found && noFindings && wantChanges && untouched && !editedTests,
       steps: state.step,
       edited_tests: editedTests,
       changed_files: changed,

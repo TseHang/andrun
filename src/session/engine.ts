@@ -180,7 +180,7 @@ export class SessionEngine {
     if (frame.type === "post_review") return this.postReview(state, frame, reply, ip);
 
     if (frame.type === "message") {
-      if (state.mode === "review" && this.store.githubState().posted) {
+      if (this.onFinish(state) === "draft_review" && this.store.githubState().posted) {
         return reply({ type: "rejected", reason: "This review was posted. Start a new review from Pull requests." });
       }
       if (this.inflight) {
@@ -246,8 +246,15 @@ export class SessionEngine {
       return reply({ type: "rejected", reason: "no such pending approval" });
     }
     if (!approvesFinish(pending, decision)) return this.startSegment(decision, true);
-    if (state.mode === "review") return reply({ type: "rejected", reason: "Choose a verdict and post the review." });
+    const onFinish = this.onFinish(state);
+    if (onFinish === "draft_review") return reply({ type: "rejected", reason: "Choose a verdict and post the review." });
+    if (onFinish === "answer") return this.startSegment(decision, false);
     this.startSegment(decision, false, () => this.publishChanges(state, pending, reply, ip));
+  }
+
+  /** How this session's finish is handled (from its mode's profile). */
+  private onFinish(state: AgentState): "open_pr" | "draft_review" | "answer" {
+    return getProfile(state.mode, this.deps.config).onFinish;
   }
 
   /** `post_review`: only for a review waiting at its finish gate. */
@@ -257,7 +264,7 @@ export class SessionEngine {
     reply: (frame: ServerFrame) => void,
     ip: string,
   ): void {
-    if (state.mode !== "review") return reply({ type: "rejected", reason: "post_review is only for review sessions" });
+    if (this.onFinish(state) !== "draft_review") return reply({ type: "rejected", reason: "post_review is only for review sessions" });
     const pending = state.pending;
     if (this.inflight || !pending || pending.approvalId !== frame.approvalId || !approvesFinish(pending, { approved: true })) {
       return reply({ type: "rejected", reason: "no such pending approval" });
