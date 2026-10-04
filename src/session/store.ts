@@ -13,7 +13,7 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS session (
     id TEXT PRIMARY KEY, mode TEXT NOT NULL, title TEXT NOT NULL, repo TEXT NOT NULL, sha TEXT NOT NULL,
     created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, status TEXT NOT NULL, step INTEGER NOT NULL,
-    tokens_used INTEGER NOT NULL, next_seq INTEGER NOT NULL, failures TEXT, nudged INTEGER NOT NULL, model TEXT)`,
+    tokens_used INTEGER NOT NULL, next_seq INTEGER NOT NULL, failures TEXT, nudged INTEGER NOT NULL, model TEXT)`, // `nudged` is no longer used (always 0); kept because existing databases have it
   `CREATE TABLE IF NOT EXISTS messages (idx INTEGER PRIMARY KEY, json TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS events (seq INTEGER PRIMARY KEY, json TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS pending_approval (id INTEGER PRIMARY KEY CHECK (id = 1), json TEXT NOT NULL)`,
@@ -125,7 +125,7 @@ export class SessionStore {
       state.tokensUsed,
       state.nextSeq,
       state.failures ? JSON.stringify(state.failures) : null,
-      state.nudged ? 1 : 0,
+      0,
       meta.model ?? null,
     );
     this.saveMessages(state.messages);
@@ -158,7 +158,6 @@ export class SessionStore {
       // Events written after the last checkpoint must not have their seq reused.
       nextSeq: Math.max(r.next_seq, maxSeq + 1),
       failures: r.failures ? (JSON.parse(r.failures) as AgentState["failures"]) : null,
-      nudged: r.nudged === 1,
       pending: pending ? (JSON.parse(pending.json) as PendingApproval) : null,
     };
   }
@@ -171,7 +170,7 @@ export class SessionStore {
       state.tokensUsed,
       state.nextSeq,
       state.failures ? JSON.stringify(state.failures) : null,
-      state.nudged ? 1 : 0,
+      0,
       now,
     );
     this.saveMessages(state.messages);

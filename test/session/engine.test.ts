@@ -1306,7 +1306,7 @@ describe("Conversational flow: the session waits for the user (CF-a, CF-d, CF-e)
       { role: "user", content: "B" },
     ]);
     expect(statuses(w.events())).toEqual(["running", "awaiting_input", "running", "awaiting_approval"]);
-    expect(ofType(w.events(), "message").filter((e) => e.role === "user")).toMatchObject([{ text: "B" }]);
+    expect(ofType(w.events(), "message").filter((e) => e.role === "user").map((e) => e.text)).toEqual([TASK, "B"]);
     expect(w.store().loadState()).toMatchObject({ step: 2, turnTokens: 120 }); // the reply started a fresh turn
     expectIncreasingSeq(w.events());
   });
@@ -1325,13 +1325,13 @@ describe("Conversational flow: the session waits for the user (CF-a, CF-d, CF-e)
     expect(engine.snapshot()).toMatchObject({ status: "awaiting_input", pending: null });
     expect(ofType(w.events(), "question")).toMatchObject([QUESTION]);
     expect(w.store().loadState()!.pending).toMatchObject({ kind: "question", ...QUESTION });
-    expect(ofType(w.events(), "tool_call").map((e) => e.name)).toEqual(["ask_user"]);
+    expect(ofType(w.events(), "tool_call").map((e) => e.name)).toEqual(["sandbox_setup", "ask_user"]);
 
     // The Durable Object is evicted while the question is open: a new engine answers it.
     const next = w.engine(model);
     expect(await send(next, { type: "message", text: "Mental math" })).toEqual([]);
 
-    expect(ofType(w.events(), "message").filter((e) => e.role === "user")).toMatchObject([{ text: "Mental math" }]);
+    expect(ofType(w.events(), "message").filter((e) => e.role === "user").map((e) => e.text)).toEqual([TASK, "Mental math"]);
     expect(ofType(w.events(), "approval_resolved")).toEqual([]);
     const sent = model.requests[1]!.messages;
     const results = sent.filter((m) => m.role === "tool");
@@ -1339,7 +1339,7 @@ describe("Conversational flow: the session waits for the user (CF-a, CF-d, CF-e)
     expect(results[0]!.content).toBe(JSON.stringify({ answer: "Mental math" }));
     expect(sent.filter((m) => m.role === "user" && m.content === "Mental math")).toEqual([]); // the answer is the tool's result, not a second message
     expectValidTranscript(sent);
-    expect(ofType(w.events(), "tool_call").map((e) => e.name)).toEqual(["ask_user", "list_files", "finish"]);
+    expect(ofType(w.events(), "tool_call").map((e) => e.name)).toEqual(["sandbox_setup", "ask_user", "list_files", "finish"]);
     expect(statuses(w.events())).toEqual(["running", "awaiting_input", "running", "awaiting_approval"]);
     expect(next.snapshot()).toMatchObject({ status: "awaiting_approval", pending: { summary: "Built Mental math." } });
     expect(w.store().loadState()).toMatchObject({ turnTokens: 120 }); // an answer starts a fresh turn (CF-e)
