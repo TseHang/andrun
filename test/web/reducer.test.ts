@@ -596,3 +596,71 @@ describe("Harness improvement: plan, turn limit, cost", () => {
     expect(more.composerEnabled).toBe(true);
   });
 });
+
+describe("Conversational flow: questions and waiting", () => {
+  const QUESTION = { question: "Which game?", options: [{ label: "Mental math", description: "Uses sum()" }, { label: "Guess the number" }] };
+  const usage = (e: ReturnType<typeof script>, step: number) =>
+    e({ type: "usage", model: "deepseek-ai/deepseek-v4-flash", tokens_in: 1000, tokens_out: 10, latency_ms: 5, context_tokens: 1000, context_window: 1_000_000 }, { step });
+
+  it("a question opens a card and the answer closes it", () => {
+    const e = script();
+    const asked = [
+      e({ type: "status", status: "running" }),
+      usage(e, 1),
+      e({ type: "tool_call", callId: "q1", name: "ask_user", args: QUESTION, summary: "Ask Which game?" }, { step: 1 }),
+      e({ type: "question", id: "a1", ...QUESTION }, { step: 1 }),
+      e({ type: "status", status: "awaiting_input" }, { step: 1 }),
+    ];
+    const open = run(asked);
+    expect(open.status).toBe("awaiting_input");
+    expect(open.question).toEqual({ id: "a1", ...QUESTION });
+    expect(open.gate).toBeNull();
+    // The question is part of the conversation; the tool call is not a step row.
+    expect(rows(open)).toEqual([]);
+    expect(open.items).toMatchObject([{ kind: "question", question: "Which game?" }]);
+    expect(initialView().question).toBeNull();
+
+    const answered = run(
+      [
+        e({ type: "message", id: "u1", role: "user", text: "Mental math" }, { step: 1 }),
+        e({ type: "status", status: "running" }, { step: 1 }),
+        e({ type: "tool_output", callId: "q1", stream: "result", chunk: '{"answer":"Mental math"}' }, { step: 1 }),
+      ],
+      open,
+    );
+    expect(answered.question).toBeNull();
+    expect(answered.status).toBe("running");
+    expect(kinds(answered)).toEqual(["question", "user"]);
+    expect(rows(answered)).toEqual([]);
+
+    // A second question replaces the first; a replay of the whole log gives the same view.
+    const second = e({ type: "question", id: "a2", question: "How hard?", options: [{ label: "Easy" }, { label: "Hard" }] }, { step: 1 });
+    const again = reduce(answered, second);
+    expect(again.question).toMatchObject({ id: "a2", question: "How hard?" });
+    expect(run([...asked.slice(0, 5)])).toEqual(open);
+  });
+
+  it("an empty reply shows a notice", () => {
+    const e = script();
+    const empty = run([e({ type: "status", status: "running" }), usage(e, 1), e({ type: "status", status: "awaiting_input" }, { step: 1 })]);
+    expect(empty.items).toMatchObject([{ kind: "notice", title: "The agent stopped without a reply." }]);
+
+    // A reply with text, or a question, is its own explanation.
+    const f = script();
+    const replied = run([
+      f({ type: "status", status: "running" }),
+      usage(f, 1),
+      f({ type: "message", id: "m1", role: "assistant", text: "Which one?" }, { step: 1 }),
+      f({ type: "status", status: "awaiting_input" }, { step: 1 }),
+    ]);
+    expect(kinds(replied)).toEqual(["assistant"]);
+    const g = script();
+    const asked = run([
+      g({ type: "status", status: "running" }),
+      usage(g, 1),
+      g({ type: "question", id: "a1", ...QUESTION }, { step: 1 }),
+      g({ type: "status", status: "awaiting_input" }, { step: 1 }),
+    ]);
+    expect(kinds(asked)).toEqual(["question"]);
+  });
+});

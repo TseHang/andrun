@@ -21,12 +21,14 @@ describe("S4: review profile cannot write (D4)", () => {
   it("profiles are data", () => {
     const code = getProfile("code", defaultConfig);
     expect(code).toMatchObject({ name: "code", sandboxSetup: "tarball@sha", onFinish: "open_pr" });
-    expect(code.tools).toEqual(["list_files", "read_file", "write_file", "apply_patch", "run_command", "update_plan", "finish"]);
+    expect(code.tools).toEqual(["list_files", "read_file", "write_file", "apply_patch", "run_command", "update_plan", "ask_user", "finish"]);
+    expect(code.onTextReply).toBe("wait");
     expect(code.systemPrompt).toBe(CODE_SYSTEM_PROMPT);
 
     const review = getProfile("review", defaultConfig);
     expect(review).toMatchObject({ name: "review", sandboxSetup: "pr-head@sha", onFinish: "draft_review" });
     expect(review.tools).toEqual(["list_files", "read_file", "run_command", "report_finding", "finish"]);
+    expect(review.onTextReply).toBe("finish");
   });
 
   it("review profile exposes no write tools and leaves workspace clean", async () => {
@@ -98,6 +100,49 @@ describe("HI-a: the plan tool belongs to Code", () => {
   });
 });
 
+describe("CF-c: questions belong to Code", () => {
+  it("ask_user is a Code tool only", async () => {
+    const code = getProfile("code", defaultConfig);
+    const review = getProfile("review", defaultConfig);
+    expect(toolSpecs(code.tools).map((t) => t.name)).toContain("ask_user");
+    expect(toolSpecs(review.tools).map((t) => t.name)).not.toContain("ask_user");
+    const args = { question: "Which?", options: [{ label: "A" }, { label: "B" }] };
+    expect(code.policy.decide({ mode: "code", tool: "ask_user", args })).toEqual({ kind: "allow" });
+
+    const model = new ScriptedModelClient([call("ask_user", args), call("finish", { summary: "No findings." })]);
+    const events: AgentEvent[] = [];
+    const { outcome } = await runAgent(createSession({ sessionId: "r", mode: "review", task: "Review PR #1" }, review), review, {
+      model,
+      sandbox: new MemorySandbox(),
+      emit: (e) => events.push(e),
+      config: defaultConfig,
+    });
+    expect(model.requests[0]!.tools.map((t) => t.name)).not.toContain("ask_user");
+    const answer = model.requests[1]!.messages.at(-1)!;
+    expect(answer.role === "tool" && answer.content).toContain("unknown tool: ask_user");
+    expect(events.filter((e) => e.type === "question")).toEqual([]);
+    expect(outcome.kind).toBe("awaiting_approval");
+  });
+});
+
+describe("CF: the code prompt describes a conversation", () => {
+  it("the code prompt covers discussion, ask_user and finish", () => {
+    const code = CODE_SYSTEM_PROMPT;
+    // A reply without a tool call hands the turn to the user.
+    expect(code).toMatch(/without (a|any) tool call.{0,80}(ends|hands)/is);
+    // Discuss before editing when the request is open.
+    expect(code).toMatch(/open-ended/i);
+    expect(code).toMatch(/several .{0,30}(approaches|ways)/i);
+    expect(code).toMatch(/do not (edit|change|write).{0,80}(chosen|choose|answer|agree)/is);
+    expect(code).toMatch(/ask_user/);
+    // A clear task is still done directly.
+    expect(code).toMatch(/clear.{0,60}(directly|without asking)/is);
+    // finish is for work that is ready for a pull request, not how every turn ends.
+    expect(code).toMatch(/finish.{0,120}ready for a pull request/is);
+    expect(code).not.toMatch(/when you are done, call finish/i);
+  });
+});
+
 describe("HI-g: the prompts are general", () => {
   /** Every path under eval/fixtures (e.g. "src/sum.js") and every fixture's name. */
   function fixtureNames(): string[] {
@@ -127,6 +172,7 @@ describe("HI-g: the prompts are general", () => {
     expect(code).toMatch(/finish/);
 
     const review = REVIEW_SYSTEM_PROMPT;
+    expect(review).not.toMatch(/ask_user/);
     expect(review).toMatch(/code reviewer/); // the fake model picks its review script by this phrase
     expect(review).toMatch(/introduce/i);
     expect(review).toMatch(/verif/i);

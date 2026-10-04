@@ -476,17 +476,6 @@ describe("S10: checkpoint every step, resumable from any step", () => {
 });
 
 describe("loop edge cases", () => {
-  it("text-only turn nudges then gates", async () => {
-    const model = new ScriptedModelClient([{ text: "I think it is fixed." }, { text: "Yes, it is done." }]);
-    const { events, deps } = harness(model, new MemorySandbox());
-    const { outcome } = await runAgent(start(), profile, deps);
-    const nudge = model.requests[1]!.messages.at(-1)!;
-    expect(nudge.role).toBe("user");
-    expect(nudge.role === "user" && nudge.content).toContain("call a tool or finish");
-    expect(outcome.kind === "awaiting_approval" && outcome.pending.kind).toBe("implicit_finish");
-    expect(events.filter((e) => e.type === "message" && e.role === "assistant")).toHaveLength(2);
-  });
-
   it("drained user message injected before next model call", async () => {
     let queue = ["Use tabs, not spaces."];
     const model = new ScriptedModelClient([call("list_files"), call("finish", { summary: "d" })]);
@@ -567,5 +556,133 @@ describe("S18 (Phase 3, P3-n): tool results carry their size and count", () => {
     const toolMessages = model.requests[2]!.messages.filter((m) => m.role === "tool");
     expect(toolMessages[0]!.content).toBe(big);
     for (const m of toolMessages) expect(String(m.content)).not.toMatch(/"bytes"|"meta"/);
+  });
+});
+
+describe("Conversational flow: a reply or a question ends the turn (CF-a, CF-d, CF-g)", () => {
+  const QUESTION = {
+    question: "Which game?",
+    options: [{ label: "Mental math", description: "Uses sum()" }, { label: "Guess the number" }],
+  };
+  const answered = (state: AgentState) => state.messages.flatMap((m) => (m.role === "tool" ? [m.tool_call_id] : []));
+  const asked = (state: AgentState) => state.messages.flatMap((m) => (m.role === "assistant" ? (m.tool_calls ?? []).map((c) => c.id) : []));
+
+  it("a text reply ends the turn and waits for the user", async () => {
+    const model = new ScriptedModelClient([{ text: "Three ideas: A, B, C. Which one?" }, { text: "never asked" }]);
+    const { events, deps } = harness(model, new MemorySandbox());
+    const before = start();
+    const { outcome, state } = await runAgent(before, profile, deps);
+
+    expect(model.requests).toHaveLength(1);
+    expect(outcome).toEqual({ kind: "awaiting_input" });
+    expect(events.at(-1)).toMatchObject({ type: "status", status: "awaiting_input" });
+    expect(state.status).toBe("awaiting_input");
+    expect(state.pending).toBeNull();
+    expect(events.filter((e) => e.type === "approval_required")).toEqual([]);
+    // Nothing is said on the model's behalf: the transcript ends with its reply.
+    expect(state.messages).toHaveLength(before.messages.length + 1);
+    expect(state.messages.at(-1)).toEqual({ role: "assistant", content: "Three ideas: A, B, C. Which one?" });
+    expect(state).not.toHaveProperty("nudged");
+    expect(events.filter((e) => e.type === "message" && e.role === "assistant")).toMatchObject([{ text: "Three ideas: A, B, C. Which one?" }]);
+  });
+
+  it("ask_user pauses with a question", async () => {
+    const sandbox = new MemorySandbox({ "a.js": "" });
+    const model = new ScriptedModelClient([
+      { calls: [{ name: "ask_user", args: QUESTION }, { name: "list_files", args: {} }] },
+      call("finish", { summary: "d" }),
+    ]);
+    const { events, deps } = harness(model, sandbox);
+    const paused = await runAgent(start(), profile, deps);
+
+    expect(model.requests[0]!.tools.map((t) => t.name)).toContain("ask_user");
+    expect(model.requests).toHaveLength(1);
+    expect(paused.outcome.kind).toBe("awaiting_input");
+    expect(events.at(-1)).toMatchObject({ type: "status", status: "awaiting_input" });
+    const questions = events.filter((e) => e.type === "question");
+    expect(questions).toMatchObject([{ type: "question", ...QUESTION }]);
+    const id = questions[0]!.type === "question" && questions[0]!.id;
+    expect(id).toBeTruthy();
+    expect(paused.state.pending).toMatchObject({ kind: "question", approvalId: id, ...QUESTION });
+    expect(events.filter((e) => e.type === "approval_required")).toEqual([]);
+    // Neither call is answered yet, and the one after the question has not run.
+    expect(answered(paused.state)).toEqual([]);
+    expect(events.filter((e) => e.type === "tool_call").map((e) => e.type === "tool_call" && e.name)).toEqual(["ask_user"]);
+
+    // The answer is the tool's result; then the rest of the reply runs and the loop goes on.
+    const before = events.length;
+    const resumed = await resume(roundTrip(paused.state), { approved: true, comment: "Mental math" }, profile, deps);
+    const added = events.slice(before);
+    expect(added.filter((e) => e.type === "approval_resolved")).toEqual([]);
+    expect(added.filter((e) => e.type === "message" && e.role === "user")).toMatchObject([{ text: "Mental math" }]);
+    expect(added.find((e) => e.type === "status")).toMatchObject({ status: "running" });
+    const results = model.requests[1]!.messages.filter((m) => m.role === "tool");
+    expect(results.map((m) => m.content)[0]).toBe(JSON.stringify({ answer: "Mental math" }));
+    expect(results).toHaveLength(2);
+    expect(added.filter((e) => e.type === "tool_call").map((e) => e.type === "tool_call" && e.name)).toEqual(["list_files", "finish"]);
+    expect(resumed.outcome.kind).toBe("awaiting_approval");
+    expect([...answered(resumed.state)].sort()).toEqual(asked(resumed.state).filter((c) => c !== (resumed.state.pending?.kind === "tool" ? resumed.state.pending.call.id : "")).sort());
+
+    // S5: bad arguments are ordinary tool errors: no question, and three in a row reach the strikes gate.
+    const bad = call("ask_user", { question: "Which?", options: [{ label: "Only one" }] });
+    const strikes = new ScriptedModelClient([bad, bad, bad]);
+    const h = harness(strikes, new MemorySandbox());
+    const r = await runAgent(start(), profile, h.deps);
+    expect(h.events.filter((e) => e.type === "question")).toEqual([]);
+    const fed = strikes.requests[1]!.messages.at(-1)!;
+    expect(fed.role === "tool" && fed.content).toContain("invalid arguments");
+    expect(r.outcome.kind === "awaiting_approval" && r.outcome.pending.kind).toBe("strikes");
+    expect(r.outcome.kind === "awaiting_approval" && r.outcome.pending.reason).toBe("ask_user failed 3 times");
+  });
+
+  it("a second question in the same reply waits for the first", async () => {
+    const second = { question: "How hard?", options: [{ label: "Easy" }, { label: "Hard" }] };
+    const model = new ScriptedModelClient([
+      { calls: [{ name: "ask_user", args: QUESTION }, { name: "ask_user", args: second }] },
+      { text: "Building Mental math, Hard." },
+    ]);
+    const { events, deps } = harness(model, new MemorySandbox());
+    const first = await runAgent(start(), profile, deps);
+    expect(events.filter((e) => e.type === "question")).toMatchObject([{ question: "Which game?" }]);
+
+    const next = await resume(first.state, { approved: true, comment: "Mental math" }, profile, deps);
+    expect(model.requests).toHaveLength(1);
+    expect(next.outcome.kind).toBe("awaiting_input");
+    expect(events.filter((e) => e.type === "question")).toMatchObject([{ question: "Which game?" }, { question: "How hard?" }]);
+    expect(next.state.pending).toMatchObject({ kind: "question", question: "How hard?", remaining: [] });
+    expect(events.at(-1)).toMatchObject({ type: "status", status: "awaiting_input" });
+
+    const last = await resume(next.state, { approved: true, comment: "Hard" }, profile, deps);
+    expect(last.outcome).toEqual({ kind: "awaiting_input" });
+    expect(last.state.pending).toBeNull();
+    expect(model.requests[1]!.messages.filter((m) => m.role === "tool").map((m) => m.content)).toEqual([JSON.stringify({ answer: "Mental math" }), JSON.stringify({ answer: "Hard" })]);
+    expect([...answered(last.state)].sort()).toEqual([...asked(last.state)].sort());
+  });
+
+  it("a text reply in a review goes to the post gate", async () => {
+    const review = getProfile("review", defaultConfig);
+    const model = new ScriptedModelClient([
+      call("report_finding", { path: "src/sum.js", line: 3, severity: "high", text: "Loop skips the last element." }),
+      { text: "One finding." },
+      { text: "never asked" },
+    ]);
+    const { events, deps } = harness(model, new MemorySandbox({ "src/sum.js": "x" }));
+    const { outcome, state } = await runAgent(start("review"), review, deps);
+
+    expect(model.requests).toHaveLength(2);
+    expect(outcome).toMatchObject({ kind: "awaiting_approval", pending: { kind: "implicit_finish", reason: "posting requires your decision", summary: "One finding." } });
+    expect(events.at(-1)).toMatchObject({ type: "status", status: "awaiting_approval" });
+    expect(state.messages.at(-1)).toEqual({ role: "assistant", content: "One finding." });
+    expect(state.messages.filter((m) => m.role === "user")).toHaveLength(1);
+  });
+
+  it("the turn limit wins over a text reply", async () => {
+    const PRICED: AgentConfig = { ...defaultConfig, models: { ...defaultConfig.models, code: "priced" }, prices: { priced: { in: 6, out: 0 } }, maxTurnCost: 50 };
+    const model = new ScriptedModelClient([{ text: "Which one?", usage: { in: 9_000_000, out: 0 } }]);
+    const { events, deps } = harness(model, new MemorySandbox(), {}, PRICED);
+    const { outcome } = await runAgent(start(), getProfile("code", PRICED), deps);
+    expect(outcome).toEqual({ kind: "budget_exceeded" });
+    expect(events.at(-1)).toMatchObject({ type: "status", status: "budget_exceeded" });
+    expect(events.filter((e) => e.type === "status").map((e) => e.type === "status" && e.status)).toEqual(["running", "budget_exceeded"]);
   });
 });
