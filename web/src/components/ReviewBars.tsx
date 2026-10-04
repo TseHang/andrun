@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { ReviewVerdict } from "../../../src/core/events";
-import type { ClientFrame } from "../../../src/session/protocol";
+import { EMPTY_REVIEW, MAX_REVIEW_COMMENT_CHARS, type ClientFrame } from "../../../src/session/protocol";
 import { useApp } from "../context";
 import { markSending, type GateView, type SessionView } from "../state/reducer";
 import { Spinner } from "./Spinner";
@@ -55,6 +55,7 @@ export function PostBar({ view, gate, send, update }: { view: SessionView; gate:
   const [verdict, setVerdict] = useState<ReviewVerdict>("COMMENT");
   const [asking, setAsking] = useState(false);
   const [comment, setComment] = useState("");
+  const [body, setBody] = useState("");
   const [offline, setOffline] = useState(false);
   const radios = useRef<(HTMLButtonElement | null)[]>([]);
   const input = useRef<HTMLInputElement>(null);
@@ -63,6 +64,9 @@ export function PostBar({ view, gate, send, update }: { view: SessionView; gate:
   const kept = view.findings.filter((f) => !f.dismissed);
   const inline = kept.filter((f) => f.inline).length;
   const current = VERDICTS.find((v) => v.value === verdict)!;
+  const summary = gate.summary?.trim() ?? "";
+  // GitHub refuses a Comment or Request changes review that says nothing.
+  const empty = verdict !== "APPROVE" && !body.trim() && kept.length === 0;
 
   useEffect(() => {
     if (asking) input.current?.focus();
@@ -73,7 +77,7 @@ export function PostBar({ view, gate, send, update }: { view: SessionView; gate:
     setOffline(!sent);
     if (sent) update(markSending);
   };
-  const post = () => fire({ type: "post_review", approvalId: gate.approvalId, verdict });
+  const post = () => fire({ type: "post_review", approvalId: gate.approvalId, verdict, ...(body.trim() && { comment: body.trim() }) });
   const reject = () => text && fire({ type: "reject", approvalId: gate.approvalId, comment: text });
 
   const move = (e: KeyboardEvent) => {
@@ -99,6 +103,20 @@ export function PostBar({ view, gate, send, update }: { view: SessionView; gate:
         <span className="grow" />
         <span className="shrink-0 text-xs text-text-secondary">Posts to GitHub as {config.repo.split("/")[0]}</span>
       </div>
+      <textarea
+        aria-label="Review comment"
+        rows={2}
+        maxLength={MAX_REVIEW_COMMENT_CHARS}
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        placeholder="Leave a comment"
+        className="mt-3 block max-h-40 min-h-9 w-full resize-y rounded-[10px] bg-black/5 px-3 py-2 text-[14px] leading-5 transition-[background-color,box-shadow] focus:bg-white focus:shadow-[0_0_0_1px_rgba(0,0,0,0.2)]"
+      />
+      {summary && (
+        <button type="button" onClick={() => setBody(body.trim() ? `${body.trim()}\n\n${summary}` : summary)} className="mt-1.5 cursor-pointer text-xs text-text-secondary">
+          Use &run's summary
+        </button>
+      )}
       <div role="radiogroup" aria-label="Verdict" data-verdict={verdict} onKeyDown={move} className="mt-3 flex rounded-[9px] bg-fill p-0.5">
         {VERDICTS.map((v, i) => (
           <button
@@ -123,7 +141,7 @@ export function PostBar({ view, gate, send, update }: { view: SessionView; gate:
           Ask &run for another look
         </button>
         <span className="grow" />
-        <button type="button" disabled={sending} onClick={post} className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-medium text-white disabled:cursor-default disabled:opacity-60 ${current.bg}`}>
+        <button type="button" disabled={sending || empty} onClick={post} className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-medium text-white disabled:cursor-default disabled:opacity-60 ${current.bg}`}>
           {sending ? (
             <>
               <Spinner />
@@ -134,6 +152,7 @@ export function PostBar({ view, gate, send, update }: { view: SessionView; gate:
           )}
         </button>
       </div>
+      {empty && <div className="mt-2 text-right text-xs text-text-secondary">{EMPTY_REVIEW}</div>}
       {(view.refused || offline) && (
         <div role="alert" className="mt-2 text-xs text-failed">
           {view.refused ?? "Not connected. Try again in a moment."}

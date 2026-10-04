@@ -44,6 +44,11 @@ describe("review (D9, P4-m)", () => {
     expect(body.trim()).toBe(REVIEW_FOOTER);
   });
 
+  it("the reviewer's comment opens the body", () => {
+    expect(buildReview(FINDINGS, "Two things before this merges.").body).toMatch(/^Two things before this merges\.\n\nNotes that are not on a changed line:/);
+    expect(buildReview([], "Looks good.").body).toBe(`Looks good.\n\n${REVIEW_FOOTER}`);
+  });
+
   it("posts the review with the PAT on the given commit", async () => {
     const { fake, github } = setup();
     const pull = fake.addPull({ number: 14, title: "Add slugify helper", headRef: "agent/1a2b3c4d-1", files: [{ filename: "src/slugify.js", status: "added", additions: 6, deletions: 0, patch: SLUGIFY_PATCH }] });

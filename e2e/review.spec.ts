@@ -224,6 +224,13 @@ test("review a pull request: dismiss, edit, request changes, post", async ({ pag
   await expect(s.postBar).toContainText("Posts to GitHub as TseHang");
   expect((await gh.state()).reviews).toEqual([]);
 
+  // The review's own words come from the reviewer, who may start from &run's summary.
+  const body = s.postBar.getByLabel("Review comment");
+  await expect(body).toHaveValue("");
+  await body.fill("Please fix the hyphens first.");
+  await s.postBar.getByRole("button", { name: "Use &run's summary" }).click();
+  await expect(body).toHaveValue("Please fix the hyphens first.\n\nFour findings; the main one is repeated spaces.");
+
   // The verdict is a three-part switch; the main button says what it will do.
   const verdict = s.postBar.getByRole("radiogroup", { name: "Verdict" });
   const option = (name: string) => verdict.getByRole("radio", { name, exact: true });
@@ -268,6 +275,7 @@ test("review a pull request: dismiss, edit, request changes, post", async ({ pag
   ]);
   expect(review.comments[0]!.body).toContain("Collapse runs of whitespace into one hyphen.");
   expect(review.comments[1]!.body).toContain("Leading and trailing hyphens are kept.");
+  expect(review.body).toMatch(/^Please fix the hyphens first\.\n\nFour findings; the main one is repeated spaces\.\n\n/);
   expect(review.body).toContain("README still shows the old name makeSlug.");
   expect(review.body).not.toContain("Consider a default export");
   expect(Object.keys(state.refs)).toEqual(["main"]); // the review changed nothing in the repo

@@ -14,7 +14,7 @@ import { SandboxLostError, STOP_REASON, type AgentDeps, type AgentState, type Ap
 import { OutputCoalescer } from "./coalesce";
 import { parseClientFrame, titleOf } from "./frames";
 import type { EngineDeps } from "./ports";
-import { RESTORED_NOTE, type ClientFrame, type PendingView, type ServerFrame, type SessionSnapshot } from "./protocol";
+import { EMPTY_REVIEW, RESTORED_NOTE, type ClientFrame, type PendingView, type ServerFrame, type SessionSnapshot } from "./protocol";
 import { SessionStore, type GitHubState, type StoredFinding } from "./store";
 
 const WATCHDOG_MS = 60_000;
@@ -293,6 +293,10 @@ export class SessionEngine {
     if (this.inflight || !pending || pending.approvalId !== frame.approvalId || !approvesFinish(pending, { approved: true })) {
       return reply({ type: "rejected", reason: "no such pending approval" });
     }
+    // GitHub refuses a Comment or Request changes review that says nothing.
+    if (frame.verdict !== "APPROVE" && !frame.comment && !this.store.githubState().posted && !this.store.findings().some((f) => !f.dismissed)) {
+      return reply({ type: "rejected", reason: EMPTY_REVIEW });
+    }
     this.startSegment({ approved: true }, false, async () => {
       // Already on GitHub (the session was interrupted before the gate closed): only close the gate.
       if (this.store.githubState().posted) return true;
@@ -300,7 +304,7 @@ export class SessionEngine {
       const meta = this.store.meta();
       const review = this.store.githubState().review;
       if (!meta || !review) return false;
-      const { body, comments } = buildReview(this.store.findings());
+      const { body, comments } = buildReview(this.store.findings(), frame.comment);
       let posted: { url: string };
       try {
         posted = await this.deps.github.postReview({ pr: review.number, commitId: meta.sha, verdict: frame.verdict, body, comments });

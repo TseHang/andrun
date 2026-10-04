@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { REVIEW_FOOTER } from "../../src/github";
 import { ScriptedModelClient } from "../support/scripted-model";
 import { fixtureTarball } from "../support/tarball";
 import { BRIEF, ID, PR_FILES, REVIEW_SCRIPT, SLUGIFY_FIXTURE, codeAtGate, containers, findings, ofType, reviewAtGate, send, world } from "./github-world";
@@ -94,6 +95,29 @@ describe("findings (S13, P4-c, P4-d)", () => {
     expect(await send(g.engine, { type: "post_review", approvalId: g.approvalId, verdict: "COMMENT" })).toMatchObject([{ type: "rejected" }]);
     expect(await send(g.engine, { type: "finding", id: "x", dismissed: true })).toMatchObject([{ type: "rejected" }]);
     expect(g.engine.snapshot()!.status).toBe("awaiting_approval");
+  });
+
+  it("the reviewer's comment is posted at the top of the review body", async () => {
+    const r = await reviewAtGate();
+    expect(await send(r.engine, { type: "post_review", approvalId: r.approvalId, verdict: "COMMENT", comment: 42 })).toMatchObject([{ type: "rejected" }]);
+    expect(await send(r.engine, { type: "post_review", approvalId: r.approvalId, verdict: "COMMENT", comment: "x".repeat(4001) })).toMatchObject([{ type: "rejected" }]);
+    expect(await send(r.engine, { type: "post_review", approvalId: r.approvalId, verdict: "COMMENT", comment: "  Please fix the hyphens first.  " })).toEqual([]);
+    expect(r.fake.reviews).toHaveLength(1);
+    expect(r.fake.reviews[0]!.body).toMatch(/^Please fix the hyphens first\.\n\n/);
+    expect(r.fake.reviews[0]!.body.endsWith(REVIEW_FOOTER)).toBe(true);
+  });
+
+  it("a review that says nothing is refused, except an approval", async () => {
+    const r = await reviewAtGate();
+    for (const f of findings(r.events())) await send(r.engine, { type: "finding", id: f.id, dismissed: true });
+    const refused = [{ type: "rejected", reason: "Write a comment or keep a finding to post this review." }];
+    expect(await send(r.engine, { type: "post_review", approvalId: r.approvalId, verdict: "COMMENT" })).toEqual(refused);
+    expect(await send(r.engine, { type: "post_review", approvalId: r.approvalId, verdict: "REQUEST_CHANGES", comment: "   " })).toEqual(refused);
+    expect(r.fake.reviews).toEqual([]);
+    expect(r.engine.snapshot()!.status).toBe("awaiting_approval");
+
+    expect(await send(r.engine, { type: "post_review", approvalId: r.approvalId, verdict: "COMMENT", comment: "Nothing to add." })).toEqual([]);
+    expect(r.fake.reviews[0]).toMatchObject({ event: "COMMENT", body: `Nothing to add.\n\n${REVIEW_FOOTER}`, comments: [] });
   });
 
   it("a review that was posted is not posted twice", async () => {
