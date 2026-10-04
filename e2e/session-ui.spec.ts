@@ -38,7 +38,13 @@ test("Stop ends the run and the session waits", async ({ page, request }) => {
   const stop = s.composer.getByRole("button", { name: "Stop" });
   await expect(stop).toBeVisible({ timeout: 60_000 });
   await expect(s.timeline.getByRole("status")).toContainText(/Thinking|Starting sandbox/);
-  await expect(s.composer).toContainText("The agent reads your message after its current step");
+  // The queue hint shows under the input, and only once a message is typed.
+  const HINT = "The agent reads your message after its current step";
+  await expect(s.composer).not.toContainText(HINT);
+  await page.getByLabel("Message to the agent").fill("use tabs");
+  await expect(s.composer).toContainText(HINT);
+  await page.getByLabel("Message to the agent").fill("");
+  await expect(s.composer).not.toContainText(HINT);
   // The sandbox is up and the model call is in flight.
   await expect(s.timeline.getByRole("status")).toHaveText("Thinking", { timeout: 60_000 });
 

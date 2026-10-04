@@ -183,7 +183,7 @@ describe("Session UI: the conversation (slice B)", () => {
     }
   });
 
-  it("the composer shows Stop and the queue hint only while running", () => {
+  it("the composer shows Stop only while running, and no queue hint before a message is typed", () => {
     const composer = (running: boolean) =>
       renderToStaticMarkup(<Composer view={initialView()} running={running} waiting={!running} code send={() => true} update={() => {}} />);
     const stop = /<button[^>]*>Stop<\/button>/;
@@ -192,7 +192,7 @@ describe("Session UI: the conversation (slice B)", () => {
     const running = composer(true);
     expect(running).toMatch(stop);
     expect(/<button[^>]*>Stop<\/button>/.exec(running)![0]).toContain('type="button"'); // it must not submit the message form
-    expect(running).toContain(HINT);
+    expect(running).not.toContain(HINT); // it shows under the input once a message is typed (E2E)
     expect(running).toMatch(/<button[^>]*>Send<\/button>/);
 
     const idle = composer(false);
