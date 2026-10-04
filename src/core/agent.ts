@@ -6,18 +6,19 @@ import { compactForRequest, estimateTokens } from "./context";
 import { summarizeDiff } from "./diff";
 import type { DiffSummary, EventBody } from "./events";
 import { executeTool, summarizeCall, toolSpecs, type ToolResult } from "./tools";
-import type {
-  SandboxAdapter,
-  AgentDeps,
-  AgentState,
-  ApprovalDecision,
-  ChatMessage,
-  ModeName,
-  ModeProfile,
-  PendingApproval,
-  RunOutcome,
-  ToolCall,
-  ToolName,
+import {
+  STOP_REASON,
+  type SandboxAdapter,
+  type AgentDeps,
+  type AgentState,
+  type ApprovalDecision,
+  type ChatMessage,
+  type ModeName,
+  type ModeProfile,
+  type PendingApproval,
+  type RunOutcome,
+  type ToolCall,
+  type ToolName,
 } from "./types";
 
 const MAX_STRIKES = 3;
@@ -154,7 +155,9 @@ async function loop(ctx: RunContext): Promise<RunOutcome> {
   const { config } = deps;
 
   while (true) {
-    if (deps.signal?.aborted) return fail(ctx, "sandbox", String(deps.signal.reason ?? "aborted"));
+    if (deps.signal?.aborted) {
+      return isStop(deps) ? stopped(ctx) : fail(ctx, "sandbox", String(deps.signal.reason ?? "aborted"));
+    }
 
     for (const text of deps.drainUserMessages?.() ?? []) {
       userMessage(ctx, text);
@@ -180,6 +183,8 @@ async function loop(ctx: RunContext): Promise<RunOutcome> {
         (text) => emit(ctx, { type: "message_delta", id: messageId, text }),
       );
     } catch (err) {
+      // The call was cut off by a stop: nothing of it is kept.
+      if (isStop(deps)) return stopped(ctx);
       return fail(ctx, "model", err instanceof Error ? err.message : String(err));
     }
 
@@ -237,6 +242,11 @@ async function processCalls(ctx: RunContext, calls: ToolCall[]): Promise<RunOutc
   const { profile, deps, state } = ctx;
 
   for (const [i, call] of calls.entries()) {
+    // After a stop the calls that have not started are not run, but each is answered.
+    if (isStop(deps)) {
+      for (const rest of calls.slice(i)) toolMessage(ctx, rest, JSON.stringify({ error: STOP_REASON }));
+      return stopped(ctx);
+    }
     const name = call.function.name;
     const args = parseArgs(call.function.arguments);
     const remaining = calls.slice(i + 1);
@@ -347,6 +357,8 @@ async function recordResult(ctx: RunContext, call: ToolCall, result: ToolResult,
   }
 
   emit(ctx, { type: "error", source: "tool", message: result.error, next: "The agent sees this error and can try again." });
+  // A command cut off by a stop is not a failure of the tool.
+  if (isStop(deps)) return null;
   state.failures = state.failures?.tool === name ? { tool: name, count: state.failures.count + 1 } : { tool: name, count: 1 };
   if (state.failures.count < MAX_STRIKES) return null;
 
@@ -372,6 +384,18 @@ function fail(ctx: RunContext, source: "model" | "sandbox", message: string): Ru
   emit(ctx, { type: "error", source, message });
   setStatus(ctx, "failed");
   return { kind: "failed", error: message };
+}
+
+/** The user stopped the run: it ends waiting for them, with the changes so far kept. */
+function stopped(ctx: RunContext): RunOutcome {
+  emit(ctx, { type: "stopped" });
+  setStatus(ctx, "awaiting_input");
+  checkpoint(ctx);
+  return { kind: "awaiting_input" };
+}
+
+function isStop(deps: AgentDeps): boolean {
+  return deps.signal?.aborted === true && deps.signal.reason === STOP_REASON;
 }
 
 /** The safety limit of one turn (HI-h): money for a priced model, tokens otherwise. Null while under it. */

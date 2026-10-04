@@ -95,6 +95,8 @@ export type EventBody =
       context_window: number;
     }
   | { type: "error"; source: ErrorSource; message: string; next?: string }
+  /** The user stopped the run; the changes so far are kept. */
+  | { type: "stopped" }
   | { type: "status"; status: Status };
 
 export type EventType = EventBody["type"];

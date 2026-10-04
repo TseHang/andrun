@@ -15,6 +15,8 @@ export interface SessionStub {
   snapshot(): Promise<(SessionSnapshot & { debug?: Record<string, unknown> }) | null>;
   remove(): Promise<boolean>;
   killSandbox(): Promise<boolean>;
+  /** The saved content of a changed file, or null. */
+  file(path: string): Promise<string | null>;
   /** Forwards the WebSocket upgrade request. */
   fetch(request: Request): Promise<Response>;
 }

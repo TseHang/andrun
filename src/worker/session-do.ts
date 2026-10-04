@@ -110,6 +110,10 @@ export class SessionDO extends DurableObject<Env> {
     return this.engine.killSandbox();
   }
 
+  async file(path: string): Promise<string | null> {
+    return this.engine.fileContent(path);
+  }
+
   // ---------- WebSocket (Hibernation API) ----------
 
   /** The upgrade: replay what the client missed, then it receives live frames like every other socket. */

@@ -8,7 +8,7 @@ import { getProfile } from "../core/modes";
 import { REPO_CONTEXT_HEADER, buildRepoContext } from "../core/repo-context";
 import { MAX_FILE_BYTES } from "../core/tools";
 import { buildReview, commentableLines, numberedPatch, type PullFile } from "../github";
-import { SandboxLostError, type AgentDeps, type AgentState, type ApprovalDecision, type PendingApproval } from "../core/types";
+import { SandboxLostError, STOP_REASON, type AgentDeps, type AgentState, type ApprovalDecision, type PendingApproval } from "../core/types";
 import { OutputCoalescer } from "./coalesce";
 import { parseClientFrame, titleOf } from "./frames";
 import type { EngineDeps } from "./ports";
@@ -148,6 +148,12 @@ export class SessionEngine {
     return gh.pr ? { number: gh.pr.number, url: gh.pr.url, branch: gh.pr.branch } : null;
   }
 
+  /** The saved content of a changed file; null unless the `changes` table holds text for exactly that path. */
+  fileContent(path: string): string | null {
+    if (this.deleted || !this.store.exists()) return null;
+    return this.store.changes().find((c) => c.path === path)?.content ?? null;
+  }
+
   replay(lastSeq: number): AgentEvent[] | null {
     if (!this.store.exists()) return null;
     return this.store.eventsAfter(lastSeq);
@@ -175,6 +181,14 @@ export class SessionEngine {
         this.handleFrame(raw, reply, ctx);
       });
       return;
+    }
+
+    if (frame.type === "stop") {
+      const controller = this.controller;
+      if (!this.inflight || !controller || controller.signal.aborted || (this.liveStatus ?? state.status) !== "running") {
+        return reply({ type: "rejected", reason: "The agent is not running." });
+      }
+      return controller.abort(STOP_REASON);
     }
 
     if (frame.type === "finding") return this.editFinding(state, frame, reply);
