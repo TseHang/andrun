@@ -49,7 +49,7 @@ Key Decisions
 - **RV-e** Severity labels: High = "Fix before merging", Medium = "Worth fixing", Low = "Optional". Colour is never the only signal: the word is always there.
 - **RV-f** Verdict labels and main button: Comment → "Post comments"; Approve → "Approve"; Request changes → "Request changes". Colours: neutral, green (`done`), red (`failed`). The switch stays a `radiogroup` for keyboard and screen readers.
 - **RV-g** In the review session the description is folded by default (the user has read it before Start); on `/prs/:n` it is open.
-- **RV-h** `GET /pulls/:n/files` uses the existing GitHub read rate limiter and does not check that the path is one of the changed files: the workspace already shows this repository, and the check would cost another GitHub request.
+- **RV-h** `GET /pulls/:n/files` uses the existing GitHub read rate limiter, serves only `.html` / `.htm` paths (added after code review), and does not check that the path is one of the changed files: the workspace already shows this repository, and the check would cost another GitHub request.
 
 Data flow: page → `GET /pulls/:n` (now with `body`) → `PullOverview`. Preview → `GET /pulls/:n/files?path=` → worker reads the pull request for its head sha, then `GET /repos/:repo/contents/:path?ref=<sha>` → base64 decoded → JSON. No new dependencies.
 
@@ -203,3 +203,4 @@ Build notes
 - E2E, full suite on the final code minus the post bar layout fix: 36 passed, 2 failed (`conversation.spec.ts` "a question is answered by picking an option", `failures.spec.ts` "a killed sandbox…"); both are outside this slice and passed when run alone (6/6). Same local container instability as in the session UI slice. After the layout fix: `review.spec.ts` 6/6.
 - Runtime: screenshots of the list, the pull request page, the preview, the hidden panel, the session at the gate and the post bar at 1440 and 1280 wide were checked by eye.
 - Known limits: at 1280 wide the verdict switch just fits; narrower windows are out of scope (no responsive layout). The sidebar still says "Awaiting approval" for a review that is ready to post (unchanged). The "Show files" button has no count until the diff has loaded.
+- Code review (high), fixed: the file endpoint served any file of the repo — it now serves only `.html` / `.htm`; an empty HTML file was reported as missing; the files panel kept bottom padding for a bar that no longer covers it. Follow-ups are in the pull request.

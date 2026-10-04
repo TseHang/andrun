@@ -90,7 +90,7 @@ describe("pull requests (spec D2: list, read)", () => {
   it("reads a file at the pull request's head commit", async () => {
     const odd = "docs/a b #1 é.html";
     const { fake, github } = setup({
-      files: { "README.md": "# demo\n", "index.html": "<h1>hi é</h1>\n", [odd]: "<p>ok</p>\n", "big.html": "x".repeat(1_000_001) },
+      files: { "README.md": "# demo\n", "index.html": "<h1>hi é</h1>\n", [odd]: "<p>ok</p>\n", "empty.html": "", "big.html": "x".repeat(1_000_001) },
     });
     fake.addPull({ number: 30, title: "Page", headRef: "feat/page" });
     fake.addPull({ number: 31, title: "From a fork", headRef: "patch-1", user: "stranger", headRepo: "stranger/andrun-demo" });
@@ -102,6 +102,7 @@ describe("pull requests (spec D2: list, read)", () => {
     expect(await github.getPullFile(30, odd)).toBe("<p>ok</p>\n");
     expect(fake.requests.at(-1)!.path).toBe(`/repos/TseHang/andrun-demo/contents/docs/a%20b%20%231%20%C3%A9.html?ref=${sha}`);
 
+    expect(await github.getPullFile(30, "empty.html")).toBe(""); // an empty file is a file
     expect(await github.getPullFile(30, "missing.html")).toBeNull();
     expect(await github.getPullFile(30, "docs")).toBeNull(); // a directory
     expect(await github.getPullFile(30, "big.html")).toBeNull(); // GitHub sends no content over 1 MB

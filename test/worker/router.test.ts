@@ -427,6 +427,12 @@ describe("router (Phase 3: P3-c, P3-d)", () => {
     await expectError(await handle(req("GET", "/pulls/14/files"), f.env), 404, /^no such file$/);
     await expectError(await handle(req("GET", "/pulls/14/files?path="), f.env), 404, /^no such file$/);
     await expectError(await handle(req("GET", "/pulls/14/files?path=missing.html"), f.env), 404, /^no such file$/);
+    // Only HTML pages are served: the rest of the repo is not readable through the preview (code review).
+    const asked = f.fake.requests.length;
+    for (const other of ["README.md", ".env", "src/slugify.js", "index.html.txt", "html"]) {
+      await expectError(await handle(req("GET", `/pulls/14/files?path=${other}`), f.env), 404, /^no such file$/);
+    }
+    expect(f.fake.requests.length).toBe(asked); // refused before any GitHub request
     await expectError(await handle(req("GET", "/pulls/16/files?path=index.html"), f.env), 404, /^no such file$/); // a fork
     await expectError(await handle(req("GET", "/pulls/99/files?path=index.html"), f.env), 404);
     await expectError(await handle(req("GET", "/pulls/abc/files?path=index.html"), f.env), 404, /^not found$/);

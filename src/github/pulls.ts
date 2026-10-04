@@ -111,7 +111,7 @@ export async function getPullFile(request: Request, repo: string, token: string,
     throw err;
   }
   const file = raw as { type?: string; encoding?: string; content?: string } | null;
-  if (!file || Array.isArray(file) || file.type !== "file" || file.encoding !== "base64" || !file.content) return null;
+  if (!file || Array.isArray(file) || file.type !== "file" || file.encoding !== "base64" || typeof file.content !== "string") return null;
   const bin = atob(file.content.replace(/\s/g, ""));
   return new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
 }

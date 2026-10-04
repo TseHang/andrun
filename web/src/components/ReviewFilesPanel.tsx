@@ -8,7 +8,7 @@ export function ReviewFilesPanel({ pull, findings, onHide, jump, notice }: { pul
   const additions = files.reduce((n, f) => n + f.additions, 0);
   const deletions = files.reduce((n, f) => n + f.deletions, 0);
   return (
-    <aside aria-label="Files changed" className="flex min-h-0 w-[58%] shrink-0 flex-col gap-3.5 overflow-y-auto border-l border-black/8 px-5 pt-4 pb-[calc(var(--bar-h,0px)+60px)]">
+    <aside aria-label="Files changed" className="flex min-h-0 w-[58%] shrink-0 flex-col gap-3.5 overflow-y-auto border-l border-black/8 px-5 pt-4 pb-6">
       <div className="flex items-baseline justify-between">
         <h2 className="m-0 text-[15px] font-semibold tracking-[-0.01em]">Files changed</h2>
         <span className="flex items-baseline gap-3 text-xs text-text-secondary">
