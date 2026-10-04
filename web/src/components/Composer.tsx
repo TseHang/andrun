@@ -6,18 +6,6 @@ const BAR = "pointer-events-auto flex items-center gap-3 rounded-2xl border bord
 
 export function Composer({ view, running, send, update }: { view: SessionView; running: boolean; send: (f: ClientFrame) => boolean; update: (fn: (v: SessionView) => SessionView) => void }) {
   const [text, setText] = useState("");
-  if (!view.composerEnabled) {
-    return (
-      <div className={BAR}>
-        <span className="grow text-[13px] text-text-secondary">Limit reached. Start a new session to continue.</span>
-        <form aria-label="Message the agent" className="contents" onSubmit={(e) => e.preventDefault()}>
-          <input aria-label="Message to the agent" disabled className="sr-only" />
-          <button type="submit" disabled className="sr-only">Send</button>
-        </form>
-        <a href="/" className="rounded-full bg-accent px-3.5 py-1.5 text-[13px] font-medium text-white">New session</a>
-      </div>
-    );
-  }
   const submit = () => {
     const t = text.trim();
     if (!t) return;

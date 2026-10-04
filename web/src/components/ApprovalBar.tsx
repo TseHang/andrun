@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import type { ClientFrame } from "../../../src/session/protocol";
-import { prTarget } from "../state/format";
+import { planNote, prTarget } from "../state/format";
 import { markSending, type GateView, type SessionView } from "../state/reducer";
 import { Spinner } from "./Spinner";
 import type { SessionInfo } from "./Timeline";
@@ -16,6 +16,7 @@ export function ApprovalBar({ view, gate, session, send, update }: { view: Sessi
   const open = gate.callId !== undefined;
   const sending = view.sending;
   const opensPr = finish && session.code;
+  const note = finish ? planNote(view.plan) : null;
 
   const fire = (frame: ClientFrame) => {
     const sent = send(frame);
@@ -48,6 +49,7 @@ export function ApprovalBar({ view, gate, session, send, update }: { view: Sessi
       {gate.command && <div className="mt-2 rounded-lg bg-sidebar px-2.5 py-1.5 font-mono text-xs break-all">{gate.command}</div>}
       {gate.paths && gate.paths.length > 0 && <div className="mt-2 rounded-lg bg-sidebar px-2.5 py-1.5 font-mono text-xs break-all">{gate.paths.join(", ")}</div>}
       {gate.summary && <div className="mt-2 text-[13px]">{gate.summary}</div>}
+      {note && <div className="mt-2 text-xs text-warning-text">{note}</div>}
       {(view.refused || offline) && (
         <div role="alert" className="mt-2 text-xs text-failed">
           {view.refused ?? "Not connected. Try again in a moment."}
