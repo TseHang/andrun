@@ -3,6 +3,8 @@
 // so a new engine over the same SQLite behaves like the old one (the Durable Object can be evicted at any time).
 
 import { createSession, resume, runAgent, type RunResult } from "../core/agent";
+import { classifyTask, routeFor } from "../core/auto";
+import { AUTO_MODEL } from "../core/config";
 import type { AgentEvent, EventBody } from "../core/events";
 import { getProfile } from "../core/modes";
 import { REPO_CONTEXT_HEADER, buildRepoContext } from "../core/repo-context";
@@ -566,7 +568,7 @@ export class SessionEngine {
     if (!state) return;
     const base = getProfile(state.mode, deps.config);
     const [model = base.model, reasoning] = (store.meta()?.model ?? "").split("@").filter(Boolean);
-    const profile = { ...base, model, ...(reasoning !== undefined && { reasoning }) };
+    let profile = { ...base, model, ...(reasoning !== undefined && { reasoning }) };
 
     // The repo context goes after the task (the first user message is the pull request's Task) and is not an event.
     if (needSandbox && state.step === 0 && !state.messages.some((m) => m.role === "user" && m.content.startsWith(REPO_CONTEXT_HEADER))) {
@@ -579,6 +581,19 @@ export class SessionEngine {
         await this.failSession(messageOf(err));
         return;
       }
+    }
+    if (model === AUTO_MODEL) {
+      // A new turn is sorted and routed; a turn that continues after a gate keeps the model it started on.
+      let route = decision ? store.lastRoute() : null;
+      if (!route) {
+        const users = state.messages.filter((m) => m.role === "user" && !m.content.startsWith(REPO_CONTEXT_HEADER));
+        const kind = await classifyTask(deps.model, users.at(-1)?.content ?? "", controller.signal);
+        if (this.deleted) return;
+        route = routeFor(kind);
+        this.emitFor(state, { type: "model_routed", task: kind, ...route });
+        store.saveState(state, this.now());
+      }
+      profile = { ...base, ...route };
     }
     const agentDeps: AgentDeps = {
       model: deps.model,

@@ -209,6 +209,14 @@ export class SessionStore {
     this.sql.exec("INSERT OR REPLACE INTO events (seq, json) VALUES (?, ?)", event.seq, JSON.stringify(stored));
   }
 
+  /** The model auto mode chose for the current turn: the newest `model_routed` event. */
+  lastRoute(): { model: string; reasoning: string } | null {
+    const row = this.read<{ json: string }>(`SELECT json FROM events WHERE json LIKE '%"type":"model_routed"%' ORDER BY seq DESC LIMIT 1`)[0];
+    if (!row) return null;
+    const event = JSON.parse(row.json) as AgentEvent;
+    return event.type === "model_routed" ? { model: event.model, reasoning: event.reasoning } : null;
+  }
+
   eventsAfter(seq: number): AgentEvent[] {
     return this.read<{ json: string }>("SELECT json FROM events WHERE seq > ? ORDER BY seq", seq).map((r) => JSON.parse(r.json) as AgentEvent);
   }

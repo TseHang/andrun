@@ -255,6 +255,55 @@ describe("S1: a created session runs to the approval gate and is persisted", () 
     expect(JSON.stringify(model.requests[1]!.messages)).not.toContain("The loop bound looks wrong.");
   });
 
+  it("auto sorts each turn with the small model and runs it on the model for that kind", async () => {
+    const w = world();
+    const model = new ScriptedModelClient([
+      { text: "daily" }, // the classifier's answer for the first turn
+      { text: "What should I change?" },
+      { text: "complex" }, // and for the second
+      call("run_command", { command: "npm test" }),
+      call("finish", { summary: "Done." }),
+    ]);
+    const engine = w.engine(model);
+    engine.create({ id: ID, mode: "code", task: TASK, model: "auto" });
+    await engine.idle();
+    engine.handleFrame(JSON.stringify({ type: "message", text: "Refactor the whole module." }), () => {});
+    await engine.idle();
+    expect(engine.snapshot()).toMatchObject({ status: "awaiting_approval" });
+
+    expect(model.requests.map((r) => [r.model, r.reasoning, r.tools.length > 0])).toEqual([
+      ["deepseek-ai/deepseek-v4-flash", "none", false],
+      ["zai-org/glm-5.3-flash", "low", true],
+      ["deepseek-ai/deepseek-v4-flash", "none", false],
+      ["deepseek-ai/deepseek-v4.1-flash", "high", true],
+      ["deepseek-ai/deepseek-v4.1-flash", "high", true],
+    ]);
+    expect(model.requests[0]!.messages.at(-1)).toEqual({ role: "user", content: TASK }); // the task, not the repo context
+    expect(model.requests[2]!.messages.at(-1)).toEqual({ role: "user", content: "Refactor the whole module." });
+    expect(w.events().filter((e) => e.type === "model_routed")).toEqual([
+      expect.objectContaining({ task: "daily", model: "zai-org/glm-5.3-flash", reasoning: "low" }),
+      expect.objectContaining({ task: "complex", model: "deepseek-ai/deepseek-v4.1-flash", reasoning: "high" }),
+    ]);
+
+    // Continuing after the gate keeps the turn's model, also in a fresh engine, without asking the classifier again.
+    const after = new ScriptedModelClient([call("finish", { summary: "Done again." })]);
+    const woken = w.engine(after);
+    woken.handleFrame(JSON.stringify({ type: "reject", approvalId: woken.snapshot()!.pending!.approvalId, comment: "rename it too" }), () => {});
+    await woken.idle();
+    expect(after.requests.map((r) => [r.model, r.reasoning])).toEqual([["deepseek-ai/deepseek-v4.1-flash", "high"]]);
+    expect(w.events().filter((e) => e.type === "model_routed")).toHaveLength(2);
+  });
+
+  it("auto falls back to the daily model when the classifier fails", async () => {
+    const w = world();
+    const model = new ScriptedModelClient([new ModelError("ai& API 500", 500), { text: "Hello." }]);
+    const engine = w.engine(model);
+    engine.create({ id: ID, mode: "code", task: TASK, model: "auto" });
+    await engine.idle();
+    expect(model.requests.at(-1)).toMatchObject({ model: "zai-org/glm-5.3-flash", reasoning: "low" });
+    expect(engine.snapshot()).toMatchObject({ status: "awaiting_input" });
+  });
+
   it("refuses to create a session twice", async () => {
     const { engine } = await atGate();
     expect(() => engine.create({ id: ID, mode: "code", task: TASK })).toThrow();
