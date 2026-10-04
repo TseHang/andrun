@@ -129,6 +129,7 @@ v3（2026-10-04）：對照 Codex 與 Claude Code 的 harness 後改寫，並納
 
 - [ ] **模型寫完後過度檢查**：`deepseek-v4-flash` 做單檔 `index.html` 時，第 6 步就寫好檔案，之後又花 10 步做語法檢查、跑不相關的測試才呼叫 `finish`，費用從 ¥0.53 漲到 ¥2.70。做法：調 Code prompt（寫完、驗證一次就 finish；不跑和任務無關的測試），再跑 `static-page` 與 `sum-off-by-one` 的真實模型 eval 比對步數。跑 eval 前先問 Henry。
 - [ ] **預覽頁加 CSP（待討論，未決定要不要做）**：HTML 預覽會執行 agent 寫的 script，隔離在 `sandbox="allow-scripts"` 的 iframe，讀不到 app，但仍可對外發請求。可在預覽內容前插入 CSP（`default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'`）擋掉對外連線。代價：用 CDN 載入函式庫或外部圖片的頁面會壞。目前的行為是 Henry 同意的；要不要改等討論。
+- [ ] **HTML 預覽會執行不受信任的 script（2026-10-04，Review UX 後）**：預覽現在有兩個入口，Code session 的變更檔與 Review PRs 的 PR 檔案（`GET /pulls/:n/files`，從 GitHub 讀 head commit）。PR 的內容不是 agent 依你的指令寫的，而是 PR 作者寫的。目前的防線：`sandbox="allow-scripts"`、沒有 `allow-same-origin`；fork PR 不顯示 Preview、API 也不回內容，所以來源只限對 repo 有寫入權限的人與 &run。剩下的風險同上一項（script 可對外連線、可在框內畫假畫面、可吃 CPU）。和上一項的 CSP 一起討論、一起決定。
 
 ## 驗收（最低標準）
 
