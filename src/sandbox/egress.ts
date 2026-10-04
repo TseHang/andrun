@@ -4,7 +4,7 @@ export interface EgressOptions {
   killSwitch: boolean;
 }
 
-const MAX_BODY_BYTES = 25 * 1024 * 1024;
+const MAX_BODY_BYTES = 25_000_000;
 
 export function egressDecision(method: string, url: string, opts: EgressOptions): { status: number; reason: string } | null {
   if (!opts.enabled || opts.killSwitch) return { status: 403, reason: "Task network is disabled" };

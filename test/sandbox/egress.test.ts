@@ -25,7 +25,7 @@ describe("Task egress", () => {
     expect(redirect).toHaveBeenCalledExactlyOnceWith(expect.any(Request), { redirect: "manual" });
     const upstream = vi.fn(async () => new Response(new Uint8Array(30 * 1024 * 1024), { headers: { "content-length": String(30 * 1024 * 1024) } }));
     const body = await proxyEgress(new Request("https://example.com/"), ON, upstream);
-    expect((await body.arrayBuffer()).byteLength).toBe(25 * 1024 * 1024);
+    expect((await body.arrayBuffer()).byteLength).toBe(25_000_000);
     expect(body.headers.get("content-length")).not.toBe(String(30 * 1024 * 1024));
     const denied = await proxyEgress(new Request("https://example.com/", { method: "POST" }), ON, upstream);
     expect(denied.status).toBe(405);
