@@ -1,0 +1,1 @@
+{"exitCode":0,"out":"-rw-r--r-- 1 root root 644 Jan  1  1970 /etc/cloudflare/certs/cloudflare-containers-ca.crt\nUpdating certificates in /etc/ssl/certs...\nrehash: warning: skipping ca-certificates.crt,it does not contain exactly one certificate or CRL\n1 added, 0 removed; done.\nRunning hooks in /etc/ca-certificates/update.d...\ndone.\n","ms":14797}
