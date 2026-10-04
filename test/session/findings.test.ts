@@ -123,11 +123,24 @@ describe("findings (S13, P4-c, P4-d)", () => {
   it("a review that was posted is not posted twice", async () => {
     // Security review: the review reached GitHub, but the session was interrupted before the gate closed.
     const r = await reviewAtGate();
-    r.store().saveGithubState({ posted: { url: "https://github.com/TseHang/andrun-demo/pull/14#pullrequestreview-1", verdict: "COMMENT", approvalId: r.approvalId } });
+    const url = "https://github.com/TseHang/andrun-demo/pull/14#pullrequestreview-1";
+    r.store().saveGithubState({ posted: { url, verdict: "COMMENT", approvalId: r.approvalId } });
     expect(await send(r.engine, { type: "post_review", approvalId: r.approvalId, verdict: "COMMENT" })).toEqual([]);
     expect(r.fake.reviews).toEqual([]); // GitHub is not asked again
     expect(ofType(r.events(), "review_posted")).toEqual([]);
     expect(r.engine.snapshot()!.status).toBe("done");
+
+    // A record from before gates were stored (no approvalId) is this gate's too.
+    const old = await reviewAtGate({ extra: [call("finish", { summary: "Nothing new." })] });
+    old.store().saveGithubState({ posted: { url, verdict: "COMMENT" } });
+    expect(await send(old.engine, { type: "post_review", approvalId: old.approvalId, verdict: "COMMENT" })).toEqual([]);
+    expect(old.fake.reviews).toEqual([]);
+    // A message after it opens the next round: the old findings count as posted, and the next post goes out.
+    await send(old.engine, { type: "message", text: "anything else?" });
+    const next = old.engine.snapshot()!.pending!.approvalId;
+    expect(await send(old.engine, { type: "post_review", approvalId: next, verdict: "COMMENT", comment: "No." })).toEqual([]);
+    expect(old.fake.reviews).toHaveLength(1);
+    expect(old.fake.reviews[0]).toMatchObject({ body: `No.\n\n${REVIEW_FOOTER}`, comments: [] });
   });
 
   it("a posted review stays open: the next review carries only what is new", async () => {

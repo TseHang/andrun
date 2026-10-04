@@ -202,6 +202,7 @@ export class SessionEngine {
     if (frame.type === "post_review") return this.postReview(state, frame, reply, ip);
 
     if (frame.type === "message") {
+      this.sealLegacyPost(state);
       if (this.inflight) {
         this.queued.push(frame.text);
         return;
@@ -291,7 +292,9 @@ export class SessionEngine {
       return reply({ type: "rejected", reason: "no such pending approval" });
     }
     // Already on GitHub (the session was interrupted before the gate closed): only close the gate.
-    const already = this.store.githubState().posted?.approvalId === frame.approvalId;
+    // A review posted before gates were recorded has no `approvalId`: it counts as this gate's until a message seals it.
+    const last = this.store.githubState().posted;
+    const already = last !== undefined && (last.approvalId ?? frame.approvalId) === frame.approvalId;
     // GitHub refuses a Comment or Request changes review that says nothing.
     if (!already && frame.verdict !== "APPROVE" && !frame.comment && !this.unposted().some((f) => !f.dismissed)) {
       return reply({ type: "rejected", reason: EMPTY_REVIEW });
@@ -323,6 +326,16 @@ export class SessionEngine {
       this.ownEmit({ type: "review_posted", url: posted.url, verdict: frame.verdict });
       this.upsertIndex("awaiting_approval");
       return true;
+    });
+  }
+
+  /** A review posted before `postedFindings` existed carried every kept finding; a message after it opens the next round. */
+  private sealLegacyPost(state: AgentState): void {
+    const gh = this.store.githubState();
+    if (!gh.posted || gh.posted.approvalId !== undefined) return;
+    this.store.saveGithubState({
+      posted: { ...gh.posted, approvalId: state.pending?.approvalId ?? "" },
+      postedFindings: this.store.findings().filter((f) => !f.dismissed).map((f) => f.id),
     });
   }
 

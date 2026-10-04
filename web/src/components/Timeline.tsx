@@ -21,7 +21,8 @@ const GITHUB_LINK = (url: string) => (
   </a>
 );
 
-function Item({ item, session }: { item: TimelineItem; session: SessionInfo }) {
+/** `latest`: the last posted review, which says how the review goes on. */
+function Item({ item, session, latest }: { item: TimelineItem; session: SessionInfo; latest: boolean }) {
   switch (item.kind) {
     case "user":
       return (
@@ -95,12 +96,14 @@ function Item({ item, session }: { item: TimelineItem; session: SessionInfo }) {
           <div className="text-[13px] font-semibold">Review posted · {VERDICT[item.verdict]}</div>
           <div className="mt-1 text-xs">{GITHUB_LINK(item.url)}</div>
           {/* This session reads the commit it started on; a newer one needs a new review. */}
-          <div className="mt-1 text-xs text-text-secondary">
-            Keep asking &run here. New commits on the pull request?{" "}
-            <a href={session.pr === null ? "/prs" : `/prs/${session.pr}`} className="text-accent-text">
-              Review again
-            </a>
-          </div>
+          {latest && (
+            <div className="mt-1 text-xs text-text-secondary">
+              Keep asking &run here. New commits on the pull request?{" "}
+              <a href={session.pr === null ? "/prs" : `/prs/${session.pr}`} className="text-accent-text">
+                Review again
+              </a>
+            </div>
+          )}
         </div>
       );
     case "approved":
@@ -128,13 +131,14 @@ export function Timeline({ view, session, before, after }: { view: SessionView; 
   });
 
   const activity = activityLabel(view);
+  const lastPosted = view.items.filter((i) => i.kind === "review_posted").at(-1);
   return (
     <section aria-label="Timeline" ref={ref} className="min-h-0 min-w-0 grow overflow-y-auto">
       <div className="mx-auto max-w-[720px] px-6 pt-4 pb-[calc(var(--bar-h,116px)+60px)]">
         {before}
         {view.items.map((item, i) => (
           <div key={item.key}>
-            <Item item={item} session={session} />
+            <Item item={item} session={session} latest={item === lastPosted} />
             {session.code && item.kind === "approved" && item.finish && view.items[i + 1]?.kind !== "pr" && <p className="text-center text-xs text-text-secondary">{NOTE}</p>}
           </div>
         ))}

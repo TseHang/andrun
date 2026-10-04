@@ -112,8 +112,8 @@ export function PostBar({ view, gate, send, update }: { view: SessionView; gate:
         placeholder="Leave a comment"
         className="mt-3 block max-h-40 min-h-9 w-full resize-y rounded-[10px] bg-black/5 px-3 py-2 text-[14px] leading-5 transition-[background-color,box-shadow] focus:bg-white focus:shadow-[0_0_0_1px_rgba(0,0,0,0.2)]"
       />
-      {summary && (
-        <button type="button" onClick={() => setBody(body.trim() ? `${body.trim()}\n\n${summary}` : summary)} className="mt-1.5 cursor-pointer text-xs text-text-secondary">
+      {summary && !body.includes(summary) && (
+        <button type="button" onClick={() => setBody((body.trim() ? `${body.trim()}\n\n${summary}` : summary).slice(0, MAX_REVIEW_COMMENT_CHARS))} className="mt-1.5 cursor-pointer text-xs text-text-secondary">
           Use &run's summary
         </button>
       )}

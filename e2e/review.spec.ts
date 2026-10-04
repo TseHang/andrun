@@ -305,6 +305,7 @@ test("review a pull request: dismiss, edit, request changes, post", async ({ pag
   await s.postBar.getByLabel("Review comment").fill("Fixed in the follow-up, thanks.");
   await s.postBar.getByRole("button", { name: "Post comments" }).click();
   await expect(s.reviewCard).toHaveCount(2);
+  await expect(page.getByRole("link", { name: "Review again" })).toHaveCount(1); // only the latest card says how to go on
   await expect(s.reviewCard.last()).toContainText("Review posted · Comment");
   await expect(s.status).toHaveText("Done");
   const again = (await gh.state()).reviews;
