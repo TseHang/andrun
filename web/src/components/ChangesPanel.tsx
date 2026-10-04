@@ -39,7 +39,7 @@ export function ChangesPanel({ view, sandboxRunning, sha }: { view: SessionView;
       aria-label="Changes"
       className={`min-h-0 min-w-0 shrink-0 overflow-y-auto border-l border-black/10 px-5 pt-4 pb-44 ${wide ? "w-[min(520px,45%)]" : "w-[400px]"}`}
     >
-      {view.plan && <PlanCard plan={view.plan} />}
+      {view.plan && <PlanCard plan={view.plan} active={view.status === "running"} />}
       <div className="mb-3 flex items-baseline justify-between">
         <h2 className="text-[15px] font-semibold">Changes</h2>
         <span className="text-xs text-text-secondary">

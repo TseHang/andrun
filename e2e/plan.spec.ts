@@ -17,6 +17,8 @@ test("the plan is shown, kept across a reload, and unfinished steps are named at
     await expect(steps).toContainText(["Read the code", "Fix the loop bound", "Run the tests"]);
     await expect(plan.locator('[data-plan-status="completed"]')).toHaveCount(2);
     await expect(plan.locator('[data-plan-status="in_progress"]')).toHaveText(/Run the tests/);
+    // QA: nothing is being worked on while the session waits, so the step shows no spinner.
+    await expect(plan.locator('[data-plan-status="in_progress"]')).toHaveAttribute("data-active", "false");
     await expect(plan.locator('[data-plan-status="pending"]')).toHaveCount(0);
     await expect(s.approval).toContainText("1 of 3 plan steps not completed");
     // The plan is a card, not timeline rows.

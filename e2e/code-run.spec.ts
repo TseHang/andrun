@@ -124,6 +124,10 @@ test("the header shows the step and the cost, and marks a cost above the notice"
   await expect(cost).toHaveText("¥18.76");
   await expect(cost).toHaveAttribute("data-over-notice", "true");
   await expect(page.getByRole("img", { name: NOTICE })).toBeVisible();
+  // QA: the note can be reached and read with the keyboard.
+  await expect(page.getByRole("tooltip")).toBeHidden();
+  await page.getByRole("img", { name: NOTICE }).focus();
+  await expect(page.getByRole("tooltip")).toHaveText(NOTICE);
   expect(await cost.evaluate(color)).not.toBe(normal);
   // Nothing stopped at ¥10: the run reached its gate.
   await expect(s.approval.getByRole("button", { name: "Approve and open PR" })).toBeEnabled();
