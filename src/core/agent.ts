@@ -2,7 +2,7 @@
 // Everything a run needs travels in one `RunContext`; there is no module-level state.
 
 import { contextWindowFor } from "./config";
-import { compactForRequest } from "./context";
+import { compactForRequest, estimateTokens } from "./context";
 import { summarizeDiff } from "./diff";
 import type { DiffSummary, EventBody } from "./events";
 import { executeTool, summarizeCall, toolSpecs, type ToolResult } from "./tools";
@@ -152,6 +152,9 @@ async function loop(ctx: RunContext): Promise<RunOutcome> {
     }
 
     if (config.maxSteps !== undefined && state.step >= config.maxSteps) return budget(ctx, `step limit reached (${config.maxSteps})`);
+    // Also here: a turn that passed its limit and then paused at a gate must not get another model call.
+    const over = turnLimit(ctx);
+    if (over) return over;
     state.step++;
 
     const contextWindow = contextWindowFor(config, profile.model);
@@ -174,8 +177,10 @@ async function loop(ctx: RunContext): Promise<RunOutcome> {
     state.tokensUsed += tokens_in + tokens_out;
     const price = config.prices?.[profile.model];
     const cost = price ? (tokens_in * price.in + tokens_out * price.out) / 1e6 : 0;
-    state.turnCost = (state.turnCost ?? 0) + cost;
-    state.turnTokens = (state.turnTokens ?? 0) + tokens_in + tokens_out;
+    // A provider that reports no usage must not switch the limit off: the request's estimated size counts instead.
+    const counted = tokens_in + tokens_out > 0 ? tokens_in + tokens_out : estimateTokens(requestMessages) + reservedTokens;
+    state.turnCost = (state.turnCost ?? 0) + (price && tokens_in + tokens_out === 0 ? (counted * price.in) / 1e6 : cost);
+    state.turnTokens = (state.turnTokens ?? 0) + counted;
     emit(ctx, {
       type: "usage",
       model: response.model,
@@ -213,10 +218,8 @@ async function loop(ctx: RunContext): Promise<RunOutcome> {
     }
 
     checkpoint(ctx);
-    if (price && state.turnCost >= config.maxTurnCost) return budget(ctx, `This turn reached its ¥${config.maxTurnCost} safety limit`, TURN_LIMIT_NEXT);
-    if (!price && state.turnTokens >= config.maxTurnTokens) {
-      return budget(ctx, `This turn reached its ${config.maxTurnTokens.toLocaleString("en-US")} token safety limit`, TURN_LIMIT_NEXT);
-    }
+    const stop = turnLimit(ctx);
+    if (stop) return stop;
   }
 }
 
@@ -342,6 +345,17 @@ function fail(ctx: RunContext, source: "model" | "sandbox", message: string): Ru
   emit(ctx, { type: "error", source, message });
   setStatus(ctx, "failed");
   return { kind: "failed", error: message };
+}
+
+/** The safety limit of one turn (HI-h): money for a priced model, tokens otherwise. Null while under it. */
+function turnLimit(ctx: RunContext): RunOutcome | null {
+  const { state, profile } = ctx;
+  const { config } = ctx.deps;
+  if (config.prices?.[profile.model]) {
+    return state.turnCost >= config.maxTurnCost ? budget(ctx, `This turn reached its ¥${config.maxTurnCost} safety limit`, TURN_LIMIT_NEXT) : null;
+  }
+  if (state.turnTokens < config.maxTurnTokens) return null;
+  return budget(ctx, `This turn reached its ${config.maxTurnTokens.toLocaleString("en-US")} token safety limit`, TURN_LIMIT_NEXT);
 }
 
 function budget(ctx: RunContext, message: string, next?: string): RunOutcome {

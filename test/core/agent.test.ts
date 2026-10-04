@@ -300,6 +300,44 @@ describe("S5: one safety limit per turn, in money (HI-h)", () => {
     expect(unpriced.state.turnCost).toBe(0);
     expect(budgetError(third.events)).toMatchObject({ message: "This turn reached its 4,000,000 token safety limit", next: "Send a message to continue." });
   });
+
+  it("the limit holds after a gate and when the provider reports no usage", async () => {
+    // Over the limit at a gate: Reject does not buy another model call.
+    const sandbox = new MemorySandbox({ "a.js": "" });
+    const first = harness(new ScriptedModelClient([call("finish", { summary: "d" }, { in: 9_000_000, out: 0 })]), sandbox, {}, PRICED);
+    const { state: paused } = await runAgent(start(), pricedProfile, first.deps);
+    expect(paused.status).toBe("awaiting_approval");
+    expect(paused.turnCost).toBeCloseTo(54);
+    const model = new ScriptedModelClient(listing(3));
+    const second = harness(model, sandbox, {}, PRICED);
+    const rejected = await resume(roundTrip(paused), { approved: false, comment: "more" }, pricedProfile, second.deps);
+    expect(rejected.outcome).toEqual({ kind: "budget_exceeded" });
+    expect(model.requests).toHaveLength(0);
+    expect(budgetError(second.events)).toMatchObject({ message: "This turn reached its ¥50 safety limit" });
+
+    // A provider that reports zero tokens: the request's estimated size is counted, so the turn still ends.
+    const big = "x".repeat(400_000); // about 100,000 tokens per request
+    const silent = (config: AgentConfig) => {
+      const m = new ScriptedModelClient(listing(200, { in: 0, out: 0 }));
+      const h = harness(m, new MemorySandbox({ "a.js": "" }), {}, config);
+      const state = start();
+      state.messages.push({ role: "user", content: big });
+      return { m, h, state };
+    };
+    const unpriced = silent({ ...defaultConfig, models: { ...defaultConfig.models, code: "unpriced" }, maxTurnTokens: 1_000_000 });
+    const r1 = await runAgent(unpriced.state, getProfile("code", { ...defaultConfig, models: { ...defaultConfig.models, code: "unpriced" } }), unpriced.h.deps);
+    expect(r1.outcome).toEqual({ kind: "budget_exceeded" });
+    expect(unpriced.m.requests.length).toBeGreaterThanOrEqual(9);
+    expect(unpriced.m.requests.length).toBeLessThanOrEqual(11);
+
+    const priced = silent({ ...PRICED, prices: { priced: { in: 100, out: 0 } } }); // about ¥10 per request
+    const r2 = await runAgent(priced.state, pricedProfile, priced.h.deps);
+    expect(r2.outcome).toEqual({ kind: "budget_exceeded" });
+    expect(priced.m.requests.length).toBeGreaterThanOrEqual(4);
+    expect(priced.m.requests.length).toBeLessThanOrEqual(6);
+    // The usage event still reports what the provider said.
+    expect(priced.h.events.find((e) => e.type === "usage")).toMatchObject({ tokens_in: 0, cost: 0 });
+  });
 });
 
 describe("HI-a, HI-b: the plan tool", () => {

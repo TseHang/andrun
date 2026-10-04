@@ -99,17 +99,9 @@ function validateCase(file: string, raw: unknown): EvalCase {
 }
 
 function validateExpectFinding(file: string, expect: Record<string, unknown> | null | undefined): void {
-  {
-    const lines = expect?.["lines"];
-    if (
-      !expect ||
-      typeof expect["path"] !== "string" ||
-      !Array.isArray(lines) ||
-      lines.length === 0 ||
-      !lines.every((n) => Number.isInteger(n) && n > 0)
-    ) {
-      throw invalid(file, `a review case needs "expect_finding" with a string "path" and a non-empty list of positive integer "lines", or "expect_no_findings: true"`);
-    }
+  const lines = expect?.["lines"];
+  if (!expect || typeof expect["path"] !== "string" || !Array.isArray(lines) || lines.length === 0 || !lines.every((n) => Number.isInteger(n) && n > 0)) {
+    throw invalid(file, `a review case needs "expect_finding" with a string "path" and a non-empty list of positive integer "lines", or "expect_no_findings: true"`);
   }
 }
 
