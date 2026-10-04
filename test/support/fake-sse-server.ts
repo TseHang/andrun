@@ -18,6 +18,9 @@
 //            instead of finish; finish and the rest play after the user's next message
 //   [md]     turn 0 is a text-only reply written in markdown (heading, list, code, table, link)
 //   [html]   writes index.html (its script fills in the heading) and app.js, then replies with text
+// An auto-mode classifier request (system prompt of `classifyTask`) is answered "complex" for a task
+// with [complex], "daily" otherwise. A request with a reasoning effort other than "none" streams a
+// line of reasoning before its answer.
 // A Review session (system prompt of the review profile) gets REVIEW_SCRIPT instead.
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -115,6 +118,7 @@ const LAST: Turn = { call: { name: "finish", args: { summary: "Nothing more to d
 
 interface ChatBody {
   model?: string;
+  reasoning_effort?: string;
   messages?: { role: string; content?: string | null }[];
 }
 
@@ -138,7 +142,9 @@ async function chat(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const task = messages.find((m) => m.role === "user")?.content ?? "";
   const played = messages.filter((m) => m.role === "assistant").length;
   const ask = task.includes("[ask]");
-  const review = (messages.find((m) => m.role === "system")?.content ?? "").includes("code reviewer");
+  const system = messages.find((m) => m.role === "system")?.content ?? "";
+  const classify = system.includes("You sort requests");
+  const review = system.includes("code reviewer");
   const script = review ? REVIEW_SCRIPT : task.includes("[md]") ? [MD_TURN, ...SCRIPT] : task.includes("[html]") ? HTML_TURNS : task.includes("[plan]") ? PLAN_SCRIPT : ask
           ? [...ASK_TURNS, ...SCRIPT]
           : task.includes("[chat]")
@@ -148,7 +154,7 @@ async function chat(req: IncomingMessage, res: ServerResponse): Promise<void> {
               : task.includes("[stop]")
                 ? [...SCRIPT.slice(0, 4), STOP_TURN, ...SCRIPT.slice(4)]
                 : SCRIPT;
-  const turn = script[played] ?? LAST;
+  const turn = classify ? { text: task.includes("[complex]") ? "complex" : "daily" } : (script[played] ?? LAST);
   console.log(`[fake-model] turn ${played}: ${turn.call?.name ?? "text"}`);
 
   if (task.includes("[fail]")) {
@@ -162,6 +168,12 @@ async function chat(req: IncomingMessage, res: ServerResponse): Promise<void> {
     res.write(`data: ${JSON.stringify({ id: "fake", object: "chat.completion.chunk", model, choices: [{ index: 0, delta, finish_reason: null }] })}\n\n`);
 
   res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
+  if (!classify && body.reasoning_effort !== undefined && body.reasoning_effort !== "none") {
+    for (const word of "Working out the next step from what the task asks.".split(/(?<= )/)) {
+      chunk({ reasoning: word });
+      await sleep(40);
+    }
+  }
   if (turn.text) {
     // Stream the text word by word so the UI's token streaming can be seen.
     for (const word of turn.text.split(/(?<= )/)) {
