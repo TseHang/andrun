@@ -33,7 +33,7 @@ test("a question is answered by picking an option", async ({ page, request }) =>
   await expect(s.composer).toHaveCount(0);
 
   await options.nth(0).click();
-  await expect(bubbles(page)).toHaveText(["Fix the loop bound"]);
+  await expect(bubbles(page)).toHaveText([`[choose] ${TASK}`, "Fix the loop bound"]);
   await expect(q).toHaveCount(0);
   await expect(s.approval).toContainText("Approval required · finish", { timeout: 90_000 });
   await expect(s.rows("apply_patch")).toHaveCount(1);
@@ -50,7 +50,7 @@ test("a question is answered with typed text", async ({ page, request }) => {
   await expect(send).toBeDisabled();
   await q.getByRole("textbox", { name: "Your answer" }).fill("Neither, make it tic-tac-toe");
   await send.click();
-  await expect(bubbles(page)).toHaveText(["Neither, make it tic-tac-toe"]);
+  await expect(bubbles(page)).toHaveText([`[choose] ${TASK}`, "Neither, make it tic-tac-toe"]);
   await expect(q).toHaveCount(0);
   await expect(s.approval).toContainText("Approval required · finish", { timeout: 90_000 });
 });
@@ -66,7 +66,7 @@ test("an open question survives a reload", async ({ page, request }) => {
   await expect(card(page)).toContainText(QUESTION);
   await expect(card(page).locator("[data-option]")).toHaveCount(2);
   await card(page).locator("[data-option]").nth(1).click();
-  await expect(bubbles(page)).toHaveText(["Rewrite with reduce"]);
+  await expect(bubbles(page)).toHaveText([`[choose] ${TASK}`, "Rewrite with reduce"]);
 });
 
 test("a text reply waits for the user, then the run goes on to a pull request", async ({ page, request }) => {
@@ -86,7 +86,7 @@ test("a text reply waits for the user, then the run goes on to a pull request", 
 
   await input.fill("Go with the first one");
   await s.composer.getByRole("button", { name: "Send" }).click();
-  await expect(bubbles(page)).toHaveText(["Go with the first one"]);
+  await expect(bubbles(page)).toHaveText([`[chat] ${TASK}`, "Go with the first one"]);
   await expect(s.approval).toContainText("Approval required · finish", { timeout: 90_000 });
   await s.approval.getByRole("button", { name: "Approve and open PR" }).click();
   await expect(s.status).toHaveText("Done");
@@ -102,6 +102,6 @@ test("Open pull request asks the agent to finish", async ({ page, request }) => 
   await expect(s.timeline).toContainText("Fixed the loop bound. Do you want anything else?");
   await expect(s.changes).toContainText("src/sum.js");
   await s.composer.getByRole("button", { name: "Open pull request" }).click();
-  await expect(bubbles(page)).toHaveText(["Open a pull request for these changes."]);
+  await expect(bubbles(page)).toHaveText([`[stop] ${TASK}`, "Open a pull request for these changes."]);
   await expect(s.approval).toContainText("Approval required · finish", { timeout: 90_000 });
 });

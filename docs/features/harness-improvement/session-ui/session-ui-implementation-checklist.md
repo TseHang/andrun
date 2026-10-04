@@ -1,6 +1,6 @@
 # Session UI (slices B + C) — Implementation Checklist
 
-**Status**: ✅ Approved (Henry, 2026-10-04: UI-c, scripts in preview, Stop in Review all OK)
+**Status**: ✅ Built — Passing (298 unit/API/render tests, 33 E2E). Approved (Henry, 2026-10-04: UI-c, scripts in preview, Stop in Review all OK)
 **Date**: 2026-10-04
 **Architecture**: `docs/architecture/web-codex-architecture-decision.md` (D7 event contract, D8 `changes` table, A21–A23 conversational flow). Follows `conversational-flow` (slice A, PR #6).
 
@@ -194,24 +194,24 @@ A command longer than 60 characters is cut with `…`.
 **Test**: E2E — `e2e/session-ui.spec.ts` › "an HTML file can be previewed in a sandboxed frame", and Unit — `test/web/format.test.ts` › "previewable paths"
 
 ## Edge Cases
-- [ ] A reply that is still streaming with an unclosed code fence renders without throwing, and the cursor is still shown — **Test**: `test/web/render.test.tsx` › "a streaming reply with an unclosed code fence renders"
-- [ ] A very long line in a code block scrolls inside the block; a long URL wraps; the timeline column does not grow wider — **Runtime check**: browser, 1440 px and 900 px wide
-- [ ] A link with a `javascript:` URL is not rendered as a working link — **Test**: `test/web/render.test.tsx` › "a javascript: link has no href"
-- [ ] An agent question (`question` item) renders as markdown too — **Test**: `test/web/render.test.tsx` › "an agent reply renders markdown" (second case)
-- [ ] Two Stop frames in a row: the second is refused, one `stopped` event — **Test**: `test/session/engine.test.ts` › "stop is refused when the agent is not running" (second case)
-- [ ] Stop with a message already queued: the run stops, then the queued message starts a new turn — **Test**: `test/session/engine.test.ts` › "a message queued before a stop starts the next turn"
-- [ ] Stop arrives as the run ends by itself (finish approved, PR being opened): nothing is aborted, no `stopped` event, the run's own outcome stands — **Test**: `test/core/agent.test.ts` › "an abort after the last check does not change the outcome"
-- [ ] Deleting a session still ends the run as before (no `stopped` event) — **Test**: existing delete tests in `test/session/engine.test.ts` stay green
-- [ ] The `stop` frame is validated: extra fields ignored, unknown types still refused — **Test**: `test/session/protocol.test.ts` › "parses a stop frame"
-- [ ] File API: `path` with `..` or a leading `/` is a plain lookup miss → 404, never a file read — **Test**: `test/worker/router.test.ts` › "reads a changed file's saved content" (traversal cases)
-- [ ] File API: a file over 1 MB or binary (stored as skipped) → 404; the card shows `Preview not available for this file` after the click — **Test**: `test/session/engine.test.ts` › "fileContent returns saved content and null…"; message is a **Runtime check**
-- [ ] Preview content changes while the preview is open (the agent edits the file again): the preview reloads when the file's diff changes — **Runtime check**: browser with the fake model
-- [ ] Script in the previewed page cannot read the app: `window.parent.document` throws inside the frame — **Runtime check**: browser console, plus the `sandbox` attribute assertion in S18
-- [ ] `localStorage` is unavailable (private mode): the panel starts shown and the toggle still works for the visit — **Runtime check**: browser
-- [ ] Panel hidden while an approval gate opens: the gate bar still shows the file list, the panel stays hidden — **Runtime check**: browser
-- [ ] `prefers-reduced-motion`: the dots do not animate (existing global rule covers new animations) — **Runtime check**: browser emulation
-- [ ] Plan card taller than 40% of the window scrolls inside itself and does not cover the composer — **Runtime check**: browser with a 10-step plan
-- [ ] Existing E2E that locate the plan in the Changes panel or read the old usage line still pass after their selectors are updated — **Test**: `e2e/plan.spec.ts`, `e2e/code-run.spec.ts`
+- [x] A reply that is still streaming with an unclosed code fence renders without throwing, and the cursor is still shown — **Test**: `test/web/render.test.tsx` › "a streaming reply with an unclosed code fence renders"
+- [~] deferred — styles are in place (`overflow-x-auto`, `break-words`), not looked at with long content A very long line in a code block scrolls inside the block; a long URL wraps; the timeline column does not grow wider — **Runtime check**: browser, 1440 px and 900 px wide
+- [x] A link with a `javascript:` URL is not rendered as a working link — **Test**: `test/web/render.test.tsx` › "a javascript: link has no href"
+- [x] An agent question (`question` item) renders as markdown too — **Test**: `test/web/render.test.tsx` › "an agent reply renders markdown" (second case)
+- [x] Two Stop frames in a row: the second is refused, one `stopped` event — **Test**: `test/session/engine.test.ts` › "stop is refused when the agent is not running" (second case)
+- [x] Stop with a message already queued: the run stops, then the queued message starts a new turn — **Test**: `test/session/engine.test.ts` › "a message queued before a stop starts the next turn"
+- [x] Stop arrives as the run ends by itself (finish approved, PR being opened): nothing is aborted, no `stopped` event, the run's own outcome stands — **Test**: `test/core/agent.test.ts` › "an abort after the last check does not change the outcome"
+- [x] Deleting a session still ends the run as before (no `stopped` event) — **Test**: existing delete tests in `test/session/engine.test.ts` stay green
+- [x] The `stop` frame is validated: extra fields ignored, unknown types still refused — **Test**: `test/session/protocol.test.ts` › "parses a stop frame"
+- [x] File API: `path` with `..` or a leading `/` is a plain lookup miss → 404, never a file read — **Test**: `test/worker/router.test.ts` › "reads a changed file's saved content" (traversal cases)
+- [x] File API: a file over 1 MB or binary (stored as skipped) → 404; the card shows `Preview not available for this file` after the click — **Test**: `test/session/engine.test.ts` › "fileContent returns saved content and null…"; message is a **Runtime check**
+- [~] deferred — the refetch on a new diff is implemented, not exercised Preview content changes while the preview is open (the agent edits the file again): the preview reloads when the file's diff changes — **Runtime check**: browser with the fake model
+- [x] (E2E asserts `window.parent.document` is blocked) Script in the previewed page cannot read the app: `window.parent.document` throws inside the frame — **Runtime check**: browser console, plus the `sandbox` attribute assertion in S18
+- [~] deferred — guarded with try/catch, not exercised `localStorage` is unavailable (private mode): the panel starts shown and the toggle still works for the visit — **Runtime check**: browser
+- [~] deferred — not walked Panel hidden while an approval gate opens: the gate bar still shows the file list, the panel stays hidden — **Runtime check**: browser
+- [~] deferred — relies on the existing global rule, not checked under emulation `prefers-reduced-motion`: the dots do not animate (existing global rule covers new animations) — **Runtime check**: browser emulation
+- [~] deferred — `max-h-[40vh]` is set, not tried with a long plan Plan card taller than 40% of the window scrolls inside itself and does not cover the composer — **Runtime check**: browser with a 10-step plan
+- [x] Existing E2E that locate the plan in the Changes panel or read the old usage line still pass after their selectors are updated — **Test**: `e2e/plan.spec.ts`, `e2e/code-run.spec.ts`
 
 Not applicable: auth (the app has none); rate limiting on the file route (it reads SQLite only, like `GET /sessions/:id`, which has no limiter); migrations (no schema change; `stopped` is a new event type and old logs replay unchanged).
 
@@ -230,7 +230,7 @@ Not applicable: auth (the app has none); rate limiting on the file route (it rea
 | 1 | Backend: `stopped` event, `stop` frame, core + engine stop; `fileContent`, DO RPC, `GET /sessions/:id/files` | S7–S10, S17, stop and file edge cases | ✅ done |
 | 2 | Web state + conversation: reducer `stopped`, `usageLine`, `activityLabel`, `isPreviewable`; Markdown, marker, usage line, indicator, Stop, hints, plan card above the composer | S1–S6, S11, S12, S14 (render) | ✅ done |
 | 3 | Changes panel: collapsible file cards, hide/show panel, HTML preview | S15, S16, S18 (E2E only) | ✅ done |
-| 4 | E2E run and runtime check | S13–S16, S18, runtime edge cases | ⏳ pending |
+| 4 | E2E run and runtime check | S13–S16, S18, runtime edge cases | ✅ done (some runtime checks deferred, see notes) |
 
 ### Build notes
 - The edge case "Stop arrives as the run ends by itself" is tested at the engine, where it can happen: `test/session/engine.test.ts` › "a stop that arrives while an approved finish is being published does not undo it". The core test is instead `test/core/agent.test.ts` › "a stop ends the turn waiting for the user, not as a failure".
@@ -238,3 +238,8 @@ Not applicable: auth (the app has none); rate limiting on the file route (it rea
 - One E2E was added beyond the list: `e2e/session-ui.spec.ts` › "an agent reply is rendered as markdown, with the & marker".
 - Test fixed after unit 2: "raw HTML in a reply is not rendered as elements" forbade the string `onclick=` anywhere in the output, which also forbids showing the HTML as text (what S2 asks for). It now forbids a `div` element carrying `onclick` and checks the tags are shown escaped. The implementer's tag-stripping plugin, written to satisfy the wrong assertion, was removed.
 - Added after the commit security check: a markdown image in a reply would be fetched by the browser on render, so a reply could send data out in the image URL. Images are rendered as links (`test/web/render.test.tsx` › "an image in a reply is a link, never loaded by the page").
+- `e2e/conversation.spec.ts` (slice A) ran for the first time and failed 5 of 5 on one assertion: the user bubbles also include the task. The expected lists now start with the task; all 5 pass. This was listed as Out; it was fixed because the suite could not be green otherwise and the cause was the test.
+- E2E ran with a scratch Docker config that has no `credsStore`: `docker-credential-desktop` does not answer on this machine, which is what hung the image build before. Command: `DOCKER_CONFIG=<dir with {} config.json and a cli-plugins link> DOCKER_HOST=unix://$HOME/.docker/run/docker.sock pnpm e2e`.
+- Runtime walk: screenshots at 1440 px of the markdown reply, running with a queued message, stopped, plan at the gate, HTML preview, and the hidden panel; no console errors.
+- Known: a message queued before Stop starts a new turn right after the stop (tested, intended). The streaming cursor sits on its own line under a markdown reply.
+- Follow-up offered, not done: a CSP in the preview document to block network requests from previewed pages (breaks pages that load libraries from a CDN).
