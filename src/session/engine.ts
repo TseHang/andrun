@@ -92,6 +92,7 @@ export class SessionEngine {
     mode: "code" | "review";
     task: string;
     model?: string;
+    reasoning?: string;
     sha?: string;
     baseBranch?: string;
     pr?: { number: number; title: string; files: PullFile[] };
@@ -111,7 +112,7 @@ export class SessionEngine {
         sha: input.sha ?? this.deps.repo.sha,
         created_at: now,
         updated_at: now,
-        ...(input.model !== undefined && { model: input.model }),
+        ...(input.model !== undefined && { model: input.reasoning !== undefined ? `${input.model}@${input.reasoning}` : input.model }),
       },
       state,
     );
@@ -564,7 +565,8 @@ export class SessionEngine {
     const state = this.deleted ? null : store.loadState();
     if (!state) return;
     const base = getProfile(state.mode, deps.config);
-    const profile = { ...base, model: store.meta()?.model ?? base.model };
+    const [model = base.model, reasoning] = (store.meta()?.model ?? "").split("@").filter(Boolean);
+    const profile = { ...base, model, ...(reasoning !== undefined && { reasoning }) };
 
     // The repo context goes after the task (the first user message is the pull request's Task) and is not an event.
     if (needSandbox && state.step === 0 && !state.messages.some((m) => m.role === "user" && m.content.startsWith(REPO_CONTEXT_HEADER))) {

@@ -202,7 +202,7 @@ export class SessionStore {
   }
 
   appendEvent(event: AgentEvent): void {
-    if (event.type === "message_delta") return;
+    if (event.type === "message_delta" || event.type === "reasoning_delta") return;
     let stored = event;
     if (event.type === "file_changed" && event.diff.length > MAX_DIFF_CHARS) stored = { ...event, diff: elide(event.diff) };
     if (event.type === "tool_output" && event.chunk.length > MAX_DIFF_CHARS) stored = { ...event, chunk: elide(event.chunk) };

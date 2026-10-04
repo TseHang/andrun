@@ -248,12 +248,12 @@ describe("router (Phase 3: P3-c, P3-d)", () => {
       repo: REPO.name,
       sha: REPO.sha,
       models: [
-        { id: "deepseek-ai/deepseek-v4-flash", contextWindow: 1_000_000 },
-        { id: "deepseek-ai/deepseek-v4-pro", contextWindow: 1_000_000 },
-        { id: "moonshotai/kimi-k2.7-code", contextWindow: 262_144 },
-        { id: "zai-org/glm-5.3", contextWindow: 1_000_000 },
+        { id: "deepseek-ai/deepseek-v4-flash", contextWindow: 1_000_000, efforts: ["none", "high", "max"] },
+        { id: "deepseek-ai/deepseek-v4.1-flash", contextWindow: 1_000_000, efforts: ["none", "high", "max"] },
+        { id: "zai-org/glm-5.3-flash", contextWindow: 1_000_000, efforts: ["low", "high", "max"] },
       ],
       defaultModel: "deepseek-ai/deepseek-v4-flash",
+      autoModel: "auto",
       maxTurnCost: 50,
       costNotice: 10,
       maxTaskChars: MAX_TASK_CHARS,
@@ -272,8 +272,15 @@ describe("router (Phase 3: P3-c, P3-d)", () => {
 
   it("validates the model on create", async () => {
     const f = fakeEnv({ createLimiter: limiter(100).binding });
-    expect((await post(f.env, { mode: "code", task: "t", model: "deepseek-ai/deepseek-v4-pro" })).status).toBe(201);
-    expect(f.created.at(-1)).toMatchObject({ mode: "code", task: "t", model: "deepseek-ai/deepseek-v4-pro" });
+    expect((await post(f.env, { mode: "code", task: "t", model: "deepseek-ai/deepseek-v4.1-flash", reasoning: "high" })).status).toBe(201);
+    expect(f.created.at(-1)).toMatchObject({ mode: "code", task: "t", model: "deepseek-ai/deepseek-v4.1-flash", reasoning: "high" });
+
+    // Without an effort the model runs on its first one; auto has none.
+    expect((await post(f.env, { mode: "code", task: "t", model: "zai-org/glm-5.3-flash" })).status).toBe(201);
+    expect(f.created.at(-1)).toMatchObject({ model: "zai-org/glm-5.3-flash", reasoning: "low" });
+    expect((await post(f.env, { mode: "code", task: "t", model: "auto" })).status).toBe(201);
+    expect(f.created.at(-1)).toMatchObject({ model: "auto" });
+    expect(f.created.at(-1)).not.toHaveProperty("reasoning");
 
     expect((await post(f.env, { mode: "code", task: "t" })).status).toBe(201);
     expect(f.created.at(-1)).not.toHaveProperty("model"); // the engine falls back to the config default
@@ -282,6 +289,10 @@ describe("router (Phase 3: P3-c, P3-d)", () => {
     await expectError(await post(f.env, { mode: "code", task: "t", model: "openai/gpt-oss-120b" }), 400, /model/);
     await expectError(await post(f.env, { mode: "code", task: "t", model: 3 }), 400, /model/);
     await expectError(await post(f.env, { mode: "code", task: "t", model: "" }), 400, /model/);
+    await expectError(await post(f.env, { mode: "code", task: "t", model: "deepseek-ai/deepseek-v4-pro" }), 400, /model/); // no longer offered
+    await expectError(await post(f.env, { mode: "code", task: "t", model: "zai-org/glm-5.3-flash", reasoning: "none" }), 400, /reasoning must be one of: low, high, max/);
+    await expectError(await post(f.env, { mode: "code", task: "t", model: "auto", reasoning: "high" }), 400, /reasoning/);
+    await expectError(await post(f.env, { mode: "code", task: "t", reasoning: "high" }), 400, /reasoning/);
     expect(f.created).toHaveLength(n);
   });
 
@@ -452,7 +463,7 @@ describe("router (Phase 3: P3-c, P3-d)", () => {
 
   it("review sessions are created from an open pull request", async () => {
     const f = withPulls();
-    const res = await post(f.env, { mode: "review", pr: 14, task: "  Review this.  ", model: "zai-org/glm-5.3" });
+    const res = await post(f.env, { mode: "review", pr: 14, task: "  Review this.  ", model: "zai-org/glm-5.3-flash", reasoning: "high" });
     expect(res.status).toBe(201);
     const { id } = await json(res);
     expect(f.created).toEqual([
@@ -460,7 +471,8 @@ describe("router (Phase 3: P3-c, P3-d)", () => {
         id,
         mode: "review",
         task: "Review this.",
-        model: "zai-org/glm-5.3",
+        model: "zai-org/glm-5.3-flash",
+        reasoning: "high",
         sha: f.fake.refs.get("main"),
         pr: { number: 14, title: "Add slugify helper", files: [{ path: "src/slugify.js", status: "added", additions: 2, deletions: 0, patch: "@@ -0,0 +1,2 @@\n+a\n+b" }] },
       },

@@ -28,6 +28,8 @@ export interface ToolSpec {
 
 export interface ModelRequest {
   model: string;
+  /** Sent as `reasoning_effort`; the provider's default for the model when absent. */
+  reasoning?: string;
   messages: ChatMessage[];
   tools: ToolSpec[];
   signal?: AbortSignal;
@@ -35,6 +37,8 @@ export interface ModelRequest {
 
 export interface ModelResponse {
   content: string | null;
+  /** The model's thinking, when it returned any. Shown to the user, never sent back. */
+  reasoning?: string;
   toolCalls: ToolCall[];
   usage: { tokens_in: number; tokens_out: number };
   latency_ms: number;
@@ -42,8 +46,8 @@ export interface ModelResponse {
 }
 
 export interface ModelClient {
-  /** `onDelta` receives streamed assistant text. Throws `ModelError` after retries are exhausted. */
-  complete(req: ModelRequest, onDelta?: (text: string) => void): Promise<ModelResponse>;
+  /** `onDelta` receives streamed assistant text, and thinking with `kind` "reasoning". Throws `ModelError` after retries are exhausted. */
+  complete(req: ModelRequest, onDelta?: (text: string, kind?: "reasoning") => void): Promise<ModelResponse>;
 }
 
 export class ModelError extends Error {
@@ -132,6 +136,7 @@ export type ToolName =
 export interface ModeProfile {
   name: ModeName;
   model: string;
+  reasoning?: string;
   systemPrompt: string;
   tools: ToolName[];
   /** Text added to a tool's description in this mode (e.g. what `run_command` may run in a review). */

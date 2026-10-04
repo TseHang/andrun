@@ -2,7 +2,7 @@
 // Web-standard APIs only, so it runs under Node tests and inside a Worker. Durable Objects are
 // reached through `env.session(id)` / `env.workspace`; ids are validated before they name one.
 
-import { contextWindowFor, defaultConfig, selectableModels } from "../core/config";
+import { AUTO_MODEL, contextWindowFor, defaultConfig, selectableModels } from "../core/config";
 import { GitHubError } from "../github";
 import { DEFAULT_REVIEW_BRIEF, MAX_TASK_CHARS } from "../session/protocol";
 import type { SessionSummary } from "../session/protocol";
@@ -39,22 +39,28 @@ async function createSession(request: Request, env: RouterEnv): Promise<Response
     return error(400, "body must be valid JSON");
   }
   if (typeof body !== "object" || body === null || Array.isArray(body)) return error(400, "body must be a JSON object");
-  const { mode, task, model, pr } = body as Record<string, unknown>;
+  const { mode, task, model, reasoning, pr } = body as Record<string, unknown>;
   if (mode !== "code" && mode !== "review") return error(400, 'mode must be "code" or "review"');
   const trimmed = typeof task === "string" ? task.trim() : "";
   if (trimmed === "" || trimmed.length > MAX_TASK_CHARS) {
     return error(400, `task must be a non-empty string of at most ${MAX_TASK_CHARS} characters`);
   }
 
-  if (model !== undefined && (typeof model !== "string" || !selectableModels.includes(model))) {
-    return error(400, `model must be one of: ${selectableModels.join(", ")}`);
+  const choice = selectableModels.find((m) => m.id === model);
+  if (model !== undefined && model !== AUTO_MODEL && !choice) {
+    return error(400, `model must be one of: ${[...selectableModels.map((m) => m.id), AUTO_MODEL].join(", ")}`);
   }
+  // Auto picks the effort itself; a model without one given runs on its first (cheapest) effort.
+  if (reasoning !== undefined && (typeof reasoning !== "string" || !choice?.efforts.includes(reasoning))) {
+    return error(400, choice ? `reasoning must be one of: ${choice.efforts.join(", ")}` : "reasoning needs a model that is not auto");
+  }
+  const effort = choice ? ((reasoning as string | undefined) ?? choice.efforts[0]) : undefined;
 
   if (mode === "review" && (typeof pr !== "number" || !Number.isSafeInteger(pr) || pr < 1)) return error(400, "pr must be a positive integer");
 
   // The repo is fixed by configuration (P2-h): other fields are ignored.
   const id = env.newId();
-  const common = { id, task: trimmed, ...(model !== undefined && { model }) };
+  const common = { id, task: trimmed, ...(model !== undefined && { model: model as string }), ...(effort !== undefined && { reasoning: effort }) };
   try {
     if (mode === "code") {
       if (env.repo.sha !== null) {
@@ -132,8 +138,9 @@ function config(env: RouterEnv): Response {
     sha: env.repo.sha,
     githubWrites: env.githubWrites,
     reviewBrief: DEFAULT_REVIEW_BRIEF,
-    models: selectableModels.map((id) => ({ id, contextWindow: contextWindowFor(defaultConfig, id) })),
+    models: selectableModels.map((m) => ({ ...m, contextWindow: contextWindowFor(defaultConfig, m.id) })),
     defaultModel: defaultConfig.models.code,
+    autoModel: AUTO_MODEL,
     maxTurnCost: defaultConfig.maxTurnCost,
     costNotice: defaultConfig.costNotice,
     maxTaskChars: MAX_TASK_CHARS,

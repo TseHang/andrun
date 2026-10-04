@@ -33,6 +33,8 @@ export const defaultConfig: AgentConfig = {
     "google/gemma-4-31b-it": 262_144,
     "motif-technologies/motif-3": 262_144,
     "deepseek-ai/deepseek-v4-flash": 1_000_000,
+    "deepseek-ai/deepseek-v4.1-flash": 1_000_000,
+    "zai-org/glm-5.3-flash": 1_000_000,
     "deepseek-ai/deepseek-v4-pro": 1_000_000,
     "openai/gpt-oss-120b": 131_072,
   },
@@ -46,6 +48,8 @@ export const defaultConfig: AgentConfig = {
     "google/gemma-4-31b-it": { in: 30, out: 80 },
     "motif-technologies/motif-3": { in: 80, out: 320 },
     "deepseek-ai/deepseek-v4-flash": { in: 25, out: 40 },
+    "deepseek-ai/deepseek-v4.1-flash": { in: 45, out: 90 },
+    "zai-org/glm-5.3-flash": { in: 23, out: 75 },
     "deepseek-ai/deepseek-v4-pro": { in: 160, out: 400 },
     "openai/gpt-oss-120b": { in: 25, out: 95 },
   },
@@ -55,13 +59,31 @@ export const defaultConfig: AgentConfig = {
   commandTimeoutMs: 120_000,
 };
 
-/** Models a user may pick for a session (P3-c), in display order. */
-export const selectableModels = [
-  "deepseek-ai/deepseek-v4-flash",
-  "deepseek-ai/deepseek-v4-pro",
-  "moonshotai/kimi-k2.7-code",
-  "zai-org/glm-5.3",
+/** Models a user may pick for a session (P3-c), in display order, with the `reasoning_effort` values ai& accepts for each (model list, 2026-10-04). The first effort is the default. */
+export const selectableModels: { id: string; efforts: string[] }[] = [
+  { id: "deepseek-ai/deepseek-v4-flash", efforts: ["none", "high", "max"] },
+  { id: "deepseek-ai/deepseek-v4.1-flash", efforts: ["none", "high", "max"] },
+  { id: "zai-org/glm-5.3-flash", efforts: ["low", "high", "max"] },
 ];
+
+/** The model choice that lets &run pick the model and effort for each turn (see `auto.ts`). */
+export const AUTO_MODEL = "auto";
+
+export type TaskKind = "daily" | "complex";
+
+export interface ModelRoute {
+  model: string;
+  reasoning: string;
+}
+
+/** Auto mode: the classifier that sorts a turn, and the model each kind of turn goes to. */
+export const autoConfig: { classifier: ModelRoute; routes: Record<TaskKind, ModelRoute> } = {
+  classifier: { model: DEFAULT_MODEL, reasoning: "none" },
+  routes: {
+    daily: { model: "zai-org/glm-5.3-flash", reasoning: "low" },
+    complex: { model: "deepseek-ai/deepseek-v4.1-flash", reasoning: "high" },
+  },
+};
 
 export function contextWindowFor(config: AgentConfig, model: string): number {
   return config.contextWindows[model] ?? DEFAULT_CONTEXT_WINDOW;

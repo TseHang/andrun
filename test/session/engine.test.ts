@@ -236,6 +236,25 @@ describe("S1: a created session runs to the approval gate and is persisted", () 
     expect(typeof w.alarms[0]).toBe("number"); // the watchdog was armed (P2-f)
   });
 
+  it("a chosen model and effort go to every model call; reasoning is stored without its deltas", async () => {
+    const w = world();
+    const model = new ScriptedModelClient([{ reasoning: "The loop bound looks wrong.", ...call("run_command", { command: "npm test" }) }, call("finish", { summary: "Done." })]);
+    const engine = w.engine(model);
+    engine.create({ id: ID, mode: "code", task: TASK, model: "zai-org/glm-5.3-flash", reasoning: "high" });
+    await engine.idle();
+
+    expect(model.requests.map((r) => [r.model, r.reasoning])).toEqual([
+      ["zai-org/glm-5.3-flash", "high"],
+      ["zai-org/glm-5.3-flash", "high"],
+    ]);
+    expect(w.frames.some((f) => f.type === "reasoning_delta")).toBe(true);
+    expect(w.events().filter((e) => e.type === "reasoning" || e.type === "reasoning_delta")).toEqual([
+      expect.objectContaining({ type: "reasoning", id: "m1", text: "The loop bound looks wrong." }),
+    ]);
+    // Thinking is shown, never sent back to the model.
+    expect(JSON.stringify(model.requests[1]!.messages)).not.toContain("The loop bound looks wrong.");
+  });
+
   it("refuses to create a session twice", async () => {
     const { engine } = await atGate();
     expect(() => engine.create({ id: ID, mode: "code", task: TASK })).toThrow();
