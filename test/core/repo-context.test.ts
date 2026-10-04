@@ -86,5 +86,15 @@ describe("repo context (HI-e)", () => {
       }
     }
     await expect(buildRepoContext(new Lost({ "a.js": "" }))).rejects.toBeInstanceOf(SandboxLostError);
+
+    // Any other listing failure only costs the entries section: the session still starts.
+    class Slow extends MemorySandbox {
+      override async listFiles(): Promise<string[]> {
+        throw new Error("command timed out");
+      }
+    }
+    const text = await buildRepoContext(new Slow({ "package.json": PACKAGE }));
+    expect(text).toContain("test: node --test");
+    expect(text).not.toContain("Top-level entries");
   });
 });

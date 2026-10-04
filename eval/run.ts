@@ -54,6 +54,8 @@ export interface EvalResult {
 }
 
 const MAX_AUTO_RESUMES = 5;
+/** For cases without `max_steps`, when run from the command line. The slowest passing run so far took 10 steps. */
+const EVAL_MAX_STEPS = 40;
 
 // ---------- Cases ----------
 
@@ -339,7 +341,8 @@ async function main(argv: string[]): Promise<number> {
     makeModel: () => new OpenAICompatModelClient({ baseUrl, apiKey }),
     outDir,
     fixturesDir: join(here, "fixtures"),
-    config: { ...defaultConfig, models: { ...defaultConfig.models, code: model, review: model } },
+    // Sessions have no step limit (the turn's cost limit stops them); an eval run gets one, so a stuck case ends early.
+    config: { ...defaultConfig, maxSteps: EVAL_MAX_STEPS, models: { ...defaultConfig.models, code: model, review: model } },
     maxCost,
     log: (l) => console.log(l),
   });

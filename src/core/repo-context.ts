@@ -50,8 +50,13 @@ export async function buildRepoContext(sandbox: SandboxAdapter, opts: { agentsMd
     sections.push(`package.json scripts:\n${shown.join("\n")}`);
   }
 
+  // The context is a help, not a requirement: a listing that fails (not a lost sandbox) leaves the section out.
+  const paths = await sandbox.listFiles().catch((err: unknown) => {
+    if (err instanceof SandboxLostError) throw err;
+    return [] as string[];
+  });
   const entries = new Set<string>();
-  for (const path of await sandbox.listFiles()) {
+  for (const path of paths) {
     const slash = path.indexOf("/");
     entries.add(oneLine(slash === -1 ? path : `${path.slice(0, slash)}/`));
   }

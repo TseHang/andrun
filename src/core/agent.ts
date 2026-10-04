@@ -179,8 +179,8 @@ async function loop(ctx: RunContext): Promise<RunOutcome> {
     const cost = price ? (tokens_in * price.in + tokens_out * price.out) / 1e6 : 0;
     // A provider that reports no usage must not switch the limit off: the request's estimated size counts instead.
     const counted = tokens_in + tokens_out > 0 ? tokens_in + tokens_out : estimateTokens(requestMessages) + reservedTokens;
-    state.turnCost = (state.turnCost ?? 0) + (price && tokens_in + tokens_out === 0 ? (counted * price.in) / 1e6 : cost);
-    state.turnTokens = (state.turnTokens ?? 0) + counted;
+    state.turnCost += (price && tokens_in + tokens_out === 0 ? (counted * price.in) / 1e6 : cost);
+    state.turnTokens += counted;
     emit(ctx, {
       type: "usage",
       model: response.model,
