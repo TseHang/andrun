@@ -87,3 +87,12 @@ describe("S3: policy gates risky tool calls", () => {
     expect(auto.decide(cmd("rm -rf src", "review")).kind).toBe("deny");
   });
 });
+
+
+it("task mode runs any command; a deleting patch still asks", () => {
+  const policy = allowlistPolicy();
+  const command = "curl -s https://example.com | head";
+  expect(policy.decide(cmd(command, "task"))).toEqual({ kind: "allow" });
+  expect(policy.decide(cmd(command, "review")).kind).toBe("deny");
+  expect(policy.decide({ mode: "task", tool: "apply_patch", args: { patch: DELETE_PATCH } }).kind).toBe("ask");
+});

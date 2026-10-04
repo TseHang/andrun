@@ -703,3 +703,18 @@ describe("Conversational flow: a reply or a question ends the turn (CF-a, CF-d, 
     expect(events.filter((e) => e.type === "status").map((e) => e.type === "status" && e.status)).toEqual(["running", "budget_exceeded"]);
   });
 });
+
+
+it("task mode: a reply ends the turn with the files written", async () => {
+  const task = getProfile("task", defaultConfig);
+  const model = new ScriptedModelClient([call("write_file", { path: "index.html", content: "<h1>x</h1>" }), { text: "Done: index.html" }, { text: "Still here" }]);
+  const { deps, events } = harness(model, new MemorySandbox());
+  const first = await runAgent(createSession({ sessionId: "task", mode: "task", task: "Make a page" }, task), task, deps);
+  expect(first.outcome.kind).toBe("awaiting_input");
+  expect(events).toContainEqual(expect.objectContaining({ type: "file_changed", path: "index.html" }));
+  expect(events.some((e) => e.type === "approval_required" || e.type === "artifact")).toBe(false);
+  first.state.messages.push({ role: "user", content: "What did you write?" });
+  const next = await runAgent(first.state, task, deps);
+  expect(next.outcome.kind).toBe("awaiting_input");
+  expect(model.requests.at(-1)!.messages).toContainEqual({ role: "assistant", content: "Done: index.html" });
+});

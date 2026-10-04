@@ -130,7 +130,7 @@ describe("router (P2-b)", () => {
     const f = fakeEnv({ createLimiter: limiter(100).binding });
     await expectError(await post(f.env, "{not json"), 400, /json/i);
     await expectError(await post(f.env, ["code"]), 400);
-    await expectError(await post(f.env, { mode: "task", task: "x" }), 400, /mode/); // "review" is a mode since Phase 4
+    await expectError(await post(f.env, { mode: "chat", task: "x" }), 400, /mode/); // Task is supported; chat is not a mode
     await expectError(await post(f.env, { task: "x" }), 400, /mode/);
     await expectError(await post(f.env, { mode: "code" }), 400, /task/);
     await expectError(await post(f.env, { mode: "code", task: "   " }), 400, /task/);
@@ -531,4 +531,21 @@ describe("Session UI: saved file content (UI-c, UI-d)", () => {
     await expectError(await handle(req("POST", `/sessions/${id}/files?path=index.html`, { body: {} }), env), 404);
     await expectError(await handle(req("GET", `/sessions/${id}/files/index.html`), env), 404);
   });
+});
+
+
+it("creates a task session without asking GitHub", async () => {
+  const w = fakeEnv({ repo: { ...REPO, sha: null } });
+  let calls = 0;
+  w.env.github = new Proxy(w.env.github, { get: () => () => { calls++; throw new Error("GitHub must not be called"); } });
+  const response = await handle(req("POST", "/sessions", { body: { mode: "task", task: "Make a page" } }), w.env);
+  expect(response.status).toBe(201);
+  expect(await response.json()).toHaveProperty("id");
+  expect(w.created[0]).toMatchObject({ mode: "task", task: "Make a page" });
+  expect(w.created[0]).not.toHaveProperty("sha");
+  expect(calls).toBe(0);
+  const invalid = await handle(req("POST", "/sessions", { body: { mode: "chat", task: "hello" } }), w.env);
+  expect(invalid.status).toBe(400);
+  const text = await invalid.text();
+  for (const mode of ["code", "review", "task"]) expect(text).toContain(mode);
 });

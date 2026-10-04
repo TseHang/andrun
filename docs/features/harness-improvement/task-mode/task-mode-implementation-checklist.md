@@ -199,4 +199,21 @@ Still open:
 - [ ] Whether passing `env` to `exec` replaces the process environment, and which CA settings Node and npm need — decide by: during build (TM-0)
 
 ## Build Progress
-_(filled by /build-to-run)_
+| # | Unit | Proves | Status |
+|---|---|---|---|
+| 0 | Local egress spike | TM-0; runtime network prerequisites | ✅ done |
+| 1 | Acceptance tests before implementation | S1–S14 and edge cases | ✅ done |
+| 2 | Core, empty sandbox, session routing | S1–S7; Auto, gate refusal, rebuild | ⏳ pending |
+| 3 | Task egress and runtime wiring | S8–S10 (conditional on TM-0) | ⏳ pending |
+| 4 | Task UI, delivery and fake model | S11, S12, S14; unsaved files | ⏳ pending |
+| 5 | Task eval loader and fixture-free workspace | S13 (scripted model only) | ⏳ pending |
+| 6 | Full verification and documentation | All scenarios; local runtime | ⏳ pending |
+
+Test notes:
+- S12's Node render test verifies tags, enabled Task button and default Code copy; switching to Task and its exact copy are verified in S11's browser test, because server rendering has no click events.
+- Old router/Home assertions that Task is unavailable now assert `chat` is refused and Task is enabled, as required by S1/S11.
+- The existing eval inventory test is updated for the new `task-page` case and its intentionally absent fixture.
+- Unsaved deliverables require storage status on the existing `file_changed` event; no new event or table is added.
+
+
+Red baseline: 16 new acceptance tests failed; egress module was absent. S11 failed in the browser because Task was disabled. Existing suite baseline: 328 tests passed. No production code changed before these runs.
