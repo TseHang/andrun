@@ -486,7 +486,7 @@ describe("router (Phase 3: P3-c, P3-d)", () => {
     await expectError(await post(f.env, { mode: "review", pr: 1e30, task: "brief" }, "203.0.113.9"), 400, /pr/);
     await expectError(await post(f.env, { mode: "review", pr: 14, task: " " }), 400, /task/);
     await expectError(await post(f.env, { mode: "review", pr: 99, task: "brief" }, IP_B), 404);
-    await expectError(await post(f.env, { mode: "task", task: "brief" }, IP_B), 400, /mode/);
+    await expectError(await post(f.env, { mode: "chat", task: "brief" }, IP_B), 400, /mode/);
 
     f.fake.pulls.find((p) => p.number === 13)!.state = "closed";
     await expectError(await post(f.env, { mode: "review", pr: 13, task: "brief" }, IP_B), 400, /pull request #13 is not open/);

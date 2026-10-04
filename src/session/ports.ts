@@ -27,8 +27,8 @@ export interface ChangedFile {
 export interface SandboxHost extends SandboxAdapter {
   /** True when the container is running. A running container always holds a set-up workspace. */
   isRunning(): boolean;
-  /** Starts the container (egress off), unpacks the repo tarball and commits the baseline. */
-  setup(tarball: ReadableStream<Uint8Array>): Promise<{ readyMs: number }>;
+  /** Starts a container and commits an empty or unpacked baseline; network is opt-in for Task. */
+  setup(source: ReadableStream<Uint8Array> | null, opts?: { network: boolean }): Promise<{ readyMs: number }>;
   /** Every path that differs from the baseline, including untracked and deleted files. */
   changedFiles(): Promise<ChangedFile[]>;
   removeFile(path: string): Promise<void>;

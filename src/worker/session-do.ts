@@ -4,6 +4,8 @@
 
 import { Files } from "@cloudflare/sandbox";
 import { DurableObject } from "cloudflare:workers";
+import { getProfile } from "../core/modes";
+import { SessionStore } from "../session/store";
 import { defaultConfig } from "../core/config";
 import { OpenAICompatModelClient } from "../core/model";
 import { CloudflareSandboxAdapter } from "../sandbox/cloudflare-sandbox";
@@ -43,11 +45,14 @@ export class SessionDO extends DurableObject<Env> {
     const sql: SqlStore = {
       exec: <T>(query: string, ...bindings: SqlValue[]) => ctx.storage.sql.exec(query, ...bindings).toArray() as T[],
     };
+    const mode = new SessionStore(sql).meta()?.mode;
     this.engine = new SessionEngine({
       sql,
       sandbox: new CloudflareSandboxAdapter({
         container: container as unknown as ContainerLike,
         files: new Files(container),
+        network: mode !== undefined && getProfile(mode, defaultConfig).network === "get",
+        egress: ctx.exports.EgressGate({ props: { enabled: env.TASK_NETWORK !== "0", killSwitch: env.KILL_SWITCH === "1" } }),
         image: () => {
           const image = container.images["sandbox"];
           if (!image) throw new Error(`no "sandbox" image on the container binding (found: ${Object.keys(container.images).join(", ") || "none"})`);

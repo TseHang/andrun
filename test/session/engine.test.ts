@@ -86,7 +86,7 @@ function world(opts: { tarball?: Uint8Array; config?: AgentConfig } = {}) {
 
   /** A new adapter each time, like a Durable Object that was evicted and woke up again. */
   const adapter = () =>
-    new CloudflareSandboxAdapter({ container, files: container.files, workdir: container.workdir, tmpDir: container.tmpDir });
+    new CloudflareSandboxAdapter({ container, files: container.files, workdir: container.workdir, tmpDir: container.tmpDir, egress: { fetch: async () => new Response("fake gate") } });
 
   const engine = (model: ModelClient, over: Partial<EngineDeps> = {}) =>
     new SessionEngine({

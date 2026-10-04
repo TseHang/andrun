@@ -20,6 +20,8 @@ export interface ExecProcessLike {
 export interface ContainerLike {
   readonly running: boolean;
   start(options: { image?: string; enableInternet: boolean }): void;
+  interceptAllOutboundHttp(handler: EgressHandler): Promise<void>;
+  interceptOutboundHttps(hostname: string, handler: EgressHandler): Promise<void>;
   destroy(): Promise<void>;
   setInactivityTimeout(durationMs: number): Promise<void>;
   /** Resolves when the container exits, rejects if it errors or fails to start. */
@@ -37,7 +39,14 @@ export interface FilesLike {
   remove(path: string, options?: { recursive?: boolean; force?: boolean }): Promise<void>;
 }
 
+export interface EgressHandler {
+  fetch(request: Request): Promise<Response>;
+}
+
 export interface CloudflareSandboxOptions {
+  egress?: EgressHandler;
+  /** Restored from the session profile when a DO wakes with its container still alive. */
+  network?: boolean;
   container: ContainerLike;
   files: FilesLike;
   /** Image passed to `container.start`. A function is called when the container is started. */

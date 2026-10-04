@@ -28,6 +28,7 @@
     "test/**/*.tsx",
     "src/worker/index.ts",
     "src/worker/env.ts",
+    "src/worker/egress-gate.ts",
     "src/worker/github.ts",
     "src/worker/session-do.ts",
     "src/worker/workspace-do.ts"

@@ -382,3 +382,13 @@ it("network: intercepts are registered for a task sandbox only, again after a re
   await task.exec("node -e 'console.log(1)'");
   expect(container.calls.at(-1)!.options?.env?.["NODE_EXTRA_CA_CERTS"]).toBeUndefined();
 });
+
+it("network: a new adapter over a live Task container keeps Node's CA", async () => {
+  const gate = { fetch: async () => new Response("ok") };
+  const first = new CloudflareSandboxAdapter({ container, files: container.files, workdir: container.workdir, tmpDir: container.tmpDir, egress: gate });
+  await first.setup(null, { network: true });
+  const resumed = new CloudflareSandboxAdapter({ container, files: container.files, workdir: container.workdir, tmpDir: container.tmpDir, egress: gate, network: true });
+  await resumed.exec("node -e 'console.log(1)'");
+  expect(container.starts).toHaveLength(1);
+  expect(container.calls.at(-1)!.options?.env).toMatchObject({ NODE_EXTRA_CA_CERTS: "/etc/cloudflare/certs/cloudflare-containers-ca.crt" });
+});

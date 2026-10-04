@@ -59,6 +59,7 @@
     "GITHUB_WRITES": "1",
     // Empty = Code sessions start from the default branch's head; set a commit to pin it (ADR A8).
     "DEMO_SHA": "",
-    "KILL_SWITCH": "0"
+    "KILL_SWITCH": "0",
+    "TASK_NETWORK": "1"
   },
 }
