@@ -164,6 +164,63 @@ describe("S7: model failures are visible", () => {
   });
 });
 
+describe("a stream cut off mid-answer is retried once", () => {
+  const data = (o: unknown) => `data: ${JSON.stringify(o)}\n\n`;
+  const text = (t: string) => data({ choices: [{ index: 0, delta: { content: t } }] });
+  const GOOD =
+    text("All four tests pass. ") +
+    data({ choices: [{ index: 0, delta: { tool_calls: [{ index: 0, id: "c1", type: "function", function: { name: "finish", arguments: '{"summary":"No findings."}' } }] } }] }) +
+    data({ choices: [], usage: { prompt_tokens: 50, completion_tokens: 9 } }) +
+    "data: [DONE]\n\n";
+  /** Sends some of an answer, then the connection drops (undici reports it as "terminated"). */
+  const cut = (partial: string) => () =>
+    new Response(
+      new ReadableStream({
+        start(c) {
+          c.enqueue(new TextEncoder().encode(partial));
+        },
+        pull(c) {
+          c.error(new TypeError("terminated"));
+        },
+      }),
+      { status: 200, headers: { "content-type": "text/event-stream" } },
+    );
+  const req = { model: "m", messages: [{ role: "user" as const, content: "hi" }], tools: [] };
+
+  it("retries a cut-off stream once and returns the second answer", async () => {
+    const { fn, calls } = fakeFetch([cut(text("All four ")), sse(GOOD)]);
+    const deltas: string[] = [];
+    const res = await client(fn).complete(req, (t) => deltas.push(t));
+    expect(calls).toHaveLength(2);
+    expect(calls[1]!.init.body).toBe(calls[0]!.init.body);
+    expect(res.content).toBe("All four tests pass. ");
+    expect(res.toolCalls).toMatchObject([{ function: { name: "finish", arguments: '{"summary":"No findings."}' } }]);
+    expect(res.usage).toEqual({ tokens_in: 50, tokens_out: 9 });
+    // The retry's text is not streamed after the first attempt's: the final message carries it whole.
+    expect(deltas.join("")).toBe("All four ");
+  });
+
+  it("a second cut-off fails visibly, and an abort is not retried", async () => {
+    const twice = fakeFetch([cut(text("a")), cut(text("b")), sse(GOOD)]);
+    const err = await client(twice.fn).complete(req).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ModelError);
+    expect((err as ModelError).message).toMatch(/stream was cut off/);
+    expect((err as ModelError).message).toContain("terminated");
+    expect(twice.calls).toHaveLength(2);
+
+    const ctrl = new AbortController();
+    const aborted = fakeFetch([
+      () => {
+        ctrl.abort("session deleted");
+        return cut(text("a"))();
+      },
+      sse(GOOD),
+    ]);
+    await expect(client(aborted.fn).complete({ ...req, signal: ctrl.signal })).rejects.toBeDefined();
+    expect(aborted.calls).toHaveLength(1);
+  });
+});
+
 describe("S11: per-mode model and usage attribution (D19)", () => {
   it("uses per-mode model id and reports it in usage", async () => {
     const config = { ...defaultConfig, models: { code: "coder-x", review: "reviewer-y", task: "chat-z" } };

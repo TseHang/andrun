@@ -61,6 +61,7 @@ export class OpenAICompatModelClient implements ModelClient {
     const payload = JSON.stringify(body);
 
     let lastError: ModelError | undefined;
+    let streamCut = false;
     for (let attempt = 0; attempt <= this.retries; attempt++) {
       if (attempt > 0 && this.backoffMs > 0) await sleep(this.backoffMs * 2 ** (attempt - 1));
 
@@ -92,7 +93,16 @@ export class OpenAICompatModelClient implements ModelClient {
         throw error;
       }
 
-      return this.readStream(res, req, started, onDelta);
+      try {
+        // After a cut-off stream the retry's text is not streamed: the first attempt's deltas are already out.
+        return await this.readStream(res, req, started, streamCut ? undefined : onDelta);
+      } catch (err) {
+        if (req.signal?.aborted) throw err;
+        lastError = new ModelError(`ai& API stream was cut off: ${err instanceof Error ? err.message : String(err)}`);
+        // A long answer that the provider drops is retried once, not `retries` times: each attempt can take minutes.
+        if (streamCut) throw lastError;
+        streamCut = true;
+      }
     }
     throw lastError ?? new ModelError("ai& API request failed");
   }
