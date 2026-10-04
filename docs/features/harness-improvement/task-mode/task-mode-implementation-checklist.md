@@ -1,6 +1,6 @@
 # &run Harness improvement, Slice B: Task mode with read-only web access — Implementation Checklist
 
-**Status**: ✅ Approved (Henry, 2026-10-04) — not built yet
+**Status**: ✅ Approved (Henry, 2026-10-04); built locally (2026-10-05). Focused checks pass; full E2E has an intermittent failure (details below).
 **Date**: 2026-10-04
 **Branch**: `feature/task-mode` (created from `main` at `03412d7`)
 **Architecture**: `docs/architecture/web-codex-architecture-decision.md` (D1, D4, D8, D10, D11, Phase 5; A13, A17, A21, A23). This slice amends D8, D10 and A13.
@@ -175,14 +175,14 @@ Note for the eval: `LocalSandbox` is not isolated (D12), so a Task case run loca
 **Test**: Unit — `test/web/render.test.tsx` › "task: the Files panel lists .html, .md and .csv only and states the limit"
 
 ## Edge Cases
-- [ ] Task text with `[task]` on a session whose model is Auto: the classifier call and the route work as in Code — **Test**: `test/session/engine.test.ts` › "task: auto routes the turn"
-- [ ] A Task session takes `approve`, `reject` and `post_review` frames with nothing pending: each is refused with the existing reasons — **Test**: `test/session/engine.test.ts` › "task: gate frames are refused"
-- [ ] A deliverable over 1 MB (a `.csv`, for example) is not saved (L2): it is listed with "Too large to save (over 1 MB)" and no Download — **Test**: `test/web/render.test.tsx` › "a file that was not saved has no download"
-- [ ] The task asks for an image or a PDF: the prompt tells the agent to say it cannot and to offer `.html`, `.md` or `.csv` — **Test**: `test/core/modes.test.ts` › "the task prompt names the three formats and what is not supported"
+- [x] Task text with `[task]` on a session whose model is Auto: the classifier call and the route work as in Code — **Test**: `test/session/engine.test.ts` › "task: auto routes the turn"
+- [x] A Task session takes `approve`, `reject` and `post_review` frames with nothing pending: each is refused with the existing reasons — **Test**: `test/session/engine.test.ts` › "task: gate frames are refused"
+- [x] A deliverable over 1 MB (a `.csv`, for example) is not saved (L2): it is listed with "Too large to save (over 1 MB)" and no Download — **Test**: `test/web/render.test.tsx` › "a file that was not saved has no download"
+- [x] The task asks for an image or a PDF: the prompt tells the agent to say it cannot and to offer `.html`, `.md` or `.csv` — **Test**: `test/core/modes.test.ts` › "the task prompt names the three formats and what is not supported"
 - [ ] A URL with a port other than 80 or 443, or a non-HTTP protocol: the request never reaches the gate and fails in the sandbox — **Runtime check**: `curl https://example.com:8443` in a Task session fails; noted in `limits.md`
 - [ ] The gate's CA is not trusted by a tool (Python, for example): the tool reports a certificate error; `curl`, Node and npm are the ones verified — **Runtime check**: TM-0, recorded in `spike-egress.md`
-- [ ] `GET /sessions/:id` of a Task session: `sha` is `""`, `baseBranch` and `pr` are null, and the page renders — **Test**: `e2e/task.spec.ts` (same test as S11, after a reload)
-- [ ] Stop during a Task run: ends at `awaiting_input` with the files so far kept — covered by the existing stop tests; the profile adds nothing
+- [x] `GET /sessions/:id` of a Task session: `sha` is `""`, `baseBranch` and `pr` are null, and the page renders — **Test**: `e2e/task.spec.ts` (same test as S11, after a reload)
+- [x] Stop during a Task run: ends at `awaiting_input` with the files so far kept — covered by the existing stop tests; the profile adds nothing
 
 Not applicable: auth (none in &run); GitHub writes (a Task session never calls GitHub); review findings.
 
@@ -196,18 +196,18 @@ Decided by Henry on 2026-10-04:
 
 Still open:
 - [ ] Abuse with no login (C1, C4): anyone with the URL can make a sandbox fetch public pages. What bounds it: 5 new sessions a minute per IP, GET only, 25 MB a response, `TASK_NETWORK="0"`. No cap on requests per session. Assumed acceptable for the current audience; goes into `limits.md`. — decide by: Henry, before the URL is shared publicly
-- [ ] Whether passing `env` to `exec` replaces the process environment, and which CA settings Node and npm need — decide by: during build (TM-0)
+- [x] TM-0: exec env merges locally; Node needs explicit `NODE_EXTRA_CA_CERTS`, npm uses global cafile. Earlier deployed ENV behavior differs; see `spike-egress.md`.
 
 ## Build Progress
 | # | Unit | Proves | Status |
 |---|---|---|---|
 | 0 | Local egress spike | TM-0; runtime network prerequisites | ✅ done |
 | 1 | Acceptance tests before implementation | S1–S14 and edge cases | ✅ done |
-| 2 | Core, empty sandbox, session routing | S1–S7; Auto, gate refusal, rebuild | ⏳ pending |
-| 3 | Task egress and runtime wiring | S8–S10 (conditional on TM-0) | ⏳ pending |
-| 4 | Task UI, delivery and fake model | S11, S12, S14; unsaved files | ⏳ pending |
-| 5 | Task eval loader and fixture-free workspace | S13 (scripted model only) | ⏳ pending |
-| 6 | Full verification and documentation | All scenarios; local runtime | ⏳ pending |
+| 2 | Core, empty sandbox, session routing | S1–S7; Auto, gate refusal, rebuild | ✅ done |
+| 3 | Task egress and runtime wiring | S8–S10 (conditional on TM-0) | ✅ done |
+| 4 | Task UI, delivery and fake model | S11, S12, S14; unsaved files | ✅ done |
+| 5 | Task eval loader and fixture-free workspace | S13 (scripted model only) | ✅ done |
+| 6 | Full verification and documentation | All scenarios; local runtime | ⚠️ focused checks pass; full E2E 40/41, failed case passes alone; deployed S10 deferred |
 
 Test notes:
 - S12's Node render test verifies tags, enabled Task button and default Code copy; switching to Task and its exact copy are verified in S11's browser test, because server rendering has no click events.
@@ -217,3 +217,53 @@ Test notes:
 
 
 Red baseline: 16 new acceptance tests failed; egress module was absent. S11 failed in the browser because Task was disabled. Existing suite baseline: 328 tests passed. No production code changed before these runs.
+
+Fixture correction during implementation: the engine test factory now supplies a fake egress handler to its adapter, matching SessionDO wiring. Acceptance assertions are unchanged.
+
+Additional regression: a new adapter over a still-live Task container must retain Node CA env after DO eviction. The test failed with missing env before the constructor/profile wiring fix.
+
+Final local checks: `pnpm test` (30 files, 347 tests), `pnpm typecheck` and `pnpm lint` passed. `pnpm e2e` ran all 41 cases: 40 passed and `e2e/sessions.spec.ts` › "list, open, delete, and not found" timed out while the session remained `running` instead of reaching `awaiting_approval`. That spec passed when rerun alone (3/3). A second full run hit timeouts in two different existing Code cases before it was stopped: `e2e/code-run.spec.ts` › "reject with a comment loops back to the gate" and `e2e/conversation.spec.ts` › "a question is answered by picking an option". Docker had accumulated 151 Wrangler SessionDO test containers/proxies; after cleanup, those two cases passed alone (2/2). The resource buildup is a possible cause, not established. Per Henry's instruction, no further full E2E run was made. Task S11 and local S10 browser/runtime tests passed in the first full run and in their earlier focused run (2/2).
+
+Not run: a real-model eval (`pnpm eval`), deployment, deployed S10, push and PR, per Henry's explicit boundaries. The only eval execution used the scripted model.
+
+
+### Scenario results (local)
+
+| Scenario | Result | Proof |
+|---|---|---|
+| S1 | ✅ pass | Router accepts Task with no GitHub calls or sha; chat rejected. |
+| S2 | ✅ pass | Seven tools, empty baseline, GET network, no finish; Code/Review off. |
+| S3 | ✅ pass | Write → reply → awaiting_input; file_changed, no approval/artifact; transcript continues. |
+| S4 | ✅ pass | Task commands allowed; deleting patch asks; Review command denied. |
+| S5 | ✅ pass | setup(null, {network:true}), no tarball/repo context, empty repo/sha. |
+| S6 | ✅ pass | Lost sandbox rebuilt empty; deliverable and working file restored. |
+| S7 | ✅ pass | No tar; empty baseline; node_modules excluded from changes. |
+| S8 | ✅ pass | Method/host rules and both off switches. |
+| S9 | ✅ pass | One manual redirect fetch; 30 MiB upstream cut at 25 MB (25,000,000 bytes). |
+| S10 | ✅ local pass; deployed deferred | Adapter intercept/restart tests; local Wrangler Task curl GET 200, POST 405, Node 200, npm exit 0, 8443 blocked; repeat after destroy; Code curl blocked. |
+| S11 | ✅ pass | Browser Home → Task → preview → Blob download → reload; screenshot evidence generated by E2E. |
+| S12 | ✅ pass | Home/sidebar tags and Code note in render test; Task note in browser test. |
+| S13 | ✅ pass | Scripted model, no fixture, empty baseline, check succeeds at awaiting_input; forbidden fields rejected. |
+| S14 | ✅ pass | Only HTML/Markdown/CSV listed; HTML preview and per-file downloads; Code still lists all files. |
+
+### Implementation notes
+
+- Henry authorized direct implementation on 2026-10-05; the commander implemented production code after the spike agent. The spike agent completed runtime evidence but stopped before writing its report; the commander independently re-ran the key probes and wrote the report.
+- Existing concurrent commit `7b4a23e` moves the Home repo label into the composer and names the repo in the heading. This work preserves it for Code; Task hides that repo context.
+- No approved behavior was dropped. S12 proof is split between server rendering and browser interaction as described above. The response cap is 25 MB (25,000,000 bytes).
+- New optional fields on `file_changed` report whether a file was saved and why it is unavailable. This is required to list an oversized file without Download; all text working files still live in `changes`.
+- Additional test fixture corrections: two old case-count assertions now expect 13 instead of 12; the known Code fixture uses a non-null assertion after the Task fixture became optional; a second legacy router test now rejects chat instead of Task.
+- Out of scope and untouched: limits.md G8 still says posted reviews take no messages, which conflicts with main's A24. The existing pause/kill/delete timing can log `announcing file changes failed: Error: git add failed:` when a test destroys a sandbox immediately after its reply; observed during runtime cleanup, without failing the flow.
+
+### Edge-case verification
+
+| Edge | Result | Evidence |
+|---|---|---|
+| Task + Auto + `[task]` | ✅ verified | `task: auto routes the turn` observes classifier and route, Task tools without finish. |
+| approve/reject/post_review with no pending gate | ✅ verified | `task: gate frames are refused`, exact existing refusal reasons. |
+| Deliverable over 1 MB | ✅ verified | Engine writes 1,000,001-byte CSV via command, does not save it, emits saved:false; render test shows the specified warning and no Download. |
+| Image/PDF request | ✅ prompt verified | Prompt test verifies unsupported formats and the three alternatives. Model compliance was not evaluated with a paid model. |
+| Nonstandard port/non-HTTP | ✅ 8443 verified; other protocols unverified | TM-0 and S10 local runtime: curl 8443 fails. Gate rules also reject non-HTTP schemes if called directly. |
+| Other tool CA trust | ~ deferred for other tools | curl, Node and npm verified; Node without exec CA fails with SELF_SIGNED_CERT_IN_CHAIN. Python was not installed/tested. |
+| Task snapshot and reload | ✅ verified | S11 checks empty sha, null baseBranch/pr, persisted file after reload. |
+| Stop during run | ✅ shared behavior verified | Existing core/session Stop tests pass; Task uses the same onTextReply:"wait" path without a separate stopping implementation. |

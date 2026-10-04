@@ -4,7 +4,7 @@ Things that work as designed but are less than a user might assume, plus open it
 
 **Rule for the product:** the UI and its copy must not promise more than what is listed here.
 
-Last updated: 2026-10-03 (Phase 4).
+Last updated: 2026-10-05 (Task mode, local verification).
 
 ## Sandbox and workspace
 
@@ -21,6 +21,10 @@ Last updated: 2026-10-03 (Phase 4).
 | L10 | A pull request is built from stored file contents. **A new file is always pushed as a normal file (mode 100644), and a change of only the executable bit is not pushed.** A modified file keeps the mode it had. | "The pull request equals the sandbox exactly." | Store the mode with each change. |
 | L7 | The first sandbox start after a deploy takes **about 11 s**; later starts take under 1 s. | "It hangs." | The "Starting sandbox…" step is shown; Phase 3 should make it prominent. |
 | L11 | **In Code mode every command runs without asking** (ADR A17). A command can delete files or change `.git` (for example hide a file from the diff), which `write_file` and `apply_patch` refuse or ask for. What bounds it: no network, no secrets, a throwaway container, and the pull request is built from the same stored changes the gate shows, so a hidden change is not published either. | "Risky commands ask first." | An auto mode with a narrower rule set (ask for `rm -rf`, `git` writes), or a Stop button. |
+
+| L12 | **Task delivers only `.html` (including `.htm`), `.md` and `.csv`.** The Files panel filters by extension; other text files are working files, saved in SQLite for rebuilds but not listed or downloadable. HTML should be self-contained with inline CSS, scripts and SVG. L2/L4 still apply; images and PDF are not supported. | "Any file the agent writes can be downloaded." | Additional formats and binary storage are a later slice. |
+| L13 | **Only Task can read the web: GET and HEAD to public DNS names, HTTP/HTTPS on ports 80/443.** Other methods return 405; literal IPs, localhost, single-label, `.local` and `.internal` names return 403. Redirects return to the client and every followed hop goes through the gate. Each response stops at 25 MB (25,000,000 bytes). There is no search tool; fetched content is untrusted data. | "Task can search, upload files or submit forms." | Search needs Henry's provider/cost decision. Code and Review remain offline. |
+| L14 | **Network and CA support were verified locally with curl, Node and npm only.** The CA is installed after start; Node gets `NODE_EXTRA_CA_CERTS` per exec, npm gets a global cafile. Other tools may report certificate errors. Nonstandard ports fail in the container (8443 verified); deployed interception is not yet verified. A GET URL can carry task text outside the sandbox. | "Every network tool works, or GET-only means no data can leave." | Verify deployed S10 with Henry's go-ahead; verify other tools only when needed. |
 
 ## GitHub (Phase 4)
 
@@ -51,7 +55,7 @@ Last updated: 2026-10-03 (Phase 4).
 
 | # | Limit | Possible fix |
 |---|---|---|
-| C1 | **Spend has a rate limit but no hard ceiling.** 5 new sessions per minute per IP. A session has no budget: each turn stops at ¥50 (list price), and a message starts another turn. `KILL_SWITCH="1"` is the stop. Accepted for now (Henry, 2026-10-01). Revisit before the URL is shared publicly. | A cap on concurrently running sessions, or a daily session cap, in the WorkspaceDO. |
+| C1 | **Spend has a rate limit but no hard ceiling.** 5 new sessions per minute per IP. A session has no budget: each turn stops at ¥50 (list price), and a message starts another turn. `KILL_SWITCH="1"` is the stop. Task additionally permits public web reads: GET/HEAD only, 25 MB per response, `TASK_NETWORK="0"` disables it (default "1"); the kill switch also disables the gate. There is no per-session request count cap. This exposure was accepted for the current audience (Henry, 2026-10-01); reconfirm before sharing the URL publicly. | A cap on concurrently running sessions, or a daily session cap, in the WorkspaceDO. |
 | C5 | **Anyone with the URL can open pull requests as the bot and post reviews as TseHang** (ADR Q1, accepted). Limits: 10 GitHub writes per minute per IP, 60 pull request reads per minute per IP. `GITHUB_WRITES="0"` or `KILL_SWITCH="1"` turns the writes off. | A passcode or login. |
 | C2 | **Closed (harness improvement, 2026-10-04).** The limit is per turn: ¥50 of model calls at list price, or 4,000,000 tokens for a model with no price. A message after `budget_exceeded` starts a new turn with a fresh limit. The header shows the session's total cost, in red above ¥10. | — |
 | C3 | `POST /sessions/:id/debug/kill-sandbox` is public while `DEBUG_ENDPOINTS="1"`. It gives no more power than the public delete. | Set `DEBUG_ENDPOINTS="0"` after the demo. |

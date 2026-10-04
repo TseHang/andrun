@@ -119,7 +119,7 @@ v3（2026-10-04）：對照 Codex 與 Claude Code 的 harness 後改寫，並納
 | Slice | 內容 | 依賴 |
 |---|---|---|
 | **A** | 第 1 到 5 項。checklist：`harness-improvement-implementation-checklist.md`（已核准） | 無 |
-| **B** | 7a：Task mode（空沙箱，產出 `.html` / `.md` / `.csv`）＋ Task 限定的唯讀連網（GET-only egress，先 spike）。checklist：`task-mode/task-mode-implementation-checklist.md`（已核准，2026-10-04） | A |
+| **B** | 7a：Task mode（空沙箱，產出 `.html` / `.md` / `.csv`）＋ Task 限定的唯讀連網（GET-only egress，先 spike）。checklist：`task-mode/task-mode-implementation-checklist.md`（已核准 2026-10-04；本機實作／驗證 2026-10-05，部署檢查待 Henry） | A |
 | **C** | 6b：egress spike（先證明 HTTPS 攔截可行），再做 registries allowlist。修訂 ADR A13 | spike 結果 |
 | **D** | 依 C 的結果：放寬成 GET-only 全網域，或做 6a 的 Worker 端工具；搜尋服務到時再選。接上 7b | C |
 
