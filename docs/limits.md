@@ -20,6 +20,7 @@ Last updated: 2026-10-03 (Phase 4).
 | L6 | Fixed in Phase 4: Approve opens a pull request. **A change that contains a binary file or a file over 1 MB (L2, L4) cannot be approved into a pull request**: the gate stays open and names the files. | "Approve always publishes my change." | Store such files in R2 and push them as blobs. |
 | L10 | A pull request is built from stored file contents. **A new file is always pushed as a normal file (mode 100644), and a change of only the executable bit is not pushed.** A modified file keeps the mode it had. | "The pull request equals the sandbox exactly." | Store the mode with each change. |
 | L7 | The first sandbox start after a deploy takes **about 11 s**; later starts take under 1 s. | "It hangs." | The "Starting sandbox…" step is shown; Phase 3 should make it prominent. |
+| L11 | **In Code mode every command runs without asking** (ADR A17). A command can delete files or change `.git` (for example hide a file from the diff), which `write_file` and `apply_patch` refuse or ask for. What bounds it: no network, no secrets, a throwaway container, and the pull request is built from the same stored changes the gate shows, so a hidden change is not published either. | "Risky commands ask first." | An auto mode with a narrower rule set (ask for `rm -rf`, `git` writes), or a Stop button. |
 
 ## GitHub (Phase 4)
 

@@ -161,6 +161,10 @@ export interface AgentState {
   /** Model turns taken so far. */
   step: number;
   tokensUsed: number;
+  /** Yen spent in the current turn; reset when a user message starts a new turn. */
+  turnCost: number;
+  /** Input plus output tokens of the current turn. */
+  turnTokens: number;
   nextSeq: number;
   failures: { tool: string; count: number } | null;
   nudged: boolean;

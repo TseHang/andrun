@@ -119,8 +119,8 @@ function config(env: RouterEnv): Response {
     reviewBrief: DEFAULT_REVIEW_BRIEF,
     models: selectableModels.map((id) => ({ id, contextWindow: contextWindowFor(defaultConfig, id) })),
     defaultModel: defaultConfig.models.code,
-    maxSteps: defaultConfig.maxSteps,
-    maxTokens: defaultConfig.maxTokens,
+    maxTurnCost: defaultConfig.maxTurnCost,
+    costNotice: defaultConfig.costNotice,
     maxTaskChars: MAX_TASK_CHARS,
   });
 }

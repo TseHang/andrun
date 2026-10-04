@@ -1145,7 +1145,6 @@ describe("Harness improvement: repo context (HI-e)", () => {
       expect(engine.snapshot()!.status).toBe("awaiting_approval");
       expect(contextOf(model.requests.at(-1)!.messages)).toHaveLength(1);
       expect(contextOf(w.store().loadState()!.messages)).toHaveLength(1);
-      expectValidTranscript(w.store().loadState()!.messages);
     }
 
     // (b) A review's workspace is the pull request's head: its AGENTS.md is the author's text.

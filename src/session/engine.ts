@@ -5,6 +5,7 @@
 import { createSession, resume, runAgent, type RunResult } from "../core/agent";
 import type { AgentEvent, EventBody } from "../core/events";
 import { getProfile } from "../core/modes";
+import { REPO_CONTEXT_HEADER, buildRepoContext } from "../core/repo-context";
 import { MAX_FILE_BYTES } from "../core/tools";
 import { buildReview, commentableLines, numberedPatch, type PullFile } from "../github";
 import { SandboxLostError, type AgentDeps, type AgentState, type ApprovalDecision, type PendingApproval } from "../core/types";
@@ -385,6 +386,8 @@ export class SessionEngine {
     state.pending = null;
     state.failures = null;
     state.nudged = false;
+    state.turnCost = 0;
+    state.turnTokens = 0;
     this.store.saveState(state, this.now());
     this.ownEmit({ type: "message", id: crypto.randomUUID(), role: "user", text });
     this.setStatus("running");
@@ -526,6 +529,19 @@ export class SessionEngine {
     if (!state) return;
     const base = getProfile(state.mode, deps.config);
     const profile = { ...base, model: store.meta()?.model ?? base.model };
+
+    // The repo context goes after the task (the first user message is the pull request's Task) and is not an event.
+    if (needSandbox && state.step === 0 && !state.messages.some((m) => m.role === "user" && m.content.startsWith(REPO_CONTEXT_HEADER))) {
+      try {
+        const content = await buildRepoContext(deps.sandbox, { agentsMd: base.sandboxSetup !== "pr-head@sha" });
+        if (this.deleted) return;
+        state.messages.push({ role: "user", content });
+        store.saveState(state, this.now());
+      } catch (err) {
+        await this.failSession(messageOf(err));
+        return;
+      }
+    }
     const agentDeps: AgentDeps = {
       model: deps.model,
       sandbox: deps.sandbox,

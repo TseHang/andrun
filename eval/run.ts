@@ -15,6 +15,7 @@ import { createSession, resume, runAgent } from "../src/core/agent";
 import { defaultConfig, type AgentConfig } from "../src/core/config";
 import { getProfile } from "../src/core/modes";
 import { OpenAICompatModelClient } from "../src/core/model";
+import { buildRepoContext } from "../src/core/repo-context";
 import { autoApprove } from "../src/core/policy";
 import type { AgentDeps, ModelClient, RunOutcome } from "../src/core/types";
 import { LocalSandbox } from "./local-sandbox";
@@ -211,6 +212,7 @@ async function runOne(
     };
 
     const state0 = createSession({ sessionId: `${c.id}-${run}`, mode: c.mode, task: c.task }, profile);
+    state0.messages.push({ role: "user", content: await buildRepoContext(sandbox, { agentsMd: profile.sandboxSetup !== "pr-head@sha" }) });
     let { state, outcome } = await runAgent(state0, profile, deps);
     // A human approves everything in eval (slice decision S-a): strikes and implicit finishes too.
     for (let resumes = 0; outcome.kind === "awaiting_approval" && resumes < MAX_AUTO_RESUMES; resumes++) {
