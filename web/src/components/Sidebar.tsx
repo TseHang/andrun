@@ -19,16 +19,19 @@ export function Sidebar({ sessions, stale, path, live, pullCount }: Props) {
   const onPrs = /^\/prs(\/|$)/.test(path);
   return (
     <nav aria-label="Workspace" className="flex w-[248px] shrink-0 flex-col gap-[18px] border-r border-black/8 bg-sidebar px-2.5 py-3.5">
-      <div className="flex items-center justify-between pl-2.5 pt-0.5">
-        <a href="/" aria-label="&run home" className="rounded-md">
-          <Wordmark />
-        </a>
-        <a href="/" aria-label="New session" className="flex size-8 items-center justify-center rounded-lg text-accent">
-          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M11.5 2.5l2 2L7 11l-2.5.5L5 9l6.5-6.5z" />
-            <path d="M13 9.5v3a1 1 0 01-1 1H3.5a1 1 0 01-1-1V4a1 1 0 011-1h3" />
-          </svg>
-        </a>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between pl-2.5 pt-0.5">
+          <a href="/" aria-label="&run home" className="rounded-md">
+            <Wordmark />
+          </a>
+          <a href="/" aria-label="New session" className="flex size-8 items-center justify-center rounded-lg text-accent">
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M11.5 2.5l2 2L7 11l-2.5.5L5 9l6.5-6.5z" />
+              <path d="M13 9.5v3a1 1 0 01-1 1H3.5a1 1 0 01-1-1V4a1 1 0 011-1h3" />
+            </svg>
+          </a>
+        </div>
+        <div className="truncate px-2.5 font-mono text-[11px] text-text-secondary">{config.repo}</div>
       </div>
       <div className="flex flex-col gap-px">
         <a href="/" aria-current={path === "/" ? "page" : undefined} className={`flex h-8 items-center rounded-lg px-2.5 font-medium ${path === "/" ? "bg-black/6" : ""}`}>
@@ -65,7 +68,6 @@ export function Sidebar({ sessions, stale, path, live, pullCount }: Props) {
         })}
       </div>
       {stale && <div className="px-2.5 text-[11px] text-text-secondary">Could not refresh</div>}
-      <div className="px-2.5 font-mono text-[11px] text-text-secondary">{config.repo}</div>
     </nav>
   );
 }

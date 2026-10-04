@@ -29,8 +29,15 @@ export function Home({ sessions }: { sessions: SessionSummary[] }) {
   return (
     <main className="flex min-w-0 grow flex-col items-center gap-14 overflow-y-auto px-12 pb-10 pt-[132px]">
       <div className="flex w-[720px] flex-col gap-5">
-        <h1 className="m-0 text-[30px] font-bold leading-[1.15] tracking-[-0.022em]">What do you want to run?</h1>
+        <h1 className="m-0 text-[30px] font-bold leading-[1.15] tracking-[-0.022em]">What do you want to run in <span className="text-accent">{config.repo.split("/").pop()}</span>?</h1>
         <div className="relative z-[2] flex flex-col gap-2.5 rounded-2xl bg-white py-3.5 pl-4 pr-3 pb-3 shadow-[0_0_0_1px_rgba(0,0,0,0.08),0_2px_6px_rgba(0,0,0,0.04),0_12px_32px_rgba(0,0,0,0.07)] transition-shadow focus-within:shadow-[0_0_0_1px_rgba(0,0,0,0.2),0_2px_6px_rgba(0,0,0,0.05),0_12px_32px_rgba(0,0,0,0.1)]">
+          <div className="-ml-4 -mr-3 flex items-center gap-1.5 border-b border-black/8 pb-2.5 pl-4 pr-3 text-[13px]">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" className="shrink-0 text-text-secondary">
+              <path d="M2 2.5A2.5 2.5 0 014.5 0h8.75a.75.75 0 01.75.75v12.5a.75.75 0 01-.75.75h-2.5a.75.75 0 010-1.5h1.75v-2h-8a1 1 0 00-.714 1.7.75.75 0 01-1.072 1.05A2.495 2.495 0 012 11.5v-9zm10.5-1h-8a1 1 0 00-1 1v6.708A2.486 2.486 0 014.5 9h8V1.5zM5 12.25v3.25a.25.25 0 00.4.2l1.45-1.087a.25.25 0 01.3 0L8.6 15.7a.25.25 0 00.4-.2v-3.25a.25.25 0 00-.25-.25h-3.5a.25.25 0 00-.25.25z" />
+            </svg>
+            <span className="font-medium">{config.repo}</span>
+            <span className="text-text-secondary">{config.sha ? `at ${config.sha.slice(0, 7)}` : "latest commit on the default branch"}</span>
+          </div>
           <label htmlFor="task" className="sr-only">
             Task
           </label>
@@ -75,12 +82,7 @@ export function Home({ sessions }: { sessions: SessionSummary[] }) {
             {error}
           </div>
         )}
-        <div className="flex items-center gap-1.5 px-1 text-xs text-text-secondary">
-          <span className="font-mono text-[11px]">{config.repo}</span>
-          <span>{config.sha ? `at ${config.sha.slice(0, 7)}` : "latest commit on the default branch"}</span>
-          <span className="grow" />
-          <span>Runs in a sandbox with no network access</span>
-        </div>
+        <div className="px-1 text-xs text-text-secondary">Runs in a sandbox with no network access</div>
       </div>
 
       {sessions.length > 0 && (
