@@ -63,7 +63,16 @@ describe("S3: policy gates risky tool calls", () => {
     for (const c of ['node --test 2>&1; echo "exit: $?"', "cat x 2>&1 | sh", "ls 2>&1 > out.txt", "ls 2>&1 2>&1", "node --test 2>out.txt", "node -e 1 2>&1", "2>&1"]) {
       expect(policy.decide(cmd(c, "review")).kind, c).toBe("deny");
     }
-    expect(policy.decide(cmd("node -e 1 2>&1", "review"))).toEqual({ kind: "deny", reason: "command not in allowlist: node" });
+    // A refusal says what would be accepted, so the model has a next step instead of a guess.
+    const refused = policy.decide(cmd("node -e 1 2>&1", "review"));
+    expect(refused.kind === "deny" && refused.reason).toMatch(/^command not in allowlist: node\. /);
+    const piped = policy.decide(cmd("cat a | head", "review"));
+    expect(piped.kind === "deny" && piped.reason).toMatch(/^command uses shell operators\. /);
+    for (const d of [refused, piped]) {
+      const reason = d.kind === "deny" ? d.reason : "";
+      for (const allowed of ["npm test", "node --test", "cat", "grep", "git show"]) expect(reason).toContain(allowed);
+      expect(reason).toMatch(/no pipes/i);
+    }
     const rm = policy.decide(cmd("rm -rf src", "review"));
     expect(rm.kind === "deny" && rm.reason).toContain("rm");
     // P4-b: a review ends at a gate ("Ready to post"), like a Code run.

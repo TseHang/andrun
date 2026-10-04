@@ -1,7 +1,7 @@
 // Mode profiles are data (ADR D4): the loop is the same, the tools, prompt and policy differ.
 
 import type { AgentConfig } from "./config";
-import { allowlistPolicy } from "./policy";
+import { READ_ONLY_COMMANDS_NOTE, allowlistPolicy } from "./policy";
 import { CODE_SYSTEM_PROMPT, REVIEW_SYSTEM_PROMPT } from "./prompts";
 import type { ModeName, ModeProfile } from "./types";
 
@@ -23,6 +23,7 @@ export function getProfile(mode: ModeName, config: AgentConfig): ModeProfile {
         model: config.models.review,
         systemPrompt: REVIEW_SYSTEM_PROMPT,
         tools: ["list_files", "read_file", "run_command", "report_finding", "finish"],
+        toolNotes: { run_command: READ_ONLY_COMMANDS_NOTE },
         policy: allowlistPolicy(),
         sandboxSetup: "pr-head@sha",
         onFinish: "draft_review",

@@ -158,7 +158,7 @@ async function loop(ctx: RunContext): Promise<RunOutcome> {
     state.step++;
 
     const contextWindow = contextWindowFor(config, profile.model);
-    const tools = toolSpecs(profile.tools);
+    const tools = toolSpecs(profile.tools, profile.toolNotes);
     const reservedTokens = Math.ceil(JSON.stringify(tools).length / 4);
     const requestMessages = compactForRequest(state.messages, { contextWindow, reservedTokens });
     const messageId = `m${state.step}`;

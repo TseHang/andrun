@@ -130,6 +130,8 @@ export interface ModeProfile {
   model: string;
   systemPrompt: string;
   tools: ToolName[];
+  /** Text added to a tool's description in this mode (e.g. what `run_command` may run in a review). */
+  toolNotes?: Partial<Record<ToolName, string>>;
   policy: ApprovalPolicy;
   sandboxSetup: "tarball@sha" | "pr-head@sha" | "empty" | "none";
   onFinish: "open_pr" | "draft_review" | "answer";

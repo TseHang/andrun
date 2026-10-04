@@ -97,8 +97,8 @@ const SPECS: Record<ToolName, ToolSpec> = {
   },
 };
 
-export function toolSpecs(names: ToolName[]): ToolSpec[] {
-  return names.map((n) => SPECS[n]);
+export function toolSpecs(names: ToolName[], notes: Partial<Record<ToolName, string>> = {}): ToolSpec[] {
+  return names.map((n) => (notes[n] ? { ...SPECS[n], description: `${SPECS[n].description} ${notes[n]}` } : SPECS[n]));
 }
 
 function asRecord(args: unknown): Record<string, unknown> {

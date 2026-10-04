@@ -38,12 +38,15 @@ function isAllowlisted(command: string): boolean {
   return COMMAND_ALLOWLIST.some((p) => c === p || c.startsWith(`${p} `) || c.startsWith(`${p}\t`));
 }
 
+/** What a read-only mode may run, in words: appended to the tool description and to every refusal. */
+export const READ_ONLY_COMMANDS_NOTE = `Only these commands run in this mode: ${COMMAND_ALLOWLIST.join(", ")} (with arguments). No pipes, redirects or other shell operators; a trailing 2>&1 is fine.`;
+
 function decideCommand(mode: PolicyInput["mode"], command: string): Decision {
   if (mode === "code" || isAllowlisted(command)) return { kind: "allow" };
   const reason = SHELL_OPERATORS.test(command.trim().replace(MERGE_STDERR, ""))
     ? "command uses shell operators"
     : `command not in allowlist: ${command.trim().split(/\s+/)[0] ?? ""}`;
-  return { kind: "deny", reason };
+  return { kind: "deny", reason: `${reason}. ${READ_ONLY_COMMANDS_NOTE}` };
 }
 
 export function allowlistPolicy(): ApprovalPolicy {

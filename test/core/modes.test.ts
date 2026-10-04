@@ -51,6 +51,14 @@ describe("S4: review profile cannot write (D4)", () => {
     expect(sent).not.toContain("apply_patch");
     expect(sent).not.toContain("write_file");
 
+    // The command limits are in the tool's own description, where the model looks when it writes a call.
+    const runCommand = model.requests[0]!.tools.find((t) => t.name === "run_command")!.description;
+    for (const allowed of ["npm test", "node --test", "cat", "grep", "git show"]) expect(runCommand).toContain(allowed);
+    expect(runCommand).toMatch(/no pipes/i);
+    const codeRunCommand = toolSpecs(getProfile("code", defaultConfig).tools).find((t) => t.name === "run_command")!.description;
+    expect(codeRunCommand).not.toMatch(/no pipes/i);
+    expect(runCommand.startsWith(codeRunCommand)).toBe(true);
+
     const results = model.requests.slice(1, 4).map((r) => r.messages.at(-1)!);
     expect(results[0]!.role === "tool" && results[0]!.content).toContain("unknown tool: apply_patch");
     expect(results[1]!.role === "tool" && results[1]!.content).toContain("unknown tool: write_file");
