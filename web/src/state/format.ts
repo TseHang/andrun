@@ -1,4 +1,5 @@
 // Small pure formatters for the UI (no DOM).
+import type { PlanStep } from "../../../src/core/events";
 import type { ChangeView, StepRow } from "./reducer";
 
 export function formatBytes(n: number): string {
@@ -22,6 +23,14 @@ export function formatTokens(n: number): string {
 
 export function formatCost(yuan: number): string {
   return `¥${yuan.toFixed(2)}`;
+}
+
+/** The gate's note on a plan with unfinished steps, null when there is nothing to say. */
+export function planNote(plan: PlanStep[] | null): string | null {
+  if (!plan) return null;
+  const open = plan.filter((s) => s.status !== "completed").length;
+  if (open === 0) return null;
+  return `${open} of ${plan.length} plan ${plan.length === 1 ? "step" : "steps"} not completed`;
 }
 
 export function modelLabel(model: string): string {

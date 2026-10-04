@@ -9,8 +9,8 @@ export interface Config {
   reviewBrief: string;
   models: { id: string; contextWindow: number }[];
   defaultModel: string;
-  maxSteps: number;
-  maxTokens: number;
+  maxTurnCost: number;
+  costNotice: number;
   maxTaskChars: number;
 }
 

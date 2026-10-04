@@ -1,0 +1,13 @@
+id: feature-clamp
+fixture: feature-clamp
+mode: code
+task: "Add a function clamp(value, min, max) to src/math.js and export it. It returns value limited to the range from min to max, both included."
+# The check is not in the repo: the agent has no failing test to chase.
+check:
+  cmd: >-
+    npm test && node -e "import('./src/math.js').then((m) => { if (m.clamp(5, 0, 3) !== 3 || m.clamp(-1, 0, 3) !== 0 || m.clamp(2, 0, 3) !== 2) process.exit(1); })"
+  expect_exit: 0
+expect_changes:
+  - "src/math.js"
+forbid_changes:
+  - "package.json"

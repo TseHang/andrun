@@ -19,6 +19,11 @@ export interface DiffSummary {
   files: { path: string; additions: number; deletions: number }[];
 }
 
+export interface PlanStep {
+  step: string;
+  status: "pending" | "in_progress" | "completed";
+}
+
 export type EventBody =
   | { type: "message"; id: string; role: "user" | "assistant"; text: string }
   /** Streamed token text. Broadcast only, never persisted (D7). */
@@ -67,6 +72,8 @@ export type EventBody =
       dismissed?: boolean;
       edited?: boolean;
     }
+  /** The agent's whole current plan; each event replaces the previous one. */
+  | { type: "plan_updated"; plan: PlanStep[] }
   | { type: "review_posted"; url: string; verdict: ReviewVerdict }
   | { type: "artifact"; name: string; size: number; url: string }
   | {

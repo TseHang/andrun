@@ -2,7 +2,7 @@
 // Everything a run needs travels in one `RunContext`; there is no module-level state.
 
 import { contextWindowFor } from "./config";
-import { compactForRequest } from "./context";
+import { compactForRequest, estimateTokens } from "./context";
 import { summarizeDiff } from "./diff";
 import type { DiffSummary, EventBody } from "./events";
 import { executeTool, summarizeCall, toolSpecs, type ToolResult } from "./tools";
@@ -21,6 +21,7 @@ import type {
 
 const NUDGE = "Please call a tool or finish. If the task is done, call finish with a summary.";
 const MAX_STRIKES = 3;
+const TURN_LIMIT_NEXT = "Send a message to continue.";
 const UI_RESULT_CHARS = 2000;
 
 interface RunContext {
@@ -45,6 +46,8 @@ export function createSession(input: { sessionId: string; mode: ModeName; task: 
     ],
     step: 0,
     tokensUsed: 0,
+    turnCost: 0,
+    turnTokens: 0,
     nextSeq: 1,
     failures: null,
     nudged: false,
@@ -148,11 +151,14 @@ async function loop(ctx: RunContext): Promise<RunOutcome> {
       emit(ctx, { type: "message", id: crypto.randomUUID(), role: "user", text });
     }
 
-    if (state.step >= config.maxSteps) return budget(ctx, `step limit reached (${config.maxSteps})`);
+    if (config.maxSteps !== undefined && state.step >= config.maxSteps) return budget(ctx, `step limit reached (${config.maxSteps})`);
+    // Also here: a turn that passed its limit and then paused at a gate must not get another model call.
+    const over = turnLimit(ctx);
+    if (over) return over;
     state.step++;
 
     const contextWindow = contextWindowFor(config, profile.model);
-    const tools = toolSpecs(profile.tools);
+    const tools = toolSpecs(profile.tools, profile.toolNotes);
     const reservedTokens = Math.ceil(JSON.stringify(tools).length / 4);
     const requestMessages = compactForRequest(state.messages, { contextWindow, reservedTokens });
     const messageId = `m${state.step}`;
@@ -170,6 +176,11 @@ async function loop(ctx: RunContext): Promise<RunOutcome> {
     const { tokens_in, tokens_out } = response.usage;
     state.tokensUsed += tokens_in + tokens_out;
     const price = config.prices?.[profile.model];
+    const cost = price ? (tokens_in * price.in + tokens_out * price.out) / 1e6 : 0;
+    // A provider that reports no usage must not switch the limit off: the request's estimated size counts instead.
+    const counted = tokens_in + tokens_out > 0 ? tokens_in + tokens_out : estimateTokens(requestMessages) + reservedTokens;
+    state.turnCost += (price && tokens_in + tokens_out === 0 ? (counted * price.in) / 1e6 : cost);
+    state.turnTokens += counted;
     emit(ctx, {
       type: "usage",
       model: response.model,
@@ -178,7 +189,7 @@ async function loop(ctx: RunContext): Promise<RunOutcome> {
       latency_ms: response.latency_ms,
       context_tokens: tokens_in, // what the provider counted for this request
       context_window: contextWindow,
-      ...(price && { cost: (tokens_in * price.in + tokens_out * price.out) / 1e6 }),
+      ...(price && { cost }),
     });
 
     if (response.content) emit(ctx, { type: "message", id: messageId, role: "assistant", text: response.content });
@@ -207,9 +218,8 @@ async function loop(ctx: RunContext): Promise<RunOutcome> {
     }
 
     checkpoint(ctx);
-    if (state.tokensUsed > config.maxTokens) {
-      return budget(ctx, `token budget exceeded (${state.tokensUsed}/${config.maxTokens})`);
-    }
+    const stop = turnLimit(ctx);
+    if (stop) return stop;
   }
 }
 
@@ -305,6 +315,7 @@ async function recordResult(ctx: RunContext, call: ToolCall, result: ToolResult,
       emit(ctx, { type: "file_changed", path, diff: (await deps.sandbox?.diff(path)) ?? "" });
     }
     if (result.finding) emit(ctx, { type: "review_finding", id: crypto.randomUUID(), ...result.finding });
+    if (result.plan) emit(ctx, { type: "plan_updated", plan: result.plan });
     return null;
   }
 
@@ -336,8 +347,19 @@ function fail(ctx: RunContext, source: "model" | "sandbox", message: string): Ru
   return { kind: "failed", error: message };
 }
 
-function budget(ctx: RunContext, message: string): RunOutcome {
-  emit(ctx, { type: "error", source: "budget", message });
+/** The safety limit of one turn (HI-h): money for a priced model, tokens otherwise. Null while under it. */
+function turnLimit(ctx: RunContext): RunOutcome | null {
+  const { state, profile } = ctx;
+  const { config } = ctx.deps;
+  if (config.prices?.[profile.model]) {
+    return state.turnCost >= config.maxTurnCost ? budget(ctx, `This turn reached its ¥${config.maxTurnCost} safety limit`, TURN_LIMIT_NEXT) : null;
+  }
+  if (state.turnTokens < config.maxTurnTokens) return null;
+  return budget(ctx, `This turn reached its ${config.maxTurnTokens.toLocaleString("en-US")} token safety limit`, TURN_LIMIT_NEXT);
+}
+
+function budget(ctx: RunContext, message: string, next?: string): RunOutcome {
+  emit(ctx, { type: "error", source: "budget", message, ...(next !== undefined && { next }) });
   setStatus(ctx, "budget_exceeded");
   return { kind: "budget_exceeded" };
 }

@@ -8,8 +8,10 @@
 // Markers in the first user message change its behaviour:
 //   [slow]  every answer is delayed 8 s (time to kill the sandbox mid-run)
 //   [fail]  every request gets HTTP 500 (the run ends as failed after the client's retries)
-//   [ask]   the first turn runs `rm -rf tmp` (not on the allowlist, so the run stops at an approval
-//           gate); after that the normal script plays from the start
+//   [ask]    the run first writes scratch.txt, then deletes it with a patch (a patch that deletes a file
+//            stops at an approval gate); after that the normal script plays from the start
+//   [plan]   PLAN_SCRIPT plays instead: three plan steps, two completed, then finish
+//   [costly] every answer reports 150,000 input tokens, so the session's cost passes the ¥10 notice
 // A Review session (system prompt of the review profile) gets REVIEW_SCRIPT instead.
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -67,7 +69,22 @@ const REVIEW_SCRIPT: Turn[] = [
   finding("src/slugify.js", 1, "low", "Consider a default export."),
   { call: { name: "finish", args: { summary: "Four findings; the main one is repeated spaces." } } },
 ];
-const ASK_TURN: Turn = { call: { name: "run_command", args: { command: "rm -rf tmp" } } };
+const DELETE_PATCH = ["diff --git a/scratch.txt b/scratch.txt", "deleted file mode 100644", "--- a/scratch.txt", "+++ /dev/null", "@@ -1 +0,0 @@", "-scratch", ""].join("\n");
+const ASK_TURNS: Turn[] = [
+  { call: { name: "write_file", args: { path: "scratch.txt", content: "scratch\n" } } },
+  { call: { name: "apply_patch", args: { patch: DELETE_PATCH } } },
+];
+const plan = (...statuses: string[]): Turn => ({
+  call: { name: "update_plan", args: { plan: ["Read the code", "Fix the loop bound", "Run the tests"].map((step, i) => ({ step, status: statuses[i] })) } },
+});
+const PLAN_SCRIPT: Turn[] = [
+  plan("in_progress", "pending", "pending"),
+  { call: { name: "read_file", args: { path: "src/sum.js" } } },
+  plan("completed", "in_progress", "pending"),
+  { text: "The loop stops one element early.", call: { name: "apply_patch", args: { patch: FIX_PATCH } } },
+  plan("completed", "completed", "in_progress"),
+  { call: { name: "finish", args: { summary: "Fixed the loop bound in sum(); the tests were not run.", title: "Fix the loop bound in sum()" } } },
+];
 const LAST: Turn = { call: { name: "finish", args: { summary: "Nothing more to do." } } };
 
 interface ChatBody {
@@ -96,7 +113,8 @@ async function chat(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const played = messages.filter((m) => m.role === "assistant").length;
   const ask = task.includes("[ask]");
   const review = (messages.find((m) => m.role === "system")?.content ?? "").includes("code reviewer");
-  const turn = review ? (REVIEW_SCRIPT[played] ?? LAST) : ask && played === 0 ? ASK_TURN : (SCRIPT[ask ? played - 1 : played] ?? LAST);
+  const script = review ? REVIEW_SCRIPT : task.includes("[plan]") ? PLAN_SCRIPT : ask ? [...ASK_TURNS, ...SCRIPT] : SCRIPT;
+  const turn = script[played] ?? LAST;
   console.log(`[fake-model] turn ${played}: ${turn.call.name}`);
 
   if (task.includes("[fail]")) {
@@ -123,7 +141,7 @@ async function chat(req: IncomingMessage, res: ServerResponse): Promise<void> {
   chunk({ tool_calls: [{ index: 0, id, type: "function", function: { name: turn.call.name, arguments: "" } }] });
   chunk({ tool_calls: [{ index: 0, function: { arguments: args.slice(0, mid) } }] }); // split like real providers do
   chunk({ tool_calls: [{ index: 0, function: { arguments: args.slice(mid) } }] });
-  const promptTokens = Math.ceil(JSON.stringify(messages).length / 4);
+  const promptTokens = task.includes("[costly]") ? 150_000 : Math.ceil(JSON.stringify(messages).length / 4);
   res.write(`data: ${JSON.stringify({ id: "fake", model, choices: [], usage: { prompt_tokens: promptTokens, completion_tokens: 30 } })}\n\n`);
   res.end("data: [DONE]\n\n");
 }

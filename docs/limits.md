@@ -20,6 +20,7 @@ Last updated: 2026-10-03 (Phase 4).
 | L6 | Fixed in Phase 4: Approve opens a pull request. **A change that contains a binary file or a file over 1 MB (L2, L4) cannot be approved into a pull request**: the gate stays open and names the files. | "Approve always publishes my change." | Store such files in R2 and push them as blobs. |
 | L10 | A pull request is built from stored file contents. **A new file is always pushed as a normal file (mode 100644), and a change of only the executable bit is not pushed.** A modified file keeps the mode it had. | "The pull request equals the sandbox exactly." | Store the mode with each change. |
 | L7 | The first sandbox start after a deploy takes **about 11 s**; later starts take under 1 s. | "It hangs." | The "Starting sandbox…" step is shown; Phase 3 should make it prominent. |
+| L11 | **In Code mode every command runs without asking** (ADR A17). A command can delete files or change `.git` (for example hide a file from the diff), which `write_file` and `apply_patch` refuse or ask for. What bounds it: no network, no secrets, a throwaway container, and the pull request is built from the same stored changes the gate shows, so a hidden change is not published either. | "Risky commands ask first." | An auto mode with a narrower rule set (ask for `rm -rf`, `git` writes), or a Stop button. |
 
 ## GitHub (Phase 4)
 
@@ -50,9 +51,9 @@ Last updated: 2026-10-03 (Phase 4).
 
 | # | Limit | Possible fix |
 |---|---|---|
-| C1 | **Spend has a rate limit but no hard ceiling.** 5 new sessions per minute per IP, each up to 400k tokens. `KILL_SWITCH="1"` is the stop. Accepted for now (Henry, 2026-10-01). Revisit before the URL is shared publicly. | A cap on concurrently running sessions, or a daily session cap, in the WorkspaceDO. |
+| C1 | **Spend has a rate limit but no hard ceiling.** 5 new sessions per minute per IP. A session has no budget: each turn stops at ¥50 (list price), and a message starts another turn. `KILL_SWITCH="1"` is the stop. Accepted for now (Henry, 2026-10-01). Revisit before the URL is shared publicly. | A cap on concurrently running sessions, or a daily session cap, in the WorkspaceDO. |
 | C5 | **Anyone with the URL can open pull requests as the bot and post reviews as TseHang** (ADR Q1, accepted). Limits: 10 GitHub writes per minute per IP, 60 pull request reads per minute per IP. `GITHUB_WRITES="0"` or `KILL_SWITCH="1"` turns the writes off. | A passcode or login. |
-| C2 | The budget is **per session**. A message sent after `budget_exceeded` is accepted and shown, but the new turn stops again at once. | Say so in the UI; or a per-turn budget. |
+| C2 | **Closed (harness improvement, 2026-10-04).** The limit is per turn: ¥50 of model calls at list price, or 4,000,000 tokens for a model with no price. A message after `budget_exceeded` starts a new turn with a fresh limit. The header shows the session's total cost, in red above ¥10. | — |
 | C3 | `POST /sessions/:id/debug/kill-sandbox` is public while `DEBUG_ENDPOINTS="1"`. It gives no more power than the public delete. | Set `DEBUG_ENDPOINTS="0"` after the demo. |
 | C4 | Anyone with the URL sees and can delete every session (one shared workspace, spec D3). | Out of scope for this version. |
 

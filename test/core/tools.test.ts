@@ -162,6 +162,126 @@ describe("tools", () => {
     expect(summarizeCall("run_command", { command: "npm test" })).toBe("Run npm test");
   });
 
+  describe("update_plan (HI-a)", () => {
+    const PLAN_TOOLS: ToolName[] = [...CODE_TOOLS, "update_plan"];
+    const plan = (args: unknown) => run("update_plan", args, PLAN_TOOLS);
+
+    it("update_plan rejects a malformed plan", async () => {
+      const good = [
+        { step: "Read the code", status: "completed" },
+        { step: "Make the change", status: "in_progress" },
+        { step: "Run the tests", status: "pending" },
+      ];
+      expect(await plan({ plan: good })).toEqual({ ok: true, output: "Plan updated", plan: good });
+
+      const cases: [unknown, RegExp][] = [
+        [{ plan: "read, then fix" }, /plan/],
+        [{}, /plan/],
+        [{ plan: ["read the code"] }, /step/],
+        [{ plan: [{ status: "pending" }] }, /step/],
+        [{ plan: [{ step: "", status: "pending" }] }, /step/],
+        [{ plan: [{ step: "Read the code" }] }, /status/],
+        [{ plan: [{ step: "Read the code", status: "done" }] }, /status/],
+      ];
+      for (const [args, names] of cases) {
+        const r = await plan(args);
+        expect(r.ok, JSON.stringify(args)).toBe(false);
+        expect(!r.ok && r.error, JSON.stringify(args)).toContain("invalid arguments");
+        expect(!r.ok && r.error, JSON.stringify(args)).toMatch(names);
+        expect(r).not.toHaveProperty("plan");
+      }
+
+      // Not a Review tool (S4).
+      expect(await run("update_plan", { plan: good }, ["list_files", "read_file", "run_command", "report_finding", "finish"])).toEqual({ ok: false, error: "unknown tool: update_plan" });
+    });
+
+    it("update_plan does not enforce one step in progress", async () => {
+      const two = [
+        { step: "Write the page", status: "in_progress" },
+        { step: "Write the styles", status: "in_progress" },
+      ];
+      expect(await plan({ plan: two })).toEqual({ ok: true, output: "Plan updated", plan: two });
+      // An empty list clears the plan.
+      expect(await plan({ plan: [] })).toEqual({ ok: true, output: "Plan updated", plan: [] });
+
+      const spec = toolSpecs(["update_plan"])[0]!;
+      expect(spec.description).toMatch(/at most one/i);
+      expect(JSON.stringify(spec.parameters)).toContain("in_progress");
+    });
+  });
+
+  describe("read_file ranges (HI-f)", () => {
+    const LINES = Array.from({ length: 2000 }, (_, i) => `line ${i + 1} ${"x".repeat(20)}`);
+    const BIG = `${LINES.join("\n")}\n`; // about 60 KB
+    const NOTE = /\n\[lines (\d+)-(\d+) of (\d+) shown; continue with offset (\d+)\]$/;
+    const body = (output: string) => output.replace(NOTE, "").replace(/\n$/, "");
+
+    it("read_file returns whole lines with a continuation note, and honors offset and limit", async () => {
+      await sandbox.writeFile("big.txt", BIG);
+      const bytes = new TextEncoder().encode(BIG).length;
+
+      const first = await run("read_file", { path: "big.txt" });
+      if (!first.ok) throw new Error(first.error);
+      expect(first.output.length).toBeLessThanOrEqual(8192);
+      const note = NOTE.exec(first.output)!;
+      expect(note, first.output.slice(-120)).not.toBeNull();
+      const [from, to, total, next] = note.slice(1).map(Number) as [number, number, number, number];
+      expect([from, total, next]).toEqual([1, 2000, to + 1]);
+      expect(to).toBeGreaterThan(200); // most of the 8 KB is used
+      expect(body(first.output)).toBe(LINES.slice(0, to).join("\n"));
+      expect(first.meta).toEqual({ bytes });
+
+      const second = await run("read_file", { path: "big.txt", offset: next });
+      if (!second.ok) throw new Error(second.error);
+      expect(second.output.startsWith(`${LINES[next - 1]}\n`)).toBe(true);
+      const note2 = NOTE.exec(second.output)!;
+      expect(Number(note2[1])).toBe(next);
+      expect(Number(note2[4])).toBe(Number(note2[2]) + 1);
+      expect(body(second.output)).toBe(LINES.slice(next - 1, Number(note2[2])).join("\n"));
+      expect(second.meta).toEqual({ bytes });
+
+      const third = await run("read_file", { path: "big.txt", offset: 1990, limit: 5 });
+      if (!third.ok) throw new Error(third.error);
+      expect(third.output.replace(/\n$/, "")).toBe(LINES.slice(1989, 1994).join("\n"));
+      expect(third.meta).toEqual({ bytes });
+
+      // The end of the file needs no note.
+      const tail = await run("read_file", { path: "big.txt", offset: 1995 });
+      expect(tail.ok && tail.output.replace(/\n$/, "")).toBe(LINES.slice(1994).join("\n"));
+
+      // A limit that does not fit in 8 KB is cut at a line, with the note.
+      const wide = await run("read_file", { path: "big.txt", offset: 100, limit: 1000 });
+      if (!wide.ok) throw new Error(wide.error);
+      expect(wide.output.length).toBeLessThanOrEqual(8192);
+      expect(Number(NOTE.exec(wide.output)![1])).toBe(100);
+
+      // A file under the cap comes back unchanged.
+      const small = await run("read_file", { path: "src/sum.js" });
+      expect(small.ok && small.output).toBe(await sandbox.readFile("src/sum.js"));
+
+      const spec = toolSpecs(["read_file"])[0]!;
+      expect(Object.keys((spec.parameters as { properties: Record<string, unknown> }).properties).sort()).toEqual(["limit", "offset", "path"]);
+      expect((spec.parameters as { required: string[] }).required).toEqual(["path"]);
+    });
+
+    it("read_file rejects bad ranges and cuts an over-long line", async () => {
+      await sandbox.writeFile("big.txt", BIG);
+      const bad = [{ offset: 2001 }, { offset: 0 }, { offset: -3 }, { offset: 1.5 }, { offset: "3" }, { limit: 0 }, { limit: -1 }, { limit: 2.5 }, { limit: "10" }];
+      for (const range of bad) {
+        const r = await run("read_file", { path: "big.txt", ...range });
+        expect(r.ok, JSON.stringify(range)).toBe(false);
+        expect(!r.ok && r.error, JSON.stringify(range)).toContain("invalid arguments");
+      }
+
+      await sandbox.writeFile("long.txt", `HEAD${"x".repeat(50_000)}TAIL`);
+      const long = await run("read_file", { path: "long.txt" });
+      if (!long.ok) throw new Error(long.error);
+      expect(long.output.length).toBeLessThanOrEqual(8192);
+      expect(long.output.startsWith("HEAD")).toBe(true);
+      expect(long.output).toMatch(/\[… \d+ bytes elided\]/);
+    });
+  });
+
   it("SandboxLostError is rethrown, not fed back", async () => {
     const lost: SandboxAdapter = {
       exec: () => Promise.reject(new SandboxLostError("the sandbox was lost while running the command")),

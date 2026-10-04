@@ -19,6 +19,8 @@ export function SessionHeader({ title, status, header, review, onDelete, moreRef
   const { config } = useApp();
   const [open, setOpen] = useState(false);
   const menu = useRef<HTMLDivElement>(null);
+  const over = header.cost > config.costNotice;
+  const notice = `This session has cost more than ¥${config.costNotice}. Smaller tasks cost less: consider splitting the work.`;
   const pct = header.contextWindow > 0 ? Math.min(100, (header.contextTokens / header.contextWindow) * 100) : 0;
 
   useEffect(() => {
@@ -52,9 +54,7 @@ export function SessionHeader({ title, status, header, review, onDelete, moreRef
       </span>
       <span className="grow" />
       {review && <span className="shrink-0 text-text-secondary">Read-only review</span>}
-      <span className="shrink-0 text-text-secondary">
-        Step {header.step} of {config.maxSteps}
-      </span>
+      <span className="shrink-0 text-text-secondary">Step {header.step}</span>
       {header.contextWindow > 0 && (
         <span className="flex shrink-0 items-center gap-1.5 text-text-secondary">
           <span className="flex h-1 w-12 overflow-hidden rounded-full bg-[#e5e5ea]">
@@ -65,7 +65,26 @@ export function SessionHeader({ title, status, header, review, onDelete, moreRef
           </span>
         </span>
       )}
-      {header.cost > 0 && <span className="shrink-0 text-text-secondary">{formatCost(header.cost)}</span>}
+      {header.cost > 0 && (
+        <span className="relative flex shrink-0 items-center gap-1">
+          <span data-testid="session-cost" data-over-notice={over} className={over ? "text-failed" : "text-text-secondary"}>
+            {formatCost(header.cost)}
+          </span>
+          {over && (
+            <>
+              <svg role="img" aria-label={notice} tabIndex={0} width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" className="peer rounded-full text-failed">
+                <circle cx="8" cy="8" r="6.5" />
+                <path d="M8 7.2v4" strokeLinecap="round" />
+                <circle cx="8" cy="4.8" r="0.5" fill="currentColor" />
+              </svg>
+              {/* Shown on hover and on keyboard focus: a native title appears for neither touch nor keyboard. */}
+              <span role="tooltip" className="absolute right-0 top-6 z-10 hidden w-64 rounded-lg bg-white p-2.5 text-xs text-text shadow-[0_0_0_0.5px_rgba(0,0,0,0.14),0_10px_36px_rgba(0,0,0,0.18)] peer-hover:block peer-focus:block">
+                {notice}
+              </span>
+            </>
+          )}
+        </span>
+      )}
       <div className="relative">
         <button
           ref={moreRef}

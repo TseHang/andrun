@@ -1,0 +1,8 @@
+id: review-clean
+fixture: review-clean
+mode: review
+task: "Review src/chunk.js: read it and its tests, run the tests, and report each bug with report_finding. If there is none, say so."
+# The code is correct: a review that reports a finding here is inventing one.
+expect_no_findings: true
+forbid_changes:
+  - "**"

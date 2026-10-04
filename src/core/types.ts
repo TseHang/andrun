@@ -121,6 +121,7 @@ export type ToolName =
   | "write_file"
   | "apply_patch"
   | "run_command"
+  | "update_plan"
   | "report_finding"
   | "finish";
 
@@ -129,6 +130,8 @@ export interface ModeProfile {
   model: string;
   systemPrompt: string;
   tools: ToolName[];
+  /** Text added to a tool's description in this mode (e.g. what `run_command` may run in a review). */
+  toolNotes?: Partial<Record<ToolName, string>>;
   policy: ApprovalPolicy;
   sandboxSetup: "tarball@sha" | "pr-head@sha" | "empty" | "none";
   onFinish: "open_pr" | "draft_review" | "answer";
@@ -160,6 +163,10 @@ export interface AgentState {
   /** Model turns taken so far. */
   step: number;
   tokensUsed: number;
+  /** Yen spent in the current turn; reset when a user message starts a new turn. */
+  turnCost: number;
+  /** Input plus output tokens of the current turn. */
+  turnTokens: number;
   nextSeq: number;
   failures: { tool: string; count: number } | null;
   nudged: boolean;

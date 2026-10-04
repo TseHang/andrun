@@ -96,3 +96,40 @@ test("scroll position is kept when the user scrolled up", async ({ page, request
   await expect(s.rows("apply_patch")).toHaveCount(1, { timeout: 60_000 });
   await expect.poll(async () => (await position()).bottom, { timeout: 5000 }).toBeLessThan(4); // at the bottom: follows
 });
+
+// S15 (HI-h, HI-k): the step count has no limit beside it, and the cost is information.
+test("the header shows the step and the cost, and marks a cost above the notice", async ({ page, request }) => {
+  const s = ui(page);
+  const header = page.locator("header");
+  const cost = page.getByTestId("session-cost");
+  const NOTICE = "This session has cost more than ¥10. Smaller tasks cost less: consider splitting the work.";
+
+  const cheap = await createSession(request, TASK);
+  await waitForStatus(request, cheap, "awaiting_approval");
+  await page.goto(`/s/${cheap}`);
+  await expect(s.status).toHaveText("Awaiting approval");
+  await expect(header).toContainText(/Step 5(?! of)/);
+  await expect(header).not.toContainText("of 30");
+  await expect(cost).toHaveText(/^¥0\.\d\d$/);
+  await expect(cost).toHaveAttribute("data-over-notice", "false");
+  await expect(page.getByRole("img", { name: NOTICE })).toHaveCount(0);
+  const color = (el: Element) => getComputedStyle(el).color;
+  const normal = await cost.evaluate(color);
+
+  // Five answers of 150,000 input tokens on the default model are ¥18.75: over the notice, under the turn limit.
+  const costly = await createSession(request, `[costly] ${TASK}`);
+  await waitForStatus(request, costly, "awaiting_approval");
+  await page.goto(`/s/${costly}`);
+  await expect(s.status).toHaveText("Awaiting approval");
+  await expect(cost).toHaveText("¥18.76");
+  await expect(cost).toHaveAttribute("data-over-notice", "true");
+  await expect(page.getByRole("img", { name: NOTICE })).toBeVisible();
+  // QA: the note can be reached and read with the keyboard.
+  await expect(page.getByRole("tooltip")).toBeHidden();
+  await page.getByRole("img", { name: NOTICE }).focus();
+  await expect(page.getByRole("tooltip")).toHaveText(NOTICE);
+  expect(await cost.evaluate(color)).not.toBe(normal);
+  // Nothing stopped at ¥10: the run reached its gate.
+  await expect(s.approval.getByRole("button", { name: "Approve and open PR" })).toBeEnabled();
+});
+

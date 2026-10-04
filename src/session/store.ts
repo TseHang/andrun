@@ -26,6 +26,7 @@ const FINDINGS_DDL = `CREATE TABLE IF NOT EXISTS findings (
   id TEXT PRIMARY KEY, n INTEGER NOT NULL, path TEXT NOT NULL, line INTEGER NOT NULL, severity TEXT NOT NULL,
   text TEXT NOT NULL, inline INTEGER NOT NULL, dismissed INTEGER NOT NULL, edited INTEGER NOT NULL)`;
 const GITHUB_STATE_DDL = `CREATE TABLE IF NOT EXISTS github_state (id INTEGER PRIMARY KEY CHECK (id = 1), json TEXT NOT NULL)`;
+const TURN_DDL = `CREATE TABLE IF NOT EXISTS turn (id INTEGER PRIMARY KEY CHECK (id = 1), cost REAL NOT NULL, tokens INTEGER NOT NULL)`;
 
 /** One review finding as stored; `n` keeps the order they were reported in. */
 export interface StoredFinding {
@@ -129,6 +130,7 @@ export class SessionStore {
     );
     this.saveMessages(state.messages);
     this.savePending(state.pending);
+    this.saveTurn(state);
   }
 
   meta(): SessionMeta | null {
@@ -142,6 +144,7 @@ export class SessionStore {
     if (!r) return null;
     const messages = this.read<{ json: string }>("SELECT json FROM messages ORDER BY idx").map((m) => JSON.parse(m.json) as ChatMessage);
     const pending = this.read<{ json: string }>("SELECT json FROM pending_approval LIMIT 1")[0];
+    const turn = this.read<{ cost: number; tokens: number }>("SELECT cost, tokens FROM turn LIMIT 1")[0];
     const maxSeq = this.read<{ m: number | null }>("SELECT MAX(seq) AS m FROM events")[0]?.m ?? 0;
     return {
       sessionId: r.id,
@@ -150,6 +153,8 @@ export class SessionStore {
       messages,
       step: r.step,
       tokensUsed: r.tokens_used,
+      turnCost: turn?.cost ?? 0,
+      turnTokens: turn?.tokens ?? 0,
       // Events written after the last checkpoint must not have their seq reused.
       nextSeq: Math.max(r.next_seq, maxSeq + 1),
       failures: r.failures ? (JSON.parse(r.failures) as AgentState["failures"]) : null,
@@ -171,6 +176,16 @@ export class SessionStore {
     );
     this.saveMessages(state.messages);
     this.savePending(state.pending);
+    this.saveTurn(state);
+  }
+
+  /** The turn counters live in a table of their own, created at the first non-zero write (the `session` table is never altered). */
+  private saveTurn(state: AgentState): void {
+    const cost = state.turnCost ?? 0;
+    const tokens = state.turnTokens ?? 0;
+    if (cost === 0 && tokens === 0 && this.read("SELECT 1 FROM turn LIMIT 1").length === 0) return;
+    this.sql.exec(TURN_DDL);
+    this.sql.exec("INSERT OR REPLACE INTO turn (id, cost, tokens) VALUES (1, ?, ?)", cost, tokens);
   }
 
   /** The transcript only grows, so rows already stored are kept and only the new tail is written. */

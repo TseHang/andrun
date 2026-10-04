@@ -1,4 +1,5 @@
-// Approval policy (spec §6): allowlisted commands run freely; risky calls ask (code) or are denied (review).
+// Approval policy (spec §6): Code mode runs every command freely; Review mode allows only allowlisted commands and denies the rest.
+// Finishing and patches that delete files still ask.
 
 import { pathsInPatch } from "./diff";
 import type { ApprovalPolicy, Decision, PolicyInput } from "./types";
@@ -28,18 +29,24 @@ const SHELL_OPERATORS = /[;&|<>`$\n\r]/;
 // Flags that let an allowlisted program delete, execute or write files.
 const WRITE_FLAGS = /(^|\s)(-delete|-exec|-execdir|-ok|-okdir|-fprint\S*|-fls|--output)(=|\s|$)/;
 
+// Models often end a command with `2>&1`. Output is already combined, so that one ending is harmless and is ignored.
+const MERGE_STDERR = /\s+2>&1$/;
+
 function isAllowlisted(command: string): boolean {
-  const c = command.trim();
+  const c = command.trim().replace(MERGE_STDERR, "");
   if (SHELL_OPERATORS.test(c) || WRITE_FLAGS.test(c)) return false;
   return COMMAND_ALLOWLIST.some((p) => c === p || c.startsWith(`${p} `) || c.startsWith(`${p}\t`));
 }
 
+/** What a read-only mode may run, in words: appended to the tool description and to every refusal. */
+export const READ_ONLY_COMMANDS_NOTE = `Only these commands run in this mode: ${COMMAND_ALLOWLIST.join(", ")} (with arguments). No pipes, redirects or other shell operators; a trailing 2>&1 is fine.`;
+
 function decideCommand(mode: PolicyInput["mode"], command: string): Decision {
-  if (isAllowlisted(command)) return { kind: "allow" };
-  const reason = SHELL_OPERATORS.test(command)
+  if (mode === "code" || isAllowlisted(command)) return { kind: "allow" };
+  const reason = SHELL_OPERATORS.test(command.trim().replace(MERGE_STDERR, ""))
     ? "command uses shell operators"
     : `command not in allowlist: ${command.trim().split(/\s+/)[0] ?? ""}`;
-  return mode === "review" ? { kind: "deny", reason } : { kind: "ask", reason };
+  return { kind: "deny", reason: `${reason}. ${READ_ONLY_COMMANDS_NOTE}` };
 }
 
 export function allowlistPolicy(): ApprovalPolicy {

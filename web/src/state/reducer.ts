@@ -1,7 +1,7 @@
 // The session's view model: reduce(view, frame) folds the event stream into what the UI shows (P3-a).
 // Pure and free of React, so a live run and a replay of the stored log give the same items.
 
-import type { AgentEvent, DiffSummary, ErrorSource, ReviewVerdict, Severity, Status } from "../../../src/core/events";
+import type { AgentEvent, DiffSummary, ErrorSource, PlanStep, ReviewVerdict, Severity, Status } from "../../../src/core/events";
 import { RESTORED_NOTE, type ServerFrame } from "../../../src/session/protocol";
 import { parseDiff } from "./diff";
 import { isTestPath } from "./format";
@@ -90,6 +90,8 @@ export interface SessionView {
   pr: { url: string; number?: number; branch?: string } | null;
   findings: FindingView[];
   posted: { url: string; verdict: ReviewVerdict } | null;
+  /** The agent's current plan; each plan_updated replaces it. */
+  plan: PlanStep[] | null;
 }
 
 export function initialView(): SessionView {
@@ -109,6 +111,7 @@ export function initialView(): SessionView {
     pr: null,
     findings: [],
     posted: null,
+    plan: null,
   };
 }
 
@@ -294,7 +297,7 @@ function apply(view: SessionView, ev: AgentEvent): SessionView {
       };
     }
     case "tool_call": {
-      if (ev.name === "finish") return view;
+      if (ev.name === "finish" || ev.name === "update_plan") return view;
       const row = newRow(ev);
       const last = view.items.at(-1);
       const items: TimelineItem[] =
@@ -376,10 +379,12 @@ function apply(view: SessionView, ev: AgentEvent): SessionView {
     }
     case "review_posted":
       return { ...view, posted: { url: ev.url, verdict: ev.verdict }, items: [...view.items, { key: `rp:${ev.seq}`, kind: "review_posted", url: ev.url, verdict: ev.verdict }] };
+    case "plan_updated":
+      return { ...view, plan: ev.plan.length > 0 ? ev.plan : null };
     case "status": {
       const closes = ev.status === "done" || ev.status === "failed" || ev.status === "budget_exceeded";
       const items = closes ? mapRows(view.items, (r) => (r.done ? r : settle({ ...r, done: true }))) : view.items;
-      return { ...view, items, status: ev.status, composerEnabled: ev.status !== "budget_exceeded" };
+      return { ...view, items, status: ev.status, composerEnabled: true };
     }
     default:
       return view;

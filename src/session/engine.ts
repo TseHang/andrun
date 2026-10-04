@@ -5,6 +5,7 @@
 import { createSession, resume, runAgent, type RunResult } from "../core/agent";
 import type { AgentEvent, EventBody } from "../core/events";
 import { getProfile } from "../core/modes";
+import { REPO_CONTEXT_HEADER, buildRepoContext } from "../core/repo-context";
 import { MAX_FILE_BYTES } from "../core/tools";
 import { buildReview, commentableLines, numberedPatch, type PullFile } from "../github";
 import { SandboxLostError, type AgentDeps, type AgentState, type ApprovalDecision, type PendingApproval } from "../core/types";
@@ -179,7 +180,7 @@ export class SessionEngine {
     if (frame.type === "post_review") return this.postReview(state, frame, reply, ip);
 
     if (frame.type === "message") {
-      if (state.mode === "review" && this.store.githubState().posted) {
+      if (this.onFinish(state) === "draft_review" && this.store.githubState().posted) {
         return reply({ type: "rejected", reason: "This review was posted. Start a new review from Pull requests." });
       }
       if (this.inflight) {
@@ -245,8 +246,15 @@ export class SessionEngine {
       return reply({ type: "rejected", reason: "no such pending approval" });
     }
     if (!approvesFinish(pending, decision)) return this.startSegment(decision, true);
-    if (state.mode === "review") return reply({ type: "rejected", reason: "Choose a verdict and post the review." });
+    const onFinish = this.onFinish(state);
+    if (onFinish === "draft_review") return reply({ type: "rejected", reason: "Choose a verdict and post the review." });
+    if (onFinish === "answer") return this.startSegment(decision, false);
     this.startSegment(decision, false, () => this.publishChanges(state, pending, reply, ip));
+  }
+
+  /** How this session's finish is handled (from its mode's profile). */
+  private onFinish(state: AgentState): "open_pr" | "draft_review" | "answer" {
+    return getProfile(state.mode, this.deps.config).onFinish;
   }
 
   /** `post_review`: only for a review waiting at its finish gate. */
@@ -256,7 +264,7 @@ export class SessionEngine {
     reply: (frame: ServerFrame) => void,
     ip: string,
   ): void {
-    if (state.mode !== "review") return reply({ type: "rejected", reason: "post_review is only for review sessions" });
+    if (this.onFinish(state) !== "draft_review") return reply({ type: "rejected", reason: "post_review is only for review sessions" });
     const pending = state.pending;
     if (this.inflight || !pending || pending.approvalId !== frame.approvalId || !approvesFinish(pending, { approved: true })) {
       return reply({ type: "rejected", reason: "no such pending approval" });
@@ -385,6 +393,8 @@ export class SessionEngine {
     state.pending = null;
     state.failures = null;
     state.nudged = false;
+    state.turnCost = 0;
+    state.turnTokens = 0;
     this.store.saveState(state, this.now());
     this.ownEmit({ type: "message", id: crypto.randomUUID(), role: "user", text });
     this.setStatus("running");
@@ -526,6 +536,19 @@ export class SessionEngine {
     if (!state) return;
     const base = getProfile(state.mode, deps.config);
     const profile = { ...base, model: store.meta()?.model ?? base.model };
+
+    // The repo context goes after the task (the first user message is the pull request's Task) and is not an event.
+    if (needSandbox && state.step === 0 && !state.messages.some((m) => m.role === "user" && m.content.startsWith(REPO_CONTEXT_HEADER))) {
+      try {
+        const content = await buildRepoContext(deps.sandbox, { agentsMd: base.sandboxSetup !== "pr-head@sha" });
+        if (this.deleted) return;
+        state.messages.push({ role: "user", content });
+        store.saveState(state, this.now());
+      } catch (err) {
+        await this.failSession(messageOf(err));
+        return;
+      }
+    }
     const agentDeps: AgentDeps = {
       model: deps.model,
       sandbox: deps.sandbox,

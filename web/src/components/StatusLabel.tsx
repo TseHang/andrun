@@ -7,7 +7,7 @@ export const STATUS_TEXT: Record<Status, string> = {
   awaiting_approval: "Awaiting approval",
   done: "Done",
   failed: "Failed",
-  budget_exceeded: "Budget exceeded",
+  budget_exceeded: "Limit reached",
 };
 
 export const DOT: Record<Status, string> = {

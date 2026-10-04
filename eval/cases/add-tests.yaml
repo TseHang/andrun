@@ -1,0 +1,12 @@
+id: add-tests
+fixture: add-tests
+mode: code
+task: "range() in src/range.js has no tests. Add test/range.test.js that covers counting up, counting down with a negative step, an empty result, and the error for a step of 0. Do not change the code under src."
+check:
+  cmd: test -f test/range.test.js && grep -q "range" test/range.test.js && npm test
+  expect_exit: 0
+expect_changes:
+  - "test/**"
+forbid_changes:
+  - "src/**"
+  - "package.json"

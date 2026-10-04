@@ -6,7 +6,7 @@ import { defaultConfig, type AgentConfig } from "../../src/core/config";
 import type { AgentEvent } from "../../src/core/events";
 import { getProfile } from "../../src/core/modes";
 import { autoApprove } from "../../src/core/policy";
-import type { AgentDeps, AgentState, ModelClient, SandboxAdapter } from "../../src/core/types";
+import type { AgentDeps, AgentState, Decision, ModelClient, PolicyInput, SandboxAdapter } from "../../src/core/types";
 import { MemorySandbox } from "../support/memory-sandbox";
 import { ScriptedModelClient, call, type ScriptStep } from "../support/scripted-model";
 
@@ -193,16 +193,24 @@ describe("transcript stays valid for the next turn", () => {
   });
 });
 
-describe("S3: gated commands", () => {
+describe("S3: gated tool calls", () => {
+  // HI-j: Code mode asks for no command, so these use a policy that asks before `rm`.
+  const askBeforeRm = {
+    decide: (input: PolicyInput): Decision => {
+      const command = typeof input.args.command === "string" ? input.args.command : "";
+      return input.tool === "run_command" && command.startsWith("rm") ? { kind: "ask", reason: "rm needs approval" } : profile.policy.decide(input);
+    },
+  };
+
   it("gated command is not executed before approval", async () => {
     const sandbox = new MemorySandbox({ "src/a.js": "x" });
-    const { deps } = harness(new ScriptedModelClient([call("run_command", { command: "rm -rf src" })]), sandbox);
+    const { deps } = harness(new ScriptedModelClient([call("run_command", { command: "rm -rf src" })]), sandbox, { policy: askBeforeRm });
     const { outcome, state } = await runAgent(start(), profile, deps);
     expect(outcome.kind).toBe("awaiting_approval");
     expect(outcome.kind === "awaiting_approval" && outcome.pending.reason).toContain("rm");
     expect(sandbox.commands).toEqual([]);
 
-    const after = harness(new ScriptedModelClient([call("finish", { summary: "done" })]), sandbox);
+    const after = harness(new ScriptedModelClient([call("finish", { summary: "done" })]), sandbox, { policy: askBeforeRm });
     const resumed = await resume(roundTrip(state), { approved: true }, profile, after.deps);
     expect(sandbox.commands).toEqual(["rm -rf src"]);
     expect(resumed.outcome.kind).toBe("awaiting_approval"); // back at the finish gate
@@ -211,33 +219,172 @@ describe("S3: gated commands", () => {
   it("runs the remaining tool calls of a turn after the gated one resolves", async () => {
     const sandbox = new MemorySandbox({ "a.js": "x" });
     const turn = { calls: [{ name: "run_command", args: { command: "rm a.js" } }, { name: "run_command", args: { command: "npm test" } }] };
-    const { deps } = harness(new ScriptedModelClient([turn]), sandbox);
+    const { deps } = harness(new ScriptedModelClient([turn]), sandbox, { policy: askBeforeRm });
     const { state } = await runAgent(start(), profile, deps);
     expect(sandbox.commands).toEqual([]);
-    const after = harness(new ScriptedModelClient([call("finish", { summary: "d" })]), sandbox);
+    const after = harness(new ScriptedModelClient([call("finish", { summary: "d" })]), sandbox, { policy: askBeforeRm });
     await resume(roundTrip(state), { approved: true }, profile, after.deps);
     expect(sandbox.commands).toEqual(["rm a.js", "npm test"]);
   });
+
+  it("a Code run asks for no command, only for finish (HI-j)", async () => {
+    const sandbox = new MemorySandbox({ "src/a.js": "x" });
+    const model = new ScriptedModelClient([call("run_command", { command: "rm -rf src" }), call("run_command", { command: "mkdir -p site && node build.js" }), call("finish", { summary: "d" })]);
+    const { events, deps } = harness(model, sandbox);
+    const { outcome } = await runAgent(start(), profile, deps);
+    expect(sandbox.commands).toEqual(["rm -rf src", "mkdir -p site && node build.js"]);
+    expect(events.filter((e) => e.type === "approval_required")).toMatchObject([{ tool: "finish" }]);
+    expect(outcome.kind).toBe("awaiting_approval");
+  });
 });
 
-describe("S5: budgets stop the loop visibly", () => {
-  it("step cap stops with budget_exceeded", async () => {
-    const model = new ScriptedModelClient(Array.from({ length: 5 }, () => call("list_files")));
-    const { events, deps } = harness(model, new MemorySandbox({ "a.js": "" }), {}, { ...defaultConfig, maxSteps: 3 });
-    const { outcome } = await runAgent(start(), profile, deps);
+describe("S5: one safety limit per turn, in money (HI-h)", () => {
+  // ¥6 per million input tokens, so a call that reports 1,000,000 input tokens costs ¥6.
+  const PRICED: AgentConfig = { ...defaultConfig, models: { ...defaultConfig.models, code: "priced" }, prices: { priced: { in: 6, out: 0 } }, maxTurnCost: 50 };
+  const pricedProfile = getProfile("code", PRICED);
+  const sixYen = { in: 1_000_000, out: 0 };
+  const listing = (n: number, usage = sixYen) => Array.from({ length: n }, () => call("list_files", {}, usage));
+  const budgetError = (events: AgentEvent[]) => events.find((e): e is Extract<AgentEvent, { type: "error" }> => e.type === "error" && e.source === "budget");
+
+  it("a turn stops at its cost limit, not at a step count", async () => {
+    expect(defaultConfig.maxSteps).toBeUndefined();
+    expect(defaultConfig).toMatchObject({ maxTurnCost: 50, maxTurnTokens: 4_000_000, costNotice: 10 });
+    expect(defaultConfig).not.toHaveProperty("maxTokens");
+
+    const model = new ScriptedModelClient(listing(20));
+    const { events, deps } = harness(model, new MemorySandbox({ "a.js": "" }), {}, PRICED);
+    const { outcome, state } = await runAgent(start(), pricedProfile, deps);
+
+    // 8 calls are ¥48; the 9th brings the turn to ¥54 and is the last one.
     expect(outcome).toEqual({ kind: "budget_exceeded" });
-    expect(model.requests).toHaveLength(3);
-    expect(events.find((e) => e.type === "error")).toMatchObject({ source: "budget" });
+    expect(model.requests).toHaveLength(9);
+    expect(state.step).toBe(9);
+    expect(state.turnCost).toBeCloseTo(54);
+    expect(budgetError(events)).toMatchObject({ message: "This turn reached its ¥50 safety limit", next: "Send a message to continue." });
     expect(events.at(-1)).toMatchObject({ type: "status", status: "budget_exceeded" });
+
+    // An eval case still sets a step limit.
+    const capped = new ScriptedModelClient(listing(5, { in: 100, out: 20 }));
+    const eval_ = harness(capped, new MemorySandbox({ "a.js": "" }), {}, { ...PRICED, maxSteps: 3 });
+    expect((await runAgent(start(), pricedProfile, eval_.deps)).outcome).toEqual({ kind: "budget_exceeded" });
+    expect(capped.requests).toHaveLength(3);
+    expect(budgetError(eval_.events)).toMatchObject({ message: "step limit reached (3)" });
+    expect(eval_.events.at(-1)).toMatchObject({ type: "status", status: "budget_exceeded" });
   });
 
-  it("token cap stops with budget_exceeded", async () => {
-    const model = new ScriptedModelClient(Array.from({ length: 5 }, () => call("list_files", {}, { in: 500, out: 100 })));
-    const { events, deps } = harness(model, new MemorySandbox({ "a.js": "" }), {}, { ...defaultConfig, maxTokens: 1000 });
+  it("a gate keeps the turn's cost; an unpriced model falls back to a token limit", async () => {
+    // (a) ¥45 spent, then the run waits at the finish gate.
+    const sandbox = new MemorySandbox({ "a.js": "" });
+    const first = harness(new ScriptedModelClient([call("finish", { summary: "d" }, { in: 7_500_000, out: 0 })]), sandbox, {}, PRICED);
+    const { state: paused, outcome: gate } = await runAgent(start(), pricedProfile, first.deps);
+    expect(gate.kind).toBe("awaiting_approval");
+    expect(paused.turnCost).toBeCloseTo(45);
+
+    // Reject + comment continues the same turn: one ¥6 call reaches ¥51.
+    const model = new ScriptedModelClient(listing(5));
+    const second = harness(model, sandbox, {}, PRICED);
+    const rejected = await resume(roundTrip(paused), { approved: false, comment: "one more thing" }, pricedProfile, second.deps);
+    expect(rejected.outcome).toEqual({ kind: "budget_exceeded" });
+    expect(model.requests).toHaveLength(1);
+    expect(rejected.state.turnCost).toBeCloseTo(51);
+    expect(budgetError(second.events)).toMatchObject({ message: "This turn reached its ¥50 safety limit" });
+
+    // (b) No price for the model: the turn is limited by tokens.
+    const UNPRICED: AgentConfig = { ...defaultConfig, models: { ...defaultConfig.models, code: "unpriced" }, maxTurnTokens: 4_000_000 };
+    const big = new ScriptedModelClient(listing(6, { in: 1_400_000, out: 100_000 }));
+    const third = harness(big, new MemorySandbox({ "a.js": "" }), {}, UNPRICED);
+    const unpriced = await runAgent(start(), getProfile("code", UNPRICED), third.deps);
+    expect(unpriced.outcome).toEqual({ kind: "budget_exceeded" });
+    expect(big.requests).toHaveLength(3); // 1.5M, 3M, 4.5M
+    expect(unpriced.state.turnTokens).toBe(4_500_000);
+    expect(unpriced.state.turnCost).toBe(0);
+    expect(budgetError(third.events)).toMatchObject({ message: "This turn reached its 4,000,000 token safety limit", next: "Send a message to continue." });
+  });
+
+  it("the limit holds after a gate and when the provider reports no usage", async () => {
+    // Over the limit at a gate: Reject does not buy another model call.
+    const sandbox = new MemorySandbox({ "a.js": "" });
+    const first = harness(new ScriptedModelClient([call("finish", { summary: "d" }, { in: 9_000_000, out: 0 })]), sandbox, {}, PRICED);
+    const { state: paused } = await runAgent(start(), pricedProfile, first.deps);
+    expect(paused.status).toBe("awaiting_approval");
+    expect(paused.turnCost).toBeCloseTo(54);
+    const model = new ScriptedModelClient(listing(3));
+    const second = harness(model, sandbox, {}, PRICED);
+    const rejected = await resume(roundTrip(paused), { approved: false, comment: "more" }, pricedProfile, second.deps);
+    expect(rejected.outcome).toEqual({ kind: "budget_exceeded" });
+    expect(model.requests).toHaveLength(0);
+    expect(budgetError(second.events)).toMatchObject({ message: "This turn reached its ¥50 safety limit" });
+
+    // A provider that reports zero tokens: the request's estimated size is counted, so the turn still ends.
+    const big = "x".repeat(400_000); // about 100,000 tokens per request
+    const silent = (config: AgentConfig) => {
+      const m = new ScriptedModelClient(listing(200, { in: 0, out: 0 }));
+      const h = harness(m, new MemorySandbox({ "a.js": "" }), {}, config);
+      const state = start();
+      state.messages.push({ role: "user", content: big });
+      return { m, h, state };
+    };
+    const unpriced = silent({ ...defaultConfig, models: { ...defaultConfig.models, code: "unpriced" }, maxTurnTokens: 1_000_000 });
+    const r1 = await runAgent(unpriced.state, getProfile("code", { ...defaultConfig, models: { ...defaultConfig.models, code: "unpriced" } }), unpriced.h.deps);
+    expect(r1.outcome).toEqual({ kind: "budget_exceeded" });
+    expect(unpriced.m.requests.length).toBeGreaterThanOrEqual(9);
+    expect(unpriced.m.requests.length).toBeLessThanOrEqual(11);
+
+    const priced = silent({ ...PRICED, prices: { priced: { in: 100, out: 0 } } }); // about ¥10 per request
+    const r2 = await runAgent(priced.state, pricedProfile, priced.h.deps);
+    expect(r2.outcome).toEqual({ kind: "budget_exceeded" });
+    expect(priced.m.requests.length).toBeGreaterThanOrEqual(4);
+    expect(priced.m.requests.length).toBeLessThanOrEqual(6);
+    // The usage event still reports what the provider said.
+    expect(priced.h.events.find((e) => e.type === "usage")).toMatchObject({ tokens_in: 0, cost: 0 });
+  });
+});
+
+describe("HI-a, HI-b: the plan tool", () => {
+  const PLAN = [
+    { step: "Read the code", status: "in_progress" },
+    { step: "Make the change", status: "pending" },
+    { step: "Run the tests", status: "pending" },
+  ];
+
+  it("update_plan answers 'Plan updated' and emits plan_updated", async () => {
+    const model = new ScriptedModelClient([call("update_plan", { plan: PLAN }), call("finish", { summary: "d" })]);
+    const { events, deps } = harness(model, new MemorySandbox());
+    const { state, outcome } = await runAgent(start(), profile, deps);
+
+    expect(model.requests[0]!.tools.map((t) => t.name)).toContain("update_plan");
+    expect(model.requests[1]!.messages.at(-1)).toMatchObject({ role: "tool", content: "Plan updated" });
+
+    const iCall = indexOf(events, (e) => e.type === "tool_call" && e.name === "update_plan");
+    const iPlan = indexOf(events, (e) => e.type === "plan_updated");
+    const iNextTurn = indexOf(events, (e) => e.type === "usage" && e.stepId === "s2");
+    expect(iCall).toBeGreaterThanOrEqual(0);
+    expect(iPlan).toBeGreaterThan(iCall);
+    expect(iNextTurn).toBeGreaterThan(iPlan);
+    expect(events[iPlan]).toMatchObject({ type: "plan_updated", plan: PLAN, stepId: "s1" });
+    expect(events.filter((e) => e.type === "plan_updated")).toHaveLength(1);
+
+    // The plan asks for no approval and is not a failure.
+    expect(events.filter((e) => e.type === "approval_required")).toMatchObject([{ tool: "finish" }]);
+    expect(events.filter((e) => e.type === "error")).toEqual([]);
+    expect(outcome.kind).toBe("awaiting_approval");
+    expect(state.failures).toBeNull();
+    // The plan is not kept in the state: it lives in the assistant message (HI-b).
+    expect(state).not.toHaveProperty("plan");
+    const planCall = state.messages.find((m) => m.role === "assistant" && m.tool_calls?.[0]?.function.name === "update_plan");
+    expect(planCall && planCall.role === "assistant" && JSON.parse(planCall.tool_calls![0]!.function.arguments)).toEqual({ plan: PLAN });
+  });
+
+  it("three malformed plans in a row pause the run, with no plan_updated", async () => {
+    const bad = call("update_plan", { plan: [{ step: "x", status: "done" }] });
+    const model = new ScriptedModelClient([bad, bad, bad]);
+    const { events, deps } = harness(model, new MemorySandbox());
     const { outcome } = await runAgent(start(), profile, deps);
-    expect(outcome).toEqual({ kind: "budget_exceeded" });
-    expect(model.requests).toHaveLength(2);
-    expect(events.at(-1)).toMatchObject({ type: "status", status: "budget_exceeded" });
+    const fed = model.requests[1]!.messages.at(-1)!;
+    expect(fed.role === "tool" && fed.content).toContain("invalid arguments");
+    expect(events.filter((e) => e.type === "plan_updated")).toEqual([]);
+    expect(outcome.kind === "awaiting_approval" && outcome.pending.kind).toBe("strikes");
+    expect(outcome.kind === "awaiting_approval" && outcome.pending.reason).toBe("update_plan failed 3 times");
   });
 });
 
@@ -385,7 +532,7 @@ describe("loop edge cases", () => {
 
   it("createSession seeds system prompt and task", () => {
     const s = start();
-    expect(s).toMatchObject({ sessionId: "sess-1", mode: "code", status: "idle", step: 0, tokensUsed: 0, pending: null });
+    expect(s).toMatchObject({ sessionId: "sess-1", mode: "code", status: "idle", step: 0, tokensUsed: 0, turnCost: 0, turnTokens: 0, pending: null });
     expect(s.messages[0]).toMatchObject({ role: "system" });
     expect(s.messages[0]!.role === "system" && s.messages[0]!.content).toMatch(/test/i);
     expect(s.messages[1]).toEqual({ role: "user", content: "Make the failing test pass." });

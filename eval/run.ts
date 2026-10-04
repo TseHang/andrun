@@ -2,8 +2,11 @@
 // Writes one JSONL trajectory per run (§5 events + a final result line) and a summary table.
 // A case (eval/cases/*.yaml) has id, fixture, mode, task, forbid_changes and optional max_steps, plus:
 //   code case:   check { cmd, expect_exit }, which must exit as expected after the run.
-//   review case: expect_finding { path, lines }, a review_finding on that path and one of those lines
-//                (spec §10); no file may change; check is optional.
+//   review case: exactly one of expect_finding { path, lines } (a review_finding on that path and one of
+//                those lines, spec §10) or expect_no_findings: true (no review_finding at all);
+//                no file may change; check is optional.
+// Either mode may not use the other's fields; code cases may add:
+//   expect_changes: a list of globs; for every glob at least one changed file must match it.
 
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
@@ -15,6 +18,7 @@ import { createSession, resume, runAgent } from "../src/core/agent";
 import { defaultConfig, type AgentConfig } from "../src/core/config";
 import { getProfile } from "../src/core/modes";
 import { OpenAICompatModelClient } from "../src/core/model";
+import { buildRepoContext } from "../src/core/repo-context";
 import { autoApprove } from "../src/core/policy";
 import type { AgentDeps, ModelClient, RunOutcome } from "../src/core/types";
 import { LocalSandbox } from "./local-sandbox";
@@ -26,6 +30,8 @@ export interface EvalCase {
   task: string;
   check?: { cmd: string; expect_exit: number };
   expect_finding?: { path: string; lines: number[] };
+  expect_changes?: string[];
+  expect_no_findings?: boolean;
   forbid_changes: string[];
   max_steps?: number;
 }
@@ -48,6 +54,8 @@ export interface EvalResult {
 }
 
 const MAX_AUTO_RESUMES = 5;
+/** For cases without `max_steps`, when run from the command line. The slowest passing run so far took 10 steps. */
+const EVAL_MAX_STEPS = 40;
 
 // ---------- Cases ----------
 
@@ -69,17 +77,20 @@ function validateCase(file: string, raw: unknown): EvalCase {
   const expect = c["expect_finding"] as Record<string, unknown> | null | undefined;
   if (c["mode"] === "code") {
     if (expect !== undefined) throw invalid(file, `"expect_finding" is only for review cases`);
+    if (c["expect_no_findings"] !== undefined) throw invalid(file, `"expect_no_findings" is only for review cases`);
   } else {
-    const lines = expect?.["lines"];
-    if (
-      !expect ||
-      typeof expect["path"] !== "string" ||
-      !Array.isArray(lines) ||
-      lines.length === 0 ||
-      !lines.every((n) => Number.isInteger(n) && n > 0)
-    ) {
-      throw invalid(file, `a review case needs "expect_finding" with a string "path" and a non-empty list of positive integer "lines"`);
+    if (c["expect_no_findings"] !== undefined && c["expect_no_findings"] !== true) {
+      throw invalid(file, `"expect_no_findings" must be true`);
     }
+    if (c["expect_no_findings"] === true) {
+      if (expect !== undefined) throw invalid(file, `a review case takes "expect_finding" or "expect_no_findings", not both`);
+    } else {
+      validateExpectFinding(file, expect);
+    }
+  }
+  const changes = c["expect_changes"];
+  if (changes !== undefined && (!Array.isArray(changes) || !changes.every((g) => typeof g === "string"))) {
+    throw invalid(file, `"expect_changes" must be a list of glob strings`);
   }
   const forbid = c["forbid_changes"];
   if (!Array.isArray(forbid) || !forbid.every((g) => typeof g === "string")) {
@@ -87,6 +98,13 @@ function validateCase(file: string, raw: unknown): EvalCase {
   }
   if (c["max_steps"] !== undefined && typeof c["max_steps"] !== "number") throw invalid(file, `"max_steps" must be a number`);
   return raw as EvalCase;
+}
+
+function validateExpectFinding(file: string, expect: Record<string, unknown> | null | undefined): void {
+  const lines = expect?.["lines"];
+  if (!expect || typeof expect["path"] !== "string" || !Array.isArray(lines) || lines.length === 0 || !lines.every((n) => Number.isInteger(n) && n > 0)) {
+    throw invalid(file, `a review case needs "expect_finding" with a string "path" and a non-empty list of positive integer "lines", or "expect_no_findings: true"`);
+  }
 }
 
 export async function loadCases(dir: string, filter?: string): Promise<EvalCase[]> {
@@ -211,6 +229,7 @@ async function runOne(
     };
 
     const state0 = createSession({ sessionId: `${c.id}-${run}`, mode: c.mode, task: c.task }, profile);
+    state0.messages.push({ role: "user", content: await buildRepoContext(sandbox, { agentsMd: profile.sandboxSetup !== "pr-head@sha" }) });
     let { state, outcome } = await runAgent(state0, profile, deps);
     // A human approves everything in eval (slice decision S-a): strikes and implicit finishes too.
     for (let resumes = 0; outcome.kind === "awaiting_approval" && resumes < MAX_AUTO_RESUMES; resumes++) {
@@ -232,11 +251,13 @@ async function runOne(
     const checkOk = !c.check || check?.exitCode === c.check.expect_exit;
     const want = c.expect_finding;
     const found = !want || findings.some((f) => f.path === want.path && want.lines.includes(f.line));
-    const untouched = !want || (changed.length === 0 && diff.exitCode === 0);
+    const noFindings = !c.expect_no_findings || findings.length === 0;
+    const wantChanges = !c.expect_changes || c.expect_changes.every((g) => changed.some((f) => picomatch(g)(f)));
+    const untouched = c.mode !== "review" || (changed.length === 0 && diff.exitCode === 0);
 
     return result({
       outcome: outcome.kind,
-      pass: outcome.kind === "finished" && checkOk && found && untouched && !editedTests,
+      pass: outcome.kind === "finished" && checkOk && found && noFindings && wantChanges && untouched && !editedTests,
       steps: state.step,
       edited_tests: editedTests,
       changed_files: changed,
@@ -320,7 +341,8 @@ async function main(argv: string[]): Promise<number> {
     makeModel: () => new OpenAICompatModelClient({ baseUrl, apiKey }),
     outDir,
     fixturesDir: join(here, "fixtures"),
-    config: { ...defaultConfig, models: { ...defaultConfig.models, code: model, review: model } },
+    // Sessions have no step limit (the turn's cost limit stops them); an eval run gets one, so a stuck case ends early.
+    config: { ...defaultConfig, maxSteps: EVAL_MAX_STEPS, models: { ...defaultConfig.models, code: model, review: model } },
     maxCost,
     log: (l) => console.log(l),
   });

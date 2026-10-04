@@ -4,8 +4,14 @@ export interface AgentConfig {
   models: { code: string; review: string; task: string };
   /** Context window per model id, in tokens. */
   contextWindows: Record<string, number>;
-  maxSteps: number;
-  maxTokens: number;
+  /** Optional step cap (eval cases set it); the product limit is `maxTurnCost`. */
+  maxSteps?: number;
+  /** Safety limit per turn, in yen (a turn is what one user message starts). */
+  maxTurnCost: number;
+  /** The same limit in tokens, for a model with no price. */
+  maxTurnTokens: number;
+  /** Yen: only reported to the UI, which tells the user the turn has cost this much. */
+  costNotice: number;
   commandTimeoutMs: number;
   /** Yen per million tokens, per model id (ai& list price, uncached input). Cost is omitted when unknown. */
   prices?: Record<string, { in: number; out: number }>;
@@ -43,8 +49,9 @@ export const defaultConfig: AgentConfig = {
     "deepseek-ai/deepseek-v4-pro": { in: 160, out: 400 },
     "openai/gpt-oss-120b": { in: 25, out: 95 },
   },
-  maxSteps: 30,
-  maxTokens: 400_000,
+  maxTurnCost: 50,
+  maxTurnTokens: 4_000_000,
+  costNotice: 10,
   commandTimeoutMs: 120_000,
 };
 

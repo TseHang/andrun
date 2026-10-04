@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import type { AgentEvent, EventBody } from "../../src/core/events";
+import type { AgentEvent, EventBody, PlanStep } from "../../src/core/events";
 import { RESTORED_NOTE, type ServerFrame } from "../../src/session/protocol";
-import { rowSummary, rowTone } from "../../web/src/state/format";
+import { planNote, rowSummary, rowTone } from "../../web/src/state/format";
 import { addPending, dropStreaming, initialView, markSending, reduce, type SessionView, type StepRow } from "../../web/src/state/reducer";
 
 /** Builds events with increasing seq and ts, like one session's log. */
@@ -295,7 +295,7 @@ describe("view state (P3-a)", () => {
       e({ type: "status", status: "budget_exceeded" }),
     ]);
     expect(budget.items.at(-1)).toMatchObject({ kind: "failure", title: "Limit reached", message: "step limit reached (30)" });
-    expect(budget.composerEnabled).toBe(false);
+    expect(budget.composerEnabled).toBe(true); // HI-h: a message continues it
   });
 
   it("a pending message is resolved by its message or by a rejection with the same comment", () => {
@@ -496,5 +496,103 @@ describe("Phase 4: pull requests and reviews", () => {
     expect(v.gate).toMatchObject({ approvalId: "a1" });
     expect(v.items.at(-1)).toMatchObject({ kind: "failure", source: "github", title: "GitHub error", message: "GitHub answered 502: Bad Gateway", next: "Approve again to retry." });
     expect(v.status).toBe("awaiting_approval");
+  });
+});
+
+describe("Harness improvement: plan, turn limit, cost", () => {
+  const PLAN_1: PlanStep[] = [
+    { step: "Read the code", status: "in_progress" },
+    { step: "Fix the loop bound", status: "pending" },
+    { step: "Run the tests", status: "pending" },
+  ];
+  const PLAN_2: PlanStep[] = [
+    { step: "Read the code", status: "completed" },
+    { step: "Fix the loop bound", status: "completed" },
+    { step: "Run the tests", status: "in_progress" },
+  ];
+  const planCall = (e: ReturnType<typeof script>, callId: string, plan: PlanStep[], step: number) => [
+    e({ type: "tool_call", callId, name: "update_plan", args: { plan }, summary: "Update plan" }, { step }),
+    e({ type: "tool_output", callId, stream: "result", chunk: "Plan updated" }, { step }),
+    e({ type: "plan_updated", plan }, { step }),
+  ];
+
+  it("plan_updated replaces the plan and adds no timeline row", () => {
+    const e = script();
+    const frames = [
+      e({ type: "status", status: "running" }),
+      ...planCall(e, "p1", PLAN_1, 1),
+      e({ type: "tool_call", callId: "c1", name: "read_file", args: { path: "src/sum.js" }, summary: "Read src/sum.js" }, { step: 2 }),
+      e({ type: "tool_output", callId: "c1", stream: "result", chunk: "export function sum" }, { step: 2 }),
+      ...planCall(e, "p2", PLAN_2, 3),
+    ];
+
+    // Live, frame by frame.
+    const afterFirst = run(frames.slice(0, 4));
+    expect(afterFirst.plan).toEqual(PLAN_1);
+    const live = run(frames.slice(4), afterFirst);
+    expect(live.plan).toEqual(PLAN_2);
+    expect(rows(live).map((r) => r.name)).toEqual(["read_file"]);
+    expect(kinds(live)).toEqual(["steps"]);
+    expect(live.header.step).toBe(3);
+
+    // A replay of the stored log gives the same view.
+    expect(run(frames)).toEqual(live);
+
+    // No plan yet.
+    expect(initialView().plan).toBeNull();
+    expect(run(frames.slice(0, 1)).plan).toBeNull();
+  });
+
+  it("an empty plan clears the card", () => {
+    const e = script();
+    const v = run([...planCall(e, "p1", PLAN_1, 1), ...planCall(e, "p2", [], 2)]);
+    expect(v.plan).toBeNull();
+    expect(rows(v)).toEqual([]);
+  });
+
+  it("the gate note counts unfinished steps of the latest plan", () => {
+    expect(planNote(null)).toBeNull();
+    expect(planNote([])).toBeNull();
+    expect(planNote(PLAN_1)).toBe("3 of 3 plan steps not completed");
+    expect(planNote(PLAN_2)).toBe("1 of 3 plan steps not completed");
+    expect(planNote([{ step: "Only step", status: "pending" }])).toBe("1 of 1 plan step not completed");
+    expect(planNote(PLAN_2.map((s) => ({ ...s, status: "completed" as const })))).toBeNull();
+
+    // A follow-up turn's plan replaces the first turn's.
+    const e = script();
+    const next: PlanStep[] = [{ step: "Add the empty array test", status: "completed" }];
+    const v = run([
+      ...planCall(e, "p1", PLAN_2, 1),
+      e({ type: "approval_required", approvalId: "a1", tool: "finish", reason: "finishing requires approval", summary: "Fixed." }, { step: 2 }),
+      e({ type: "approval_resolved", approvalId: "a1", approved: true }, { step: 2 }),
+      e({ type: "status", status: "done" }, { step: 2 }),
+      e({ type: "message", id: "u2", role: "user", text: "also add a test" }, { step: 2 }),
+      e({ type: "status", status: "running" }, { step: 2 }),
+      ...planCall(e, "p2", next, 3),
+    ]);
+    expect(v.plan).toEqual(next);
+    expect(planNote(v.plan)).toBeNull();
+  });
+
+  it("the composer stays enabled after the turn limit", () => {
+    const e = script();
+    const usage = (cost: number, step: number) =>
+      e({ type: "usage", model: "deepseek-ai/deepseek-v4-flash", tokens_in: 1000, tokens_out: 10, latency_ms: 5, cost, context_tokens: 1000, context_window: 1_000_000 }, { step });
+    const v = run([
+      e({ type: "status", status: "running" }),
+      usage(30, 1),
+      usage(24, 2),
+      e({ type: "error", source: "budget", message: "This turn reached its ¥50 safety limit", next: "Send a message to continue." }, { step: 2 }),
+      e({ type: "status", status: "budget_exceeded" }, { step: 2 }),
+    ]);
+    expect(v.status).toBe("budget_exceeded");
+    expect(v.composerEnabled).toBe(true);
+    expect(v.header).toMatchObject({ step: 2, cost: 54 }); // the session's total, not the turn's
+    expect(v.items.at(-1)).toMatchObject({ kind: "failure", title: "Limit reached", message: "This turn reached its ¥50 safety limit", next: "Send a message to continue." });
+
+    // The next turn adds to the total.
+    const more = run([e({ type: "message", id: "u2", role: "user", text: "continue" }, { step: 2 }), e({ type: "status", status: "running" }, { step: 2 }), usage(6, 3)], v);
+    expect(more.header).toMatchObject({ step: 3, cost: 60 });
+    expect(more.composerEnabled).toBe(true);
   });
 });
