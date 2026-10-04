@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { SessionSnapshot } from "../../../src/session/protocol";
 import { UUID, deleteSession, getSnapshot } from "../api";
 import { useApp } from "../context";
@@ -128,6 +128,19 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
     return () => clearInterval(t);
   }, [snap.sandboxRunning, status]);
 
+  // The timeline and the panels keep their last lines clear of the floating bar, whatever its height (plan card, long summary).
+  const bar = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = bar.current;
+    const row = el?.parentElement;
+    if (!el || !row) return;
+    const measure = () => row.style.setProperty("--bar-h", `${el.offsetHeight}px`);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   const close = useCallback(() => {
     setConfirming(false);
     setError(null);
@@ -172,7 +185,7 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
             )}
           </>
         )}
-        <div data-slot="floating-bar" className={`pointer-events-none absolute bottom-5 left-7 ${review ? "right-[360px]" : "right-5"}`}>
+        <div ref={bar} data-slot="floating-bar" className={`pointer-events-none absolute bottom-5 left-7 ${review ? "right-[360px]" : "right-5"}`}>
           {!review && view.plan && (
             <div className="mb-2">
               <PlanCard plan={view.plan} active={status === "running"} />

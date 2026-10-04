@@ -3,6 +3,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { AgentEvent, EventBody, PlanStep } from "../../src/core/events";
+import { ApprovalBar } from "../../web/src/components/ApprovalBar";
 import { Composer } from "../../web/src/components/Composer";
 import { PlanCard } from "../../web/src/components/PlanCard";
 import { Timeline } from "../../web/src/components/Timeline";
@@ -191,6 +192,21 @@ describe("Session UI: the conversation (slice B)", () => {
     // A message typed while the agent runs says when it will be read.
     const queued = timeline(addPending(viewOf({ type: "status", status: "running" }, { type: "message", id: "u1", role: "user", text: "go" }), "use tabs"));
     expect(queued).toContain("Queued · read after the current step");
+  });
+
+  it("the approval bar renders the finish summary as markdown", () => {
+    const view = viewOf(
+      { type: "status", status: "running" },
+      { type: "approval_required", approvalId: "a1", tool: "finish", reason: "finishing requires approval", summary: "Created `index.html`:\n\n- Picks a number\n- **Tracks** attempts" },
+      { type: "status", status: "awaiting_approval" },
+    );
+    const html = renderToStaticMarkup(<ApprovalBar view={view} gate={view.gate!} session={SESSION} send={() => true} update={() => {}} />);
+    expect(html).toMatch(/<code[^>]*>index\.html<\/code>/);
+    expect(html).toMatch(/<li[^>]*>Picks a number<\/li>/);
+    expect(html).toMatch(/<strong[^>]*>Tracks<\/strong>/);
+    expect(html).not.toContain("**");
+    // A long summary scrolls inside the bar instead of growing over the timeline.
+    expect(html).toMatch(/data-slot="summary"[^>]*class="[^"]*max-h-\[30vh\][^"]*overflow-y-auto/);
   });
 
   it("the plan card lists its steps and counts the completed ones", () => {

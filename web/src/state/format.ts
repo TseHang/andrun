@@ -33,6 +33,13 @@ export function planNote(plan: PlanStep[] | null): string | null {
   return `${open} of ${plan.length} plan ${plan.length === 1 ? "step" : "steps"} not completed`;
 }
 
+/** A command on one line: its first non-empty line, with "…" when more follows. */
+export function firstLine(command: string): string {
+  const lines = command.split("\n").filter((l) => l.trim() !== "");
+  if (lines.length === 0) return "";
+  return lines.length > 1 ? `${lines[0]!.trim()} …` : lines[0]!.trim();
+}
+
 export function modelLabel(model: string): string {
   return model.slice(model.lastIndexOf("/") + 1);
 }

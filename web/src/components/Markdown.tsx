@@ -46,9 +46,9 @@ const COMPONENTS: Components = {
   td: styled("td", "border border-black/10 px-2.5 py-1"),
 };
 
-export function Markdown({ text }: { text: string }) {
+export function Markdown({ text, className = "text-[15px] leading-relaxed" }: { text: string; className?: string }) {
   return (
-    <div className="text-[15px] leading-relaxed break-words">
+    <div className={`break-words ${className}`}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={COMPONENTS}>
         {text}
       </ReactMarkdown>

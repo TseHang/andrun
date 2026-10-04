@@ -70,7 +70,7 @@ export function ReviewBody({ view, status, session, pr, send }: { view: SessionV
         {tab === "activity" ? (
           <Timeline view={view} session={session} />
         ) : (
-          <div className="flex min-h-0 grow flex-col gap-3.5 overflow-y-auto py-4 pb-44 pl-7 pr-5">
+          <div className="flex min-h-0 grow flex-col gap-3.5 overflow-y-auto py-4 pb-[calc(var(--bar-h,116px)+60px)] pl-7 pr-5">
             {diff.kind === "loading" && <span className="text-text-secondary">Loading the diff</span>}
             {diff.kind === "error" && <span className="text-text-secondary">{diff.message}</span>}
             {diff.kind === "ready" && diff.pull.files.map((f) => <FileDiff key={f.path} file={f} findings={kept} />)}

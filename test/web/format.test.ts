@@ -5,6 +5,7 @@ import type { AgentEvent, EventBody } from "../../src/core/events";
 import { initialView, reduce, type SessionView } from "../../web/src/state/reducer";
 import {
   activityLabel,
+  firstLine,
   isPreviewable,
   usageLine,
   changeTotals,
@@ -115,6 +116,13 @@ describe("Session UI: usage line, activity label, previewable paths", () => {
     for (const status of ["awaiting_input", "awaiting_approval", "done", "failed", "budget_exceeded", "idle"] as const) {
       expect(activityLabel(after(running, { type: "status", status })), status).toBeNull();
     }
+  });
+
+  it("a command is shown on one line", () => {
+    expect(firstLine("npm test")).toBe("npm test");
+    expect(firstLine('node -e "\nconst fs = require(\'fs\');\nconsole.log(1);\n"')).toBe('node -e " …');
+    expect(firstLine("\n  npm test  \n")).toBe("npm test");
+    expect(firstLine("")).toBe("");
   });
 
   it("previewable paths", () => {

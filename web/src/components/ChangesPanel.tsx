@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { SessionView } from "../state/reducer";
 import { parseDiff } from "../state/diff";
-import { changeTotals, isPreviewable } from "../state/format";
+import { changeTotals, firstLine, isPreviewable } from "../state/format";
 import { DiffView } from "./DiffView";
 import { HtmlPreview } from "./HtmlPreview";
 
@@ -56,7 +56,7 @@ export function ChangesPanel({ id, view, sandboxRunning, sha, onHide }: { id: st
   return (
     <aside
       aria-label="Changes"
-      className={`min-h-0 min-w-0 shrink-0 overflow-y-auto border-l border-black/10 px-5 pt-4 ${view.plan ? "pb-96" : "pb-44"} ${wide ? "w-[min(520px,45%)]" : "w-[400px]"}`}
+      className={`min-h-0 min-w-0 shrink-0 overflow-y-auto border-l border-black/10 px-5 pt-4 pb-[calc(var(--bar-h,116px)+60px)] ${wide ? "w-[min(520px,45%)]" : "w-[400px]"}`}
     >
       <div className="mb-3 flex items-baseline justify-between">
         <h2 className="text-[15px] font-semibold">Changes</h2>
@@ -91,9 +91,10 @@ export function ChangesPanel({ id, view, sandboxRunning, sha, onHide }: { id: st
         view.changes.map((c) => <Card key={c.path} sessionId={id} change={c} />)
       )}
       {last && (
-        <div className="mb-4 text-xs break-words text-text-secondary">
-          Last command: <code className="font-mono text-text">{last.command}</code> ·{" "}
-          <span className={last.exitCode === 0 ? "text-done-text" : "text-failed"}>exit {last.exitCode === null ? "timed out" : last.exitCode}</span>
+        <div className="mb-4 flex items-baseline gap-1.5 text-xs text-text-secondary">
+          <span className="shrink-0">Last command:</span>
+          <code title={last.command} className="min-w-0 truncate font-mono text-text">{firstLine(last.command)}</code>
+          <span className={`shrink-0 ${last.exitCode === 0 ? "text-done-text" : "text-failed"}`}>· exit {last.exitCode === null ? "timed out" : last.exitCode}</span>
         </div>
       )}
       <div className="divide-y divide-white rounded-xl bg-sidebar">

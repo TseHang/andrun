@@ -108,7 +108,7 @@ export function Timeline({ view, session }: { view: SessionView; session: Sessio
   const activity = activityLabel(view);
   return (
     <section aria-label="Timeline" ref={ref} className="min-h-0 min-w-0 grow overflow-y-auto">
-      <div className={`mx-auto max-w-[720px] px-6 pt-4 ${view.plan && session.code ? "pb-96" : "pb-44"}`}>
+      <div className="mx-auto max-w-[720px] px-6 pt-4 pb-[calc(var(--bar-h,116px)+60px)]">
         {view.items.map((item, i) => (
           <div key={item.key}>
             <Item item={item} session={session} />
