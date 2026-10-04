@@ -1,14 +1,50 @@
-import { useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { ReviewVerdict } from "../../../src/core/events";
 import type { ClientFrame } from "../../../src/session/protocol";
 import { useApp } from "../context";
 import { markSending, type GateView, type SessionView } from "../state/reducer";
 import { Spinner } from "./Spinner";
 
-const VERDICTS: { value: ReviewVerdict; label: string; hint: string }[] = [
-  { value: "COMMENT", label: "Comment", hint: "Leaves the findings as comments" },
-  { value: "APPROVE", label: "Approve", hint: "Approves the pull request" },
-  { value: "REQUEST_CHANGES", label: "Request changes", hint: "Asks the author to fix these before merging" },
+const ICON = { width: 14, height: 14, viewBox: "0 0 14 14", fill: "none", stroke: "currentColor", strokeWidth: 1.5, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true, className: "shrink-0" } as const;
+
+const VERDICTS: { value: ReviewVerdict; label: string; button: string; text: string; bg: string; icon: ReactNode }[] = [
+  {
+    value: "COMMENT",
+    label: "Comment",
+    button: "Post comments",
+    text: "text-text",
+    bg: "bg-accent",
+    icon: (
+      <svg {...ICON}>
+        <path d="M2 2.5h10v7H6.5L4 12V9.5H2z" />
+      </svg>
+    ),
+  },
+  {
+    value: "APPROVE",
+    label: "Approve",
+    button: "Approve",
+    text: "text-done-text",
+    bg: "bg-done",
+    icon: (
+      <svg {...ICON}>
+        <path d="m2.5 7.5 3 3 6-7" />
+      </svg>
+    ),
+  },
+  {
+    value: "REQUEST_CHANGES",
+    label: "Request changes",
+    button: "Request changes",
+    text: "text-failed",
+    bg: "bg-failed",
+    icon: (
+      <svg {...ICON}>
+        <circle cx="7" cy="7" r="5.5" />
+        <path d="m5 5 4 4M9 5 5 9" />
+      </svg>
+    ),
+  },
 ];
 
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
@@ -17,12 +53,20 @@ const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
 export function PostBar({ view, gate, send, update }: { view: SessionView; gate: GateView; send: (f: ClientFrame) => boolean; update: (fn: (v: SessionView) => SessionView) => void }) {
   const { config } = useApp();
   const [verdict, setVerdict] = useState<ReviewVerdict>("COMMENT");
+  const [asking, setAsking] = useState(false);
   const [comment, setComment] = useState("");
   const [offline, setOffline] = useState(false);
+  const radios = useRef<(HTMLButtonElement | null)[]>([]);
+  const input = useRef<HTMLInputElement>(null);
   const text = comment.trim();
   const sending = view.sending;
   const kept = view.findings.filter((f) => !f.dismissed);
   const inline = kept.filter((f) => f.inline).length;
+  const current = VERDICTS.find((v) => v.value === verdict)!;
+
+  useEffect(() => {
+    if (asking) input.current?.focus();
+  }, [asking]);
 
   const fire = (frame: ClientFrame) => {
     const sent = send(frame);
@@ -31,6 +75,15 @@ export function PostBar({ view, gate, send, update }: { view: SessionView; gate:
   };
   const post = () => fire({ type: "post_review", approvalId: gate.approvalId, verdict });
   const reject = () => text && fire({ type: "reject", approvalId: gate.approvalId, comment: text });
+
+  const move = (e: KeyboardEvent) => {
+    const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+    if (!step) return;
+    e.preventDefault();
+    const next = (VERDICTS.findIndex((v) => v.value === verdict) + step + VERDICTS.length) % VERDICTS.length;
+    setVerdict(VERDICTS[next]!.value);
+    radios.current[next]?.focus();
+  };
 
   return (
     <form
@@ -41,29 +94,43 @@ export function PostBar({ view, gate, send, update }: { view: SessionView; gate:
         if (!sending) reject();
       }}
     >
-      <div className="flex items-baseline gap-2 text-[13px]">
+      <div className="flex flex-wrap items-baseline gap-x-2 text-[13px]">
         <span className="font-semibold">{`${plural(inline, "inline comment")}, ${plural(kept.length - inline, "note")} in the summary`}</span>
         <span className="grow" />
         <span className="shrink-0 text-xs text-text-secondary">Posts to GitHub as {config.repo.split("/")[0]}</span>
       </div>
+      <div role="radiogroup" aria-label="Verdict" data-verdict={verdict} onKeyDown={move} className="mt-3 flex rounded-[9px] bg-fill p-0.5">
+        {VERDICTS.map((v, i) => (
+          <button
+            key={v.value}
+            ref={(el) => {
+              radios.current[i] = el;
+            }}
+            type="button"
+            role="radio"
+            aria-checked={verdict === v.value}
+            tabIndex={verdict === v.value ? 0 : -1}
+            onClick={() => setVerdict(v.value)}
+            className={`flex h-7 min-w-0 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-[7px] px-2 whitespace-nowrap transition-colors motion-reduce:transition-none ${verdict === v.value ? `bg-white font-semibold shadow-[0_1px_2px_rgba(0,0,0,0.14),0_0_0_0.5px_rgba(0,0,0,0.04)] ${v.text}` : "text-text-secondary"}`}
+          >
+            {v.icon}
+            {v.label}
+          </button>
+        ))}
+      </div>
       <div className="mt-3 flex items-center gap-3">
-        <div role="radiogroup" aria-label="Verdict" className="flex items-center gap-4">
-          {VERDICTS.map((v) => (
-            <label key={v.value} className="flex cursor-pointer items-center gap-1.5">
-              <input type="radio" name="verdict" value={v.value} checked={verdict === v.value} onChange={() => setVerdict(v.value)} className="accent-accent" />
-              {v.label}
-            </label>
-          ))}
-        </div>
-        <span className="min-w-0 grow truncate text-xs text-text-secondary">{VERDICTS.find((v) => v.value === verdict)!.hint}</span>
-        <button type="button" disabled={sending} onClick={post} className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-accent px-3.5 py-1.5 text-[13px] font-medium text-white disabled:cursor-default disabled:opacity-60">
+        <button type="button" aria-expanded={asking} onClick={() => setAsking(!asking)} className="cursor-pointer text-xs text-text-secondary">
+          Ask &run for another look
+        </button>
+        <span className="grow" />
+        <button type="button" disabled={sending} onClick={post} className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-medium text-white disabled:cursor-default disabled:opacity-60 ${current.bg}`}>
           {sending ? (
             <>
               <Spinner />
               Sending
             </>
           ) : (
-            "Post review"
+            current.button
           )}
         </button>
       </div>
@@ -72,18 +139,21 @@ export function PostBar({ view, gate, send, update }: { view: SessionView; gate:
           {view.refused ?? "Not connected. Try again in a moment."}
         </div>
       )}
-      <div className="mt-3 flex items-center gap-2">
-        <input
-          aria-label="Comment for the agent"
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          placeholder="Ask the agent for another look instead"
-          className="h-9 min-w-0 grow rounded-[10px] bg-black/5 px-3 text-[14px] transition-[background-color,box-shadow] focus:bg-white focus:shadow-[0_0_0_1px_rgba(0,0,0,0.2)]"
-        />
-        <button type="submit" disabled={sending || !text} className="shrink-0 rounded-full bg-fill px-3.5 py-1.5 text-[13px] font-medium disabled:opacity-40">
-          Send
-        </button>
-      </div>
+      {asking && (
+        <div className="mt-3 flex items-center gap-2">
+          <input
+            ref={input}
+            aria-label="Comment for the agent"
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            placeholder="Ask the agent for another look instead"
+            className="h-9 min-w-0 grow rounded-[10px] bg-black/5 px-3 text-[14px] transition-[background-color,box-shadow] focus:bg-white focus:shadow-[0_0_0_1px_rgba(0,0,0,0.2)]"
+          />
+          <button type="submit" disabled={sending || !text} className="shrink-0 rounded-full bg-fill px-3.5 py-1.5 text-[13px] font-medium disabled:opacity-40">
+            Send
+          </button>
+        </div>
+      )}
     </form>
   );
 }

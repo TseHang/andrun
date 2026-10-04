@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { getFile } from "../api";
 import type { SessionView } from "../state/reducer";
 import { parseDiff } from "../state/diff";
 import { changeTotals, firstLine, isPreviewable } from "../state/format";
@@ -32,7 +33,7 @@ function Card({ sessionId, change }: { sessionId: string; change: SessionView["c
         (change.diff === null ? (
           <div className="px-3 py-2.5 text-xs text-text-secondary">Changed by a command. Diff not available.</div>
         ) : canPreview && preview ? (
-          <HtmlPreview sessionId={sessionId} path={change.path} version={change.diff} />
+          <HtmlPreview load={() => getFile(sessionId, change.path)} path={change.path} version={change.diff} />
         ) : (
           <DiffView diff={change.diff} />
         ))}

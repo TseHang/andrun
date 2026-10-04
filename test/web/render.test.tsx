@@ -325,7 +325,7 @@ describe("Review UX: the pull request and the findings", () => {
     expect(count(html, AVATAR)).toBe(1);
     expect(html).toMatch(/<textarea[^>]*>Review this pull request\.<\/textarea>/);
     expect(html).toMatch(/<button[^>]*>Start review<\/button>/);
-    expect(/<button[^>]*>Start review<\/button>/.exec(html)![0]).not.toMatch(/disabled/);
+    expect(/<button[^>]*>Start review<\/button>/.exec(html)![0]).not.toMatch(/ disabled=""/);
     expect(html).toContain("Nothing is posted to GitHub until you choose to post.");
   });
 
@@ -338,7 +338,7 @@ describe("Review UX: the pull request and the findings", () => {
     for (const [over, reason] of cases) {
       const html = inApp(<ReviewCard pull={pull(over)} />);
       expect(html, reason).toContain(reason);
-      expect(/<button[^>]*>Start review<\/button>/.exec(html)![0], reason).toMatch(/disabled/);
+      expect(/<button[^>]*>Start review<\/button>/.exec(html)![0], reason).toMatch(/ disabled=""/);
     }
   });
 
@@ -397,7 +397,7 @@ describe("Review UX: the pull request and the findings", () => {
     expect(high).toContain("Two spaces in a row become two hyphens.");
     expect(high).toMatch(/<button[^>]*>Edit<\/button>/);
     expect(high).toMatch(/<button[^>]*>Dismiss<\/button>/);
-    expect(/<button[^>]*>Dismiss<\/button>/.exec(high)![0]).not.toMatch(/disabled/);
+    expect(/<button[^>]*>Dismiss<\/button>/.exec(high)![0]).not.toMatch(/ disabled=""/);
 
     expect(post(html, "b")).toContain("Medium · Worth fixing");
 
@@ -417,7 +417,7 @@ describe("Review UX: the pull request and the findings", () => {
     const running = findings(reviewed(), "running");
     expect(running).toContain("4 so far");
     expect(running).toContain("You can edit findings when the agent has finished.");
-    expect(/<button[^>]*>Dismiss<\/button>/.exec(post(running, "a"))![0]).toMatch(/disabled/);
+    expect(/<button[^>]*>Dismiss<\/button>/.exec(post(running, "a"))![0]).toMatch(/ disabled=""/);
 
     // The note in the diff has the same header; a dismissed finding has no note.
     const diff = panel(pull(), view);

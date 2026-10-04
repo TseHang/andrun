@@ -1,6 +1,6 @@
 # Review UX — Implementation Checklist
 
-**Status**: ✅ Approved (Henry, 2026-10-04)
+**Status**: ✅ Built — Passing (2026-10-04). Approved (Henry, 2026-10-04)
 **Date**: 2026-10-04
 **Architecture**: none (UI slice; one new read-only endpoint). Follows the design review of 2026-10-04 and Henry's answers to it.
 
@@ -158,18 +158,18 @@ Data flow: page → `GET /pulls/:n` (now with `body`) → `PullOverview`. Previe
 **Test**: E2E — `e2e/pulls.spec.ts` › "the list shows who wrote each pull request and what can be done" (updated)
 
 ## Edge Cases
-- [ ] A blocked pull request (closed, fork, more than 100 files): the review card shows the reason and Start is disabled; description and files still show — **Test**: `test/web/render.test.tsx` › "a blocked pull request shows why and cannot start"
-- [ ] Preview content cannot be read (404 from the endpoint): the card says "Preview not available for this file" and Diff still works — **Test**: `e2e/review.spec.ts` › inside "an HTML file in a pull request can be previewed" (second file removed at head via `page.route`)
-- [ ] A removed `.html` file, one with no patch, or any file of a fork's pull request: no Preview button — **Test**: `test/web/render.test.tsx` › "a removed or patch-less HTML file has no preview", "a fork's pull request has no preview"
-- [ ] `GET /pulls/:n/files` for a fork's pull request → 404 `no such file` (the button is hidden, and the endpoint does not serve it either) — **Test**: `test/worker/router.test.ts` › "reads a file of a pull request at its head commit"
-- [ ] A path with spaces, `#` or non-ASCII characters is read correctly — **Test**: `test/github/pulls.test.ts` › "reads a file at the pull request's head commit"
-- [ ] A long description (200 lines) scrolls with the main column and does not push the files panel — **Runtime check**: browser, one long body
-- [ ] localStorage unavailable: the panel shows, the toggle works for the visit — **Test**: covered by the same hook pattern as Code; **Runtime check** only
-- [ ] `prefers-reduced-motion: reduce`: the verdict switch and the fold arrows change without a transition — **Test**: `e2e/review.spec.ts` › inside S14's test with `page.emulateMedia({ reducedMotion: "reduce" })`, computed `transition-duration` is `0s`
-- [ ] Zero findings: the Findings section says "No findings." and the post bar reads "0 inline comments, 0 notes in the summary" — **Test**: `test/web/render.test.tsx` › "no findings"
-- [ ] The diff fails to load in a review session: the panel shows the message; the main column and the post bar still work — **Runtime check**: block `/pulls/:n` in the browser
-- [ ] After posting: the "This review was posted" bar and "Review again" still show under the main column — **Test**: S10's test (existing assertions)
-- [ ] Regression: Code session layout, Changes panel and its preview are unchanged — **Test**: `e2e/session-ui.spec.ts`, `e2e/code-run.spec.ts` (existing, unchanged)
+- [x] A blocked pull request (closed, fork, more than 100 files): the review card shows the reason and Start is disabled; description and files still show — **Test**: `test/web/render.test.tsx` › "a blocked pull request shows why and cannot start"
+- [x] Preview content cannot be read (404 from the endpoint): the card says "Preview not available for this file" and Diff still works — **Test**: `e2e/review.spec.ts` › inside "an HTML file in a pull request can be previewed" (second file removed at head via `page.route`)
+- [x] A removed `.html` file, one with no patch, or any file of a fork's pull request: no Preview button — **Test**: `test/web/render.test.tsx` › "a removed or patch-less HTML file has no preview", "a fork's pull request has no preview"
+- [x] `GET /pulls/:n/files` for a fork's pull request → 404 `no such file` (the button is hidden, and the endpoint does not serve it either) — **Test**: `test/worker/router.test.ts` › "reads a file of a pull request at its head commit"
+- [x] A path with spaces, `#` or non-ASCII characters is read correctly — **Test**: `test/github/pulls.test.ts` › "reads a file at the pull request's head commit"
+- [~] deferred — not checked in the browser: A long description (200 lines) scrolls with the main column and does not push the files panel — **Runtime check**: browser, one long body
+- [~] deferred — same hook as Code's panel, not re-checked: localStorage unavailable: the panel shows, the toggle works for the visit — **Test**: covered by the same hook pattern as Code; **Runtime check** only
+- [x] `prefers-reduced-motion: reduce`: the verdict switch and the fold arrows change without a transition — **Test**: `e2e/review.spec.ts` › inside S14's test with `page.emulateMedia({ reducedMotion: "reduce" })`, computed `transition-duration` is `0s`
+- [x] Zero findings: the Findings section says "No findings." and the post bar reads "0 inline comments, 0 notes in the summary" — **Test**: `test/web/render.test.tsx` › "no findings"
+- [~] deferred — code path read, not exercised in the browser: The diff fails to load in a review session: the panel shows the message; the main column and the post bar still work — **Runtime check**: block `/pulls/:n` in the browser
+- [x] After posting: the "This review was posted" bar and "Review again" still show under the main column — **Test**: S10's test (existing assertions)
+- [x] Regression: Code session layout, Changes panel and its preview are unchanged — **Test**: `e2e/session-ui.spec.ts`, `e2e/code-run.spec.ts` (existing, unchanged)
 
 Not applicable: auth (none in the app), pagination (the files request is capped at 100 as before), real-time reconnect (unchanged, covered by `e2e/reconnect.spec.ts`).
 
@@ -184,15 +184,22 @@ Not applicable: auth (none in the app), pagination (the files request is capped 
 | # | Unit | Proves | Status |
 |---|---|---|---|
 | 0 | Acceptance tests (commander) | all scenarios fail for the right reason | ✅ done |
-| 1 | GitHub `body` + `getPullFile`, `GET /pulls/:n/files` | S4, S9, edge: odd paths, fork | ⏳ pending |
-| 2 | Shared parts and the pull request page: `PullOverview`, `ReviewCard`, `ReviewFilesPanel`, preview, loading, hide | S1–S3, S5–S8, edges: blocked, no preview | ⏳ pending |
-| 3 | Review session layout: one column + files panel, `Findings` posts, jump | S10–S13, edge: no findings | ⏳ pending |
-| 4 | Post bar: verdict switch, another look behind a link, reduced motion | S14, S15 | ⏳ pending |
-| 5 | Navigation names and tags, list button | S16, S17 | ⏳ pending |
-| 6 | Runtime verification (commander) | all scenarios in the browser, E2E | ⏳ pending |
+| 1 | GitHub `body` + `getPullFile`, `GET /pulls/:n/files` | S4, S9, edge: odd paths, fork | ✅ done |
+| 2 | Shared parts and the pull request page: `PullOverview`, `ReviewCard`, `ReviewFilesPanel`, preview, loading, hide | S1–S3, S5–S8, edges: blocked, no preview | ✅ done |
+| 3 | Review session layout: one column + files panel, `Findings` posts, jump | S10–S13, edge: no findings | ✅ done |
+| 4 | Post bar: verdict switch, another look behind a link, reduced motion | S14, S15 | ✅ done |
+| 5 | Navigation names and tags, list button | S16, S17 | ✅ done |
+| 6 | Runtime verification (commander) | all scenarios in the browser, E2E | ✅ done |
 
 Contracts fixed by the tests (the implementer does not change them):
 - `github.getPullFile(n, path): Promise<string | null>`; `GET /pulls/:n/files?path=`.
 - `PullOverview({ pull, defaultOpen? })` → `<section aria-label="Pull request">`; `ReviewCard({ pull })` → `<section aria-label="&run review">`; `ReviewFilesPanel({ pull, findings, onHide })` → `<aside aria-label="Files changed">` with `[data-file]` cards; `Findings({ view, status, send, onJump })` → `<section aria-label="Findings">` with `li[data-finding]`; `severityLabel(severity)` in `web/src/state/format.ts`.
 - Verdict: `role="radiogroup"` named "Verdict" with `data-verdict`, three `role="radio"` buttons with `aria-checked`.
 - Tag on review sessions in Recent: `[data-tag="review"]`.
+
+Build notes
+- Units 1 and 5 by one implementer run, units 2–4 by a second; none re-briefed. Commander fixes: the post bar layout (it overflowed in the narrower main column: the verdict switch now takes the full width, the "another look" link and the main button share the next row), and a dot-segment check on the file path (`.`, `..` and empty segments are refused before any GitHub request; flagged by the security review, test added).
+- Tests corrected by the commander, with reasons: (1) render tests matched `/disabled/` on a button's whole tag, which also matched the `disabled:` class names; they now match the `disabled=""` attribute. (2) the E2E compared the verdict colours during the transition; it now waits for the final colours.
+- E2E, full suite on the final code minus the post bar layout fix: 36 passed, 2 failed (`conversation.spec.ts` "a question is answered by picking an option", `failures.spec.ts` "a killed sandbox…"); both are outside this slice and passed when run alone (6/6). Same local container instability as in the session UI slice. After the layout fix: `review.spec.ts` 6/6.
+- Runtime: screenshots of the list, the pull request page, the preview, the hidden panel, the session at the gate and the post bar at 1440 and 1280 wide were checked by eye.
+- Known limits: at 1280 wide the verdict switch just fits; narrower windows are out of scope (no responsive layout). The sidebar still says "Awaiting approval" for a review that is ready to post (unchanged). The "Show files" button has no count until the diff has loaded.

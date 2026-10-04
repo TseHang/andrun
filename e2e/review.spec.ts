@@ -243,12 +243,12 @@ test("review a pull request: dismiss, edit, request changes, post", async ({ pag
   await expect(option("Approve")).toHaveAttribute("aria-checked", "true");
   await expect(option("Comment")).toHaveAttribute("aria-checked", "false");
   await expect(s.postBar.getByRole("button", { name: "Approve", exact: true })).toBeVisible();
-  const approveColour = await option("Approve").evaluate((el) => getComputedStyle(el).color);
+  await expect(option("Approve")).toHaveCSS("color", "rgb(31, 107, 44)"); // green, once the transition has ended
   await page.keyboard.press("ArrowRight"); // the arrow keys move the choice
   await expect(option("Request changes")).toHaveAttribute("aria-checked", "true");
   await expect(option("Request changes")).toBeFocused();
   await expect(verdict).toHaveAttribute("data-verdict", "REQUEST_CHANGES");
-  expect(await option("Request changes").evaluate((el) => getComputedStyle(el).color)).not.toBe(approveColour);
+  await expect(option("Request changes")).toHaveCSS("color", "rgb(143, 29, 29)"); // red
   await expect(s.postBar.getByLabel("Comment for the agent")).toHaveCount(0); // behind "Ask &run for another look"
   await s.postBar.getByRole("button", { name: "Request changes", exact: true }).click();
 

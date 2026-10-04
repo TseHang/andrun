@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef, type ReactNode } from "react";
 import type { SessionView, TimelineItem } from "../state/reducer";
 import { activityLabel, prTarget, usageLine } from "../state/format";
 import { Activity } from "./Activity";
@@ -95,7 +95,8 @@ function Item({ item, session }: { item: TimelineItem; session: SessionInfo }) {
   }
 }
 
-export function Timeline({ view, session }: { view: SessionView; session: SessionInfo }) {
+/** `before` and `after` sit in the scrolling column, around the activity (a review shows the pull request and the findings there). */
+export function Timeline({ view, session, before, after }: { view: SessionView; session: SessionInfo; before?: ReactNode; after?: ReactNode }) {
   const ref = useRef<HTMLElement>(null);
   const height = useRef(0);
   // Follow only if the view was at the bottom before this render's content was added.
@@ -109,6 +110,7 @@ export function Timeline({ view, session }: { view: SessionView; session: Sessio
   return (
     <section aria-label="Timeline" ref={ref} className="min-h-0 min-w-0 grow overflow-y-auto">
       <div className="mx-auto max-w-[720px] px-6 pt-4 pb-[calc(var(--bar-h,116px)+60px)]">
+        {before}
         {view.items.map((item, i) => (
           <div key={item.key}>
             <Item item={item} session={session} />
@@ -116,6 +118,7 @@ export function Timeline({ view, session }: { view: SessionView; session: Sessio
           </div>
         ))}
         {activity && <Activity label={activity} />}
+        {after}
       </div>
     </section>
   );

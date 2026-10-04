@@ -5,6 +5,7 @@ import { useApp } from "../context";
 import { useSession } from "../socket";
 import { ApprovalBar } from "./ApprovalBar";
 import { changeTotals } from "../state/format";
+import { usePanelHidden } from "../state/hidden";
 import { ChangesPanel } from "./ChangesPanel";
 import { Composer } from "./Composer";
 import { DeleteDialog } from "./DeleteDialog";
@@ -57,35 +58,12 @@ function Loader({ id }: { id: string }) {
   return <Live id={id} snap={snap} reload={reload} />;
 }
 
-const HIDDEN_KEY = "andrun.changes.hidden";
-
-// Whether the Changes panel is hidden: remembered in localStorage, shown if that is unavailable.
-function useChangesHidden(): [boolean, (hidden: boolean) => void] {
-  const [hidden, setHidden] = useState(() => {
-    try {
-      return typeof window !== "undefined" && window.localStorage.getItem(HIDDEN_KEY) === "1";
-    } catch {
-      return false;
-    }
-  });
-  const set = (next: boolean) => {
-    setHidden(next);
-    try {
-      if (next) window.localStorage.setItem(HIDDEN_KEY, "1");
-      else window.localStorage.removeItem(HIDDEN_KEY);
-    } catch {
-      // Not remembered, but the toggle still works for this visit.
-    }
-  };
-  return [hidden, set];
-}
-
 function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload: () => void }) {
   const { navigate, refreshList, refreshPulls, reportStatus } = useApp();
   const { view, send, update, reconnecting, deleted } = useSession(id);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [changesHidden, setChangesHidden] = useChangesHidden();
+  const [changesHidden, setChangesHidden] = usePanelHidden("andrun.changes.hidden");
   const [error, setError] = useState<string | null>(null);
   const more = useRef<HTMLButtonElement>(null);
   const status = view.status ?? snap.status;
@@ -128,11 +106,11 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
     return () => clearInterval(t);
   }, [snap.sandboxRunning, status]);
 
-  // The timeline and the panels keep their last lines clear of the floating bar, whatever its height (plan card, long summary).
+  // The timeline and the panels (anything in the page) keep their last lines clear of the floating bar, whatever its height (plan card, long summary).
   const bar = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const el = bar.current;
-    const row = el?.parentElement;
+    const row = el?.closest("main");
     if (!el || !row) return;
     const measure = () => row.style.setProperty("--bar-h", `${el.offsetHeight}px`);
     measure();
@@ -157,6 +135,29 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
     navigate("/");
   };
 
+  const barEl = (
+    <div ref={bar} data-slot="floating-bar" className="pointer-events-none absolute bottom-5 left-7 right-5">
+      {!review && view.plan && (
+        <div className="mb-2">
+          <PlanCard plan={view.plan} active={status === "running"} />
+        </div>
+      )}
+      {review && view.posted ? (
+        <PostedBar pr={snap.pr?.number ?? null} />
+      ) : view.gate && status === "awaiting_approval" ? (
+        review && view.gate.tool === "finish" ? (
+          <PostBar view={view} gate={view.gate} send={send} update={update} />
+        ) : (
+          <ApprovalBar view={view} gate={view.gate} session={session} send={send} update={update} />
+        )
+      ) : !review && view.question && status === "awaiting_input" ? (
+        <QuestionCard view={view} question={view.question} send={send} />
+      ) : (
+        <Composer view={view} running={status === "running"} waiting={status === "awaiting_input"} code={snap.mode === "code"} send={send} update={update} />
+      )}
+    </div>
+  );
+
   if (deleted) return <Notice title="This session was deleted" />;
 
   return (
@@ -170,7 +171,7 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
       <SessionHeader title={snap.title} status={status} header={view.header} review={review} onDelete={() => setConfirming(true)} moreRef={more} />
       <div className="relative flex min-h-0 grow">
         {review ? (
-          <ReviewBody view={view} status={status} session={session} pr={snap.pr?.number ?? null} send={send} />
+          <ReviewBody view={view} status={status} session={session} pr={snap.pr?.number ?? null} send={send} bar={barEl} />
         ) : (
           <>
             <Timeline view={view} session={session} />
@@ -185,26 +186,7 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
             )}
           </>
         )}
-        <div ref={bar} data-slot="floating-bar" className={`pointer-events-none absolute bottom-5 left-7 ${review ? "right-[360px]" : "right-5"}`}>
-          {!review && view.plan && (
-            <div className="mb-2">
-              <PlanCard plan={view.plan} active={status === "running"} />
-            </div>
-          )}
-          {review && view.posted ? (
-            <PostedBar pr={snap.pr?.number ?? null} />
-          ) : view.gate && status === "awaiting_approval" ? (
-            review && view.gate.tool === "finish" ? (
-              <PostBar view={view} gate={view.gate} send={send} update={update} />
-            ) : (
-              <ApprovalBar view={view} gate={view.gate} session={session} send={send} update={update} />
-            )
-          ) : !review && view.question && status === "awaiting_input" ? (
-            <QuestionCard view={view} question={view.question} send={send} />
-          ) : (
-            <Composer view={view} running={status === "running"} waiting={status === "awaiting_input"} code={snap.mode === "code"} send={send} update={update} />
-          )}
-        </div>
+        {!review && barEl}
       </div>
       {confirming && <DeleteDialog busy={busy} error={error} onCancel={close} onConfirm={() => void confirm()} />}
     </main>
