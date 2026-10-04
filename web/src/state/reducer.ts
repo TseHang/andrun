@@ -62,6 +62,8 @@ export interface ChangeView {
   additions: number;
   deletions: number;
   diff: string | null;
+  saved?: boolean;
+  unavailableReason?: string;
 }
 
 export interface FindingView {
@@ -348,9 +350,9 @@ function apply(view: SessionView, ev: AgentEvent): SessionView {
     }
     case "file_changed": {
       const rest = view.changes.filter((c) => c.path !== ev.path || c.diff === null);
-      if (ev.diff === "") return withChanges(view, view.changes.filter((c) => c.path !== ev.path));
+      if (ev.diff === "" && ev.saved !== false) return withChanges(view, view.changes.filter((c) => c.path !== ev.path));
       const { additions, deletions } = parseDiff(ev.diff);
-      const change: ChangeView = { path: ev.path, additions, deletions, diff: ev.diff };
+      const change: ChangeView = { path: ev.path, additions, deletions, diff: ev.diff, ...(ev.saved !== undefined && { saved: ev.saved }), ...(ev.unavailableReason && { unavailableReason: ev.unavailableReason }) };
       const at = view.changes.findIndex((c) => c.path === ev.path && c.diff !== null);
       if (at >= 0) return withChanges(view, view.changes.map((c, n) => (n === at ? change : c)));
       const withDiff = rest.filter((c) => c.diff !== null);

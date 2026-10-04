@@ -62,6 +62,7 @@ export function Sidebar({ sessions, stale, path, live, pullCount }: Props) {
               <span className="flex items-center gap-1.5">
                 <StatusLabel status={status} className={`text-[11px] ${LIST_COLOR(status)}`} />
                 {s.mode === "review" && <span data-tag="review" className="rounded-full bg-fill px-1.5 text-[11px] text-text-secondary">Review</span>}
+              {s.mode === "task" && <span data-tag="task" className="rounded-full bg-fill px-1.5 text-[11px] text-text-secondary">Task</span>}
               </span>
             </a>
           );

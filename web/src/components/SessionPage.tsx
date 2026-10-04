@@ -4,7 +4,7 @@ import { UUID, deleteSession, getSnapshot } from "../api";
 import { useApp } from "../context";
 import { useSession } from "../socket";
 import { ApprovalBar } from "./ApprovalBar";
-import { changeTotals } from "../state/format";
+import { changeTotals, isDeliverable } from "../state/format";
 import { usePanelHidden } from "../state/hidden";
 import { ChangesPanel } from "./ChangesPanel";
 import { Composer } from "./Composer";
@@ -176,11 +176,11 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
             {changesHidden ? (
               <div className="pointer-events-none absolute top-3 right-5 z-10">
                 <button type="button" onClick={() => setChangesHidden(false)} className="pointer-events-auto cursor-pointer rounded-full bg-fill px-3 py-1 text-xs font-medium">
-                  {view.changes.length > 0 ? `Show changes · ${changeTotals(view.changes).files}` : "Show changes"}
+                  {snap.mode === "task" ? `Show files · ${view.changes.filter((c) => isDeliverable(c.path)).length}` : view.changes.length > 0 ? `Show changes · ${changeTotals(view.changes).files}` : "Show changes"}
                 </button>
               </div>
             ) : (
-              <ChangesPanel id={id} view={view} sandboxRunning={snap.sandboxRunning} sha={snap.sha} onHide={() => setChangesHidden(true)} />
+              <ChangesPanel id={id} mode={snap.mode} view={view} sandboxRunning={snap.sandboxRunning} sha={snap.sha} onHide={() => setChangesHidden(true)} />
             )}
           </>
         )}

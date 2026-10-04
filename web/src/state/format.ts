@@ -130,6 +130,12 @@ export function activityLabel(view: SessionView): string | null {
   return view.items.some((i) => i.kind === "assistant" && i.streaming) ? "Writing a reply" : "Thinking";
 }
 
+export const TASK_FORMAT_NOTE = "Task produces .html, .md and .csv files. Images, PDF and other binary files are not supported.";
+
+export function isDeliverable(path: string): boolean {
+  return /\.(html?|md|csv)$/i.test(path);
+}
+
 /** Whether the file can be shown in the preview: HTML pages. */
 export function isPreviewable(path: string): boolean {
   return /\.html?$/i.test(path);
