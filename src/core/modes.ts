@@ -12,10 +12,11 @@ export function getProfile(mode: ModeName, config: AgentConfig): ModeProfile {
         name: "code",
         model: config.models.code,
         systemPrompt: CODE_SYSTEM_PROMPT,
-        tools: ["list_files", "read_file", "write_file", "apply_patch", "run_command", "update_plan", "finish"],
+        tools: ["list_files", "read_file", "write_file", "apply_patch", "run_command", "update_plan", "ask_user", "finish"],
         policy: allowlistPolicy(),
         sandboxSetup: "tarball@sha",
         onFinish: "open_pr",
+        onTextReply: "wait",
       };
     case "review":
       return {
@@ -27,6 +28,7 @@ export function getProfile(mode: ModeName, config: AgentConfig): ModeProfile {
         policy: allowlistPolicy(),
         sandboxSetup: "pr-head@sha",
         onFinish: "draft_review",
+        onTextReply: "finish",
       };
     case "task":
       throw new Error("task mode is not implemented yet (Phase 5)");

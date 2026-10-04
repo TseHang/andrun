@@ -7,6 +7,7 @@ import { summarizeDiff } from "./diff";
 import type { DiffSummary, EventBody } from "./events";
 import { executeTool, summarizeCall, toolSpecs, type ToolResult } from "./tools";
 import type {
+  SandboxAdapter,
   AgentDeps,
   AgentState,
   ApprovalDecision,
@@ -19,7 +20,6 @@ import type {
   ToolName,
 } from "./types";
 
-const NUDGE = "Please call a tool or finish. If the task is done, call finish with a summary.";
 const MAX_STRIKES = 3;
 const TURN_LIMIT_NEXT = "Send a message to continue.";
 const UI_RESULT_CHARS = 2000;
@@ -50,7 +50,6 @@ export function createSession(input: { sessionId: string; mode: ModeName; task: 
     turnTokens: 0,
     nextSeq: 1,
     failures: null,
-    nudged: false,
     pending: null,
   };
 }
@@ -72,12 +71,17 @@ export async function resume(
   const pending = ctx.state.pending;
   if (!pending) throw new Error("resume: no pending approval");
 
-  emit(ctx, {
-    type: "approval_resolved",
-    approvalId: pending.approvalId,
-    approved: decision.approved,
-    ...(decision.comment !== undefined && { comment: decision.comment }),
-  });
+  if (pending.kind === "question") {
+    // The answer is a user message, not an approval.
+    emit(ctx, { type: "message", id: crypto.randomUUID(), role: "user", text: decision.comment ?? "" });
+  } else {
+    emit(ctx, {
+      type: "approval_resolved",
+      approvalId: pending.approvalId,
+      approved: decision.approved,
+      ...(decision.comment !== undefined && { comment: decision.comment }),
+    });
+  }
   ctx.state.pending = null;
   setStatus(ctx, "running");
 
@@ -132,8 +136,14 @@ async function applyDecision(ctx: RunContext, pending: PendingApproval, decision
     case "implicit_finish":
       if (decision.approved) return done(ctx, pending.summary);
       userMessage(ctx, comment);
-      state.nudged = false;
       return null;
+    case "question": {
+      toolMessage(ctx, pending.call, JSON.stringify({ answer: comment }));
+      const outcome = await processCalls(ctx, pending.remaining);
+      if (outcome) return outcome;
+      checkpoint(ctx);
+      return null;
+    }
   }
 }
 
@@ -200,19 +210,16 @@ async function loop(ctx: RunContext): Promise<RunOutcome> {
     });
 
     if (response.toolCalls.length === 0) {
-      if (state.nudged) {
-        return pause(ctx, {
-          kind: "implicit_finish",
-          approvalId: crypto.randomUUID(),
-          reason: "the agent stopped without calling finish",
-          summary: response.content ?? "",
-          diffSummary: await currentDiffSummary(ctx),
-        });
+      // The turn limit wins over a reply.
+      const over = turnLimit(ctx);
+      if (over) return over;
+      if (profile.onTextReply === "wait") {
+        setStatus(ctx, "awaiting_input");
+        checkpoint(ctx);
+        return { kind: "awaiting_input" };
       }
-      state.nudged = true;
-      userMessage(ctx, NUDGE);
+      return textReplyFinish(ctx, response.content ?? "");
     } else {
-      state.nudged = false;
       const outcome = await processCalls(ctx, response.toolCalls);
       if (outcome) return outcome;
     }
@@ -260,6 +267,26 @@ async function processCalls(ctx: RunContext, calls: ToolCall[]): Promise<RunOutc
         remaining,
         ...(isFinish && { summary: stringArg(args, "summary"), diffSummary: await currentDiffSummary(ctx) }),
       });
+    }
+
+    if (name === "ask_user") {
+      // The tool only validates; it needs no sandbox.
+      const checked = await executeTool(
+        { name, rawArgs: call.function.arguments },
+        { sandbox: deps.sandbox as SandboxAdapter, allowed: profile.tools, timeoutMs: deps.config.commandTimeoutMs },
+      );
+      if (!checked.ok || !checked.question) {
+        const strikes = await recordResult(ctx, call, checked, remaining);
+        if (strikes) return strikes;
+        continue;
+      }
+      const { question, options } = checked.question;
+      const approvalId = crypto.randomUUID();
+      state.pending = { kind: "question", approvalId, question, options, call, remaining };
+      emit(ctx, { type: "question", id: approvalId, question, options });
+      setStatus(ctx, "awaiting_input");
+      checkpoint(ctx);
+      return { kind: "awaiting_input" };
     }
 
     if (decision.auto) autoApprove(ctx, name, decision.auto.reason);
@@ -364,7 +391,24 @@ function budget(ctx: RunContext, message: string, next?: string): RunOutcome {
   return { kind: "budget_exceeded" };
 }
 
-function pause(ctx: RunContext, pending: PendingApproval): RunOutcome {
+/** A review's model replied with text and no tool call: it goes to the finish gate at once. */
+async function textReplyFinish(ctx: RunContext, summary: string): Promise<RunOutcome> {
+  const { deps, profile, state } = ctx;
+  const decision = (deps.policy ?? profile.policy).decide({ mode: state.mode, tool: "finish", args: { summary } });
+  if (decision.kind === "allow") {
+    if (decision.auto) autoApprove(ctx, "finish", decision.auto.reason);
+    return done(ctx, summary);
+  }
+  return pause(ctx, {
+    kind: "implicit_finish",
+    approvalId: crypto.randomUUID(),
+    reason: decision.reason,
+    summary,
+    diffSummary: await currentDiffSummary(ctx),
+  });
+}
+
+function pause(ctx: RunContext, pending: Exclude<PendingApproval, { kind: "question" }>): RunOutcome {
   ctx.state.pending = pending;
   emit(ctx, {
     type: "approval_required",

@@ -2,7 +2,7 @@
 
 import { TOOL_OUTPUT_CAP, capToolOutput } from "./context";
 import { pathsInPatch } from "./diff";
-import type { PlanStep } from "./events";
+import type { PlanStep, QuestionOption } from "./events";
 import { SandboxLostError, type Finding, type SandboxAdapter, type ToolName, type ToolSpec } from "./types";
 
 export const MAX_FILE_BYTES = 1_000_000;
@@ -71,6 +71,22 @@ const SPECS: Record<ToolName, ToolSpec> = {
       ["plan"],
     ),
   },
+  ask_user: {
+    name: "ask_user",
+    description:
+      "Ask the user to choose between concrete options, then wait for the answer. Give 2 to 4 options; the user can also answer in their own words. Use it for a choice between a few concrete options, not for open questions (ask those in a reply).",
+    parameters: schema(
+      {
+        question: str("The question, in one sentence."),
+        options: {
+          type: "array",
+          description: "2 to 4 options.",
+          items: schema({ label: str("Short option name."), description: str("One line on what this option means.") }, ["label"]),
+        },
+      },
+      ["question", "options"],
+    ),
+  },
   report_finding: {
     name: "report_finding",
     description: "Record one review finding about a specific line. Call once per issue.",
@@ -126,6 +142,8 @@ export function summarizeCall(name: string, args: unknown): string {
       return `Finding ${s("path")}:${String(a.line ?? "")}`;
     case "update_plan":
       return "Update plan";
+    case "ask_user":
+      return `Ask ${s("question")}`;
     case "finish":
       return "Finish";
     default:
@@ -157,6 +175,7 @@ export type ToolResult =
       changedPaths?: string[];
       finding?: Omit<Finding, "id">;
       plan?: PlanStep[];
+      question?: { question: string; options: QuestionOption[] };
       /** Sizes for the UI only (never sent to the model). */
       meta?: { bytes?: number; files?: number };
     }
@@ -197,6 +216,23 @@ function parsePlan(raw: unknown): PlanStep[] {
     }
     return { step: o.step, status };
   });
+}
+
+function parseQuestion(args: Record<string, unknown>): { question: string; options: QuestionOption[] } {
+  const { question, options } = args;
+  if (typeof question !== "string" || question.trim() === "") throw new InvalidArgs(`"question" must be a non-empty string`);
+  if (!Array.isArray(options)) throw new InvalidArgs(`"options" must be an array of 2 to 4 items`);
+  if (options.length < 2 || options.length > 4) throw new InvalidArgs(`"options" must have 2 to 4 items, got ${options.length}`);
+  const seen = new Set<string>();
+  const parsed = options.map((item, i): QuestionOption => {
+    const o = asRecord(item);
+    if (typeof o.label !== "string" || o.label.trim() === "") throw new InvalidArgs(`"options[${i}].label" must be a non-empty string`);
+    if (seen.has(o.label)) throw new InvalidArgs(`"options[${i}].label" is a duplicate: labels must be unique`);
+    seen.add(o.label);
+    if (o.description !== undefined && typeof o.description !== "string") throw new InvalidArgs(`"options[${i}].description" must be a string`);
+    return { label: o.label, ...(o.description !== undefined && { description: o.description }) };
+  });
+  return { question, options: parsed };
 }
 
 /** Whole lines of `content` from `offset`, as many as fit the output cap; a note says where to continue. */
@@ -312,6 +348,8 @@ async function run(name: ToolName, args: Record<string, unknown>, ctx: ToolConte
       const plan = parsePlan(args.plan);
       return { ok: true, output: "Plan updated", plan };
     }
+    case "ask_user":
+      return { ok: true, output: "", question: parseQuestion(args) };
     case "finish":
       return { ok: true, output: reqString(args, "summary") };
   }
