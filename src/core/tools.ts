@@ -2,6 +2,7 @@
 
 import { TOOL_OUTPUT_CAP, capToolOutput } from "./context";
 import { pathsInPatch } from "./diff";
+import type { PlanStep } from "./events";
 import { SandboxLostError, type Finding, type SandboxAdapter, type ToolName, type ToolSpec } from "./types";
 
 export const MAX_FILE_BYTES = 1_000_000;
@@ -21,8 +22,16 @@ const SPECS: Record<ToolName, ToolSpec> = {
   },
   read_file: {
     name: "read_file",
-    description: "Read a file and return its contents.",
-    parameters: schema({ path: str("File path relative to the repo root.") }, ["path"]),
+    description:
+      "Read a file and return its contents. Long files are cut at whole lines with a note giving the offset to continue from; pass offset and limit to read a range.",
+    parameters: schema(
+      {
+        path: str("File path relative to the repo root."),
+        offset: { type: "integer", minimum: 1, description: "1-based first line to return." },
+        limit: { type: "integer", minimum: 1, description: "Maximum number of lines to return." },
+      },
+      ["path"],
+    ),
   },
   write_file: {
     name: "write_file",
@@ -42,6 +51,25 @@ const SPECS: Record<ToolName, ToolSpec> = {
     description:
       "Run a shell command in the repo root (e.g. the tests). Returns the exit code and combined output. A non-zero exit is reported, not an error.",
     parameters: schema({ command: str("Shell command line.") }, ["command"]),
+  },
+  update_plan: {
+    name: "update_plan",
+    description:
+      "Record your plan as a short list of steps with a status each. Each call replaces the whole plan; an empty list clears it. At most one step can be in_progress at a time.",
+    parameters: schema(
+      {
+        plan: {
+          type: "array",
+          description: "The full list of steps, in order.",
+          items: {
+            type: "object",
+            properties: { step: str("What this step does."), status: { type: "string", enum: ["pending", "in_progress", "completed"] } },
+            required: ["step", "status"],
+          },
+        },
+      },
+      ["plan"],
+    ),
   },
   report_finding: {
     name: "report_finding",
@@ -96,6 +124,8 @@ export function summarizeCall(name: string, args: unknown): string {
       return `List ${s("path") || "."}`;
     case "report_finding":
       return `Finding ${s("path")}:${String(a.line ?? "")}`;
+    case "update_plan":
+      return "Update plan";
     case "finish":
       return "Finish";
     default:
@@ -126,6 +156,7 @@ export type ToolResult =
       exitCode?: number | null;
       changedPaths?: string[];
       finding?: Omit<Finding, "id">;
+      plan?: PlanStep[];
       /** Sizes for the UI only (never sent to the model). */
       meta?: { bytes?: number; files?: number };
     }
@@ -146,6 +177,50 @@ function reqString(args: Record<string, unknown>, key: string): string {
   const v = args[key];
   if (typeof v !== "string") throw new InvalidArgs(`"${key}" must be a string`);
   return v;
+}
+
+function optPositiveInt(args: Record<string, unknown>, key: string): number | undefined {
+  const v = args[key];
+  if (v === undefined) return undefined;
+  if (typeof v !== "number" || !Number.isInteger(v) || v < 1) throw new InvalidArgs(`"${key}" must be an integer >= 1`);
+  return v;
+}
+
+function parsePlan(raw: unknown): PlanStep[] {
+  if (!Array.isArray(raw)) throw new InvalidArgs(`"plan" must be an array`);
+  return raw.map((item, i) => {
+    const o = asRecord(item);
+    if (typeof o.step !== "string" || o.step.trim() === "") throw new InvalidArgs(`"plan[${i}].step" must be a non-empty string`);
+    const { status } = o;
+    if (status !== "pending" && status !== "in_progress" && status !== "completed") {
+      throw new InvalidArgs(`"plan[${i}].status" must be pending, in_progress or completed`);
+    }
+    return { step: o.step, status };
+  });
+}
+
+/** Whole lines of `content` from `offset`, as many as fit the output cap; a note says where to continue. */
+function readRange(content: string, offset: number | undefined, limit: number | undefined): string {
+  const lines = content.split("\n");
+  if (content.endsWith("\n")) lines.pop();
+  const total = lines.length;
+  const first = offset ?? 1;
+  if (first > total) throw new InvalidArgs(`"offset" is past the end of the file (${total} lines)`);
+  const end = Math.min(total, limit === undefined ? total : first + limit - 1);
+  const wanted = lines.slice(first - 1, end).join("\n");
+  if (wanted.length <= TOOL_OUTPUT_CAP) return wanted;
+  const note = (last: number) => `\n[lines ${first}-${last} of ${total} shown; continue with offset ${last + 1}]`;
+  const budget = TOOL_OUTPUT_CAP - note(end).length;
+  let used = 0;
+  let last = first - 1;
+  for (let i = first; i <= end; i++) {
+    const next = used + (i > first ? 1 : 0) + lines[i - 1]!.length;
+    if (next > budget) break;
+    used = next;
+    last = i;
+  }
+  if (last < first) return capToolOutput(lines[first - 1]!);
+  return lines.slice(first - 1, last).join("\n") + note(last);
 }
 
 class InvalidArgs extends Error {}
@@ -188,8 +263,11 @@ async function run(name: ToolName, args: Record<string, unknown>, ctx: ToolConte
     }
     case "read_file": {
       const path = validatePath(reqString(args, "path"));
+      const offset = optPositiveInt(args, "offset");
+      const limit = optPositiveInt(args, "limit");
       const content = await sandbox.readFile(path);
-      return { ok: true, output: capToolOutput(content), meta: { bytes: new TextEncoder().encode(content).length } };
+      const output = offset === undefined && limit === undefined && content.length <= TOOL_OUTPUT_CAP ? content : readRange(content, offset, limit);
+      return { ok: true, output, meta: { bytes: new TextEncoder().encode(content).length } };
     }
     case "write_file": {
       const rawPath = reqString(args, "path");
@@ -229,6 +307,10 @@ async function run(name: ToolName, args: Record<string, unknown>, ctx: ToolConte
         throw new InvalidArgs(`"severity" must be high, medium or low`);
       }
       return { ok: true, output: "finding recorded", finding: { path, line, severity, text } };
+    }
+    case "update_plan": {
+      const plan = parsePlan(args.plan);
+      return { ok: true, output: "Plan updated", plan };
     }
     case "finish":
       return { ok: true, output: reqString(args, "summary") };

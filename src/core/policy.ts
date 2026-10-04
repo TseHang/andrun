@@ -1,4 +1,5 @@
-// Approval policy (spec §6): allowlisted commands run freely; risky calls ask (code) or are denied (review).
+// Approval policy (spec §6): Code mode runs every command freely; Review mode allows only allowlisted commands and denies the rest.
+// Finishing and patches that delete files still ask.
 
 import { pathsInPatch } from "./diff";
 import type { ApprovalPolicy, Decision, PolicyInput } from "./types";
@@ -35,11 +36,11 @@ function isAllowlisted(command: string): boolean {
 }
 
 function decideCommand(mode: PolicyInput["mode"], command: string): Decision {
-  if (isAllowlisted(command)) return { kind: "allow" };
+  if (mode === "code" || isAllowlisted(command)) return { kind: "allow" };
   const reason = SHELL_OPERATORS.test(command)
     ? "command uses shell operators"
     : `command not in allowlist: ${command.trim().split(/\s+/)[0] ?? ""}`;
-  return mode === "review" ? { kind: "deny", reason } : { kind: "ask", reason };
+  return { kind: "deny", reason };
 }
 
 export function allowlistPolicy(): ApprovalPolicy {

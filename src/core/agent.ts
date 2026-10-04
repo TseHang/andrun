@@ -305,6 +305,7 @@ async function recordResult(ctx: RunContext, call: ToolCall, result: ToolResult,
       emit(ctx, { type: "file_changed", path, diff: (await deps.sandbox?.diff(path)) ?? "" });
     }
     if (result.finding) emit(ctx, { type: "review_finding", id: crypto.randomUUID(), ...result.finding });
+    if (result.plan) emit(ctx, { type: "plan_updated", plan: result.plan });
     return null;
   }
 

@@ -12,7 +12,7 @@ export function getProfile(mode: ModeName, config: AgentConfig): ModeProfile {
         name: "code",
         model: config.models.code,
         systemPrompt: CODE_SYSTEM_PROMPT,
-        tools: ["list_files", "read_file", "write_file", "apply_patch", "run_command", "finish"],
+        tools: ["list_files", "read_file", "write_file", "apply_patch", "run_command", "update_plan", "finish"],
         policy: allowlistPolicy(),
         sandboxSetup: "tarball@sha",
         onFinish: "open_pr",

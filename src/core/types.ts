@@ -121,6 +121,7 @@ export type ToolName =
   | "write_file"
   | "apply_patch"
   | "run_command"
+  | "update_plan"
   | "report_finding"
   | "finish";
 
