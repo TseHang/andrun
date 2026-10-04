@@ -1,6 +1,6 @@
 # Conversational Flow — Implementation Checklist
 
-**Status**: ✅ Approved
+**Status**: 🔨 Built — unit and API tests passing; E2E and runtime check not run (Docker build hung)
 **Date**: 2026-10-04
 **Architecture**: `docs/architecture/web-codex-architecture-decision.md` (D2 loop, D3 approval, D4 modes, D7 events). This slice adds revisions A21–A23.
 
@@ -158,15 +158,15 @@ New in this slice:
 **Test**: Unit — `test/eval/runner.test.ts` › "all cases load"
 
 ## Edge Cases
-- [ ] A message sent while the agent is running, when that run then ends with a text reply: the queued message starts the next turn at once instead of being left unsent — **Test**: `test/session/engine.test.ts` › "a message queued during a run that ends waiting starts the next turn"
-- [ ] Two `ask_user` calls in one reply: the second is asked after the first is answered — **Test**: `test/core/agent.test.ts` › "a second question in the same reply waits for the first"
-- [ ] An approve or reject frame while a question is open is refused with a reason, and the question stays open — **Test**: `test/session/engine.test.ts` › "approve and reject are refused while a question is open"
-- [ ] A reload or reconnect while a question is open shows the same card (replay from stored events; the snapshot status is `awaiting_input`) — **Test**: `e2e/conversation.spec.ts` › "an open question survives a reload"
-- [ ] A session saved before this slice (`nudged` set, status `awaiting_approval` with `implicit_finish` pending in Code mode) can still be approved or answered — **Test**: `test/session/engine.test.ts` › "an implicit finish saved by an older version still resolves"
-- [ ] The turn limit is reached on the same step as a text reply: the outcome is the limit, not `awaiting_input` — **Test**: `test/core/agent.test.ts` › "the turn limit wins over a text reply"
-- [ ] An empty reply (no text, no tool call) also ends the turn; the timeline shows a notice "The agent stopped without a reply." — **Test**: `test/web/reducer.test.ts` › "an empty reply shows a notice"
-- [ ] A long option label or description wraps inside the card and does not push the buttons off screen — **Runtime check**: `/qa-web` with a 200-character option
-- [ ] The sandbox stops while the session waits; the next message brings it back with the workspace restored (existing behavior, not changed here) — **Runtime check**: wait past the sandbox timeout in `wrangler dev`, then reply
+- [x] A message sent while the agent is running, when that run then ends with a text reply: the queued message starts the next turn at once instead of being left unsent — **Test**: `test/session/engine.test.ts` › "a message queued during a run that ends waiting starts the next turn"
+- [x] Two `ask_user` calls in one reply: the second is asked after the first is answered — **Test**: `test/core/agent.test.ts` › "a second question in the same reply waits for the first"
+- [x] An approve or reject frame while a question is open is refused with a reason, and the question stays open — **Test**: `test/session/engine.test.ts` › "approve and reject are refused while a question is open"
+- [~] deferred (needs the dev server; Docker build hung) — A reload or reconnect while a question is open shows the same card (replay from stored events; the snapshot status is `awaiting_input`) — **Test**: `e2e/conversation.spec.ts` › "an open question survives a reload"
+- [x] A session saved before this slice (`nudged` set, status `awaiting_approval` with `implicit_finish` pending in Code mode) can still be approved or answered — **Test**: `test/session/engine.test.ts` › "an implicit finish saved by an older version still resolves"
+- [x] The turn limit is reached on the same step as a text reply: the outcome is the limit, not `awaiting_input` — **Test**: `test/core/agent.test.ts` › "the turn limit wins over a text reply"
+- [x] An empty reply (no text, no tool call) also ends the turn; the timeline shows a notice "The agent stopped without a reply." — **Test**: `test/web/reducer.test.ts` › "an empty reply shows a notice"
+- [~] deferred (needs the dev server; Docker build hung) — A long option label or description wraps inside the card and does not push the buttons off screen — **Runtime check**: `/qa-web` with a 200-character option
+- [~] deferred (needs the dev server; Docker build hung) — The sandbox stops while the session waits; the next message brings it back with the workspace restored (existing behavior, not changed here) — **Runtime check**: wait past the sandbox timeout in `wrangler dev`, then reply
 
 Not applicable: auth and rate limits (no new endpoint; the `message` frame already has both); GitHub (the PR path is unchanged).
 
@@ -186,7 +186,10 @@ Not applicable: auth and rate limits (no new endpoint; the `message` frame alrea
 | 3 | Eval: new endings, `expect_reply`, case `discuss-first` | S13, S14 | ✅ done |
 | 4 | Web + fake model: status, question card, composer, Open pull request | S9–S12; edges: reload, empty reply | ✅ done |
 | 5 | Docs: ADR revisions A21–A23 | — | ✅ done |
-| 6 | Runtime verification | all | 🔨 in progress |
+| 6 | Runtime verification | all | ⛔ blocked — the sandbox image's `docker buildx build` made no progress for 13 minutes; Henry runs `pnpm e2e` |
 
 ### Build notes
 - Test fix (unit 2): two session tests asserted that the only user `message` event was the reply, and that the first `tool_call` was `ask_user`. A session also emits the task as a user message and a `sandbox_setup` tool call (existing behavior). The assertions now list those too. The scenarios' meaning is unchanged.
+- Not verified in a runtime: the four E2E scenarios (S9–S12), the reload edge case and the two runtime checks. `e2e/conversation.spec.ts` is written and has never run. The 274 unit and API tests, typecheck, lint and `pnpm build` pass.
+- Differences from the checklist: the `question` pending item has `reason?: undefined` so code that reads `pending.reason` on the union type-checks; a refused answer in the question card can be sent again (not in the spec); `Home.tsx` and `SessionHeader.tsx` also show the new status.
+- New Code prompt lines: "Call finish only when the work is ready for a pull request… If you changed no files, reply in text instead of calling finish." and the section "How a conversation works" (a reply without a tool call ends the turn; do a clear request directly; for a question, an open-ended request or several reasonable approaches, reply or use ask_user and do not edit files before the user has chosen).
