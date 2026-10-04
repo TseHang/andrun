@@ -1,6 +1,6 @@
 # &run Harness improvement, Slice A: plan, general Code mode, stronger Review — Implementation Checklist
 
-**Status**: ✅ Approved (Henry, 2026-10-04)
+**Status**: ✅ Built — Passing (2026-10-04; approved by Henry the same day)
 **Date**: 2026-10-04
 **Branch**: `feature/harness-improvement`
 **Architecture**: `docs/architecture/web-codex-architecture-decision.md` (D2, D4, D7, D12, D17; A10, A13 unchanged)
@@ -168,18 +168,18 @@ Constraint found while reading: `publishChanges` takes the first user message as
 **Test**: Unit — `test/core/policy.test.ts` › "Code mode allows every command; Review keeps the read-only allowlist"; E2E — `e2e/gates.spec.ts` (updated: the `[ask]` task now gates on a patch that deletes a file)
 
 ## Edge Cases
-- [ ] `update_plan` with an empty list clears the plan; the card disappears — **Test**: `test/web/reducer.test.ts` › "an empty plan clears the card"
-- [ ] Two steps `in_progress` are accepted and shown as given (HI-a) — **Test**: `test/core/tools.test.ts` › "update_plan does not enforce one step in progress"
-- [ ] A follow-up turn replaces the previous turn's plan; all steps completed shows no gate note — **Test**: `test/web/reducer.test.ts` › "the gate note counts unfinished steps of the latest plan"
-- [ ] A session stored before this slice (no `plan_updated`, state without the context message) opens and continues; no context message is added to a session already past step 0 — **Test**: `test/session/engine.test.ts` › "a session from before this slice resumes unchanged"
-- [ ] A repo with no `AGENTS.md` and no `package.json` gets a context message with the top-level entries only; an `AGENTS.md` over 8 KB is cut with the elision marker — **Test**: `test/core/repo-context.test.ts` › "missing files are skipped and a long AGENTS.md is capped"
-- [ ] The sandbox fails while the context is read: the run ends as `failed` like any setup failure, with no half-written message — **Test**: `test/session/engine.test.ts` › "a sandbox lost while reading the repo context fails the session"
-- [ ] `read_file` with `offset` past the end, `offset: 0`, a negative or non-integer `limit` → `invalid arguments`; a single line longer than the cap is cut with the elision marker — **Test**: `test/core/tools.test.ts` › "read_file rejects bad ranges and cuts an over-long line"
-- [ ] A Review session's layout has no plan card — **Runtime check**: open a review session in the browser after the build
-- [ ] The engine has no `state.mode === "review"` on a finish path (`decide`, `postReview`, the message refusal) — **Runtime check**: `grep -n 'mode === "review"' src/session/engine.ts` shows only `editFinding`
-- [ ] A session stored before this slice has no turn counters: its next turn starts from zero and is limited like a new one — **Test**: `test/session/store.test.ts` › "a store without turn counters loads as a fresh turn"
-- [ ] A message queued while the agent runs (a redirect) does not start a new turn — **Test**: `test/session/engine.test.ts` › "a redirect keeps the running turn's cost"
-- [ ] The whole flow on `wrangler dev` with the fake model: Code run with a plan, Approve, follow-up message, second Approve; Review run to Post — **Runtime check**: `pnpm e2e` plus a manual pass in the browser
+- [x] `update_plan` with an empty list clears the plan; the card disappears — **Test**: `test/web/reducer.test.ts` › "an empty plan clears the card" — verified: unit test
+- [x] Two steps `in_progress` are accepted and shown as given (HI-a) — **Test**: `test/core/tools.test.ts` › "update_plan does not enforce one step in progress" — verified: unit test
+- [x] A follow-up turn replaces the previous turn's plan; all steps completed shows no gate note — **Test**: `test/web/reducer.test.ts` › "the gate note counts unfinished steps of the latest plan" — verified: unit test
+- [x] A session stored before this slice (no `plan_updated`, state without the context message) opens and continues; no context message is added to a session already past step 0 — **Test**: `test/session/engine.test.ts` › "a session from before this slice resumes unchanged" — verified: API test
+- [x] A repo with no `AGENTS.md` and no `package.json` gets a context message with the top-level entries only; an `AGENTS.md` over 8 KB is cut with the elision marker — **Test**: `test/core/repo-context.test.ts` › "missing files are skipped and a long AGENTS.md is capped" — verified: unit test
+- [x] The sandbox fails while the context is read: the run ends as `failed` like any setup failure, with no half-written message — **Test**: `test/session/engine.test.ts` › "a sandbox lost while reading the repo context fails the session" — verified: API test
+- [x] `read_file` with `offset` past the end, `offset: 0`, a negative or non-integer `limit` → `invalid arguments`; a single line longer than the cap is cut with the elision marker — **Test**: `test/core/tools.test.ts` › "read_file rejects bad ranges and cuts an over-long line" — verified: unit test
+- [x] A Review session's layout has no plan card — **Runtime check**: open a review session in the browser after the build — verified: browser: a review of PR #14 on wrangler dev shows 0 Plan regions
+- [x] The engine has no `state.mode === "review"` on a finish path (`decide`, `postReview`, the message refusal) — **Runtime check**: `grep -n 'mode === "review"' src/session/engine.ts` shows only `editFinding` — verified: grep shows only `editFinding` (written as `!==`)
+- [x] A session stored before this slice has no turn counters: its next turn starts from zero and is limited like a new one — **Test**: `test/session/store.test.ts` › "a store without turn counters loads as a fresh turn" — verified: unit test
+- [x] A message queued while the agent runs (a redirect) does not start a new turn — **Test**: `test/session/engine.test.ts` › "a redirect keeps the running turn's cost" — verified: API test
+- [x] The whole flow on `wrangler dev` with the fake model: Code run with a plan, Approve, follow-up message, second Approve; Review run to Post — **Runtime check**: `pnpm e2e` plus a manual pass in the browser — verified: `pnpm e2e` 23/23, plus a headless browser pass with screenshots; no console or network errors
 
 Not applicable: auth (none in &run); new storage or migrations (none); GitHub API changes (none); rate limits (no new route).
 
@@ -188,24 +188,32 @@ Not applicable: auth (none in &run); new storage or migrations (none); GitHub AP
 - [x] Code mode runs commands without asking — yes (Henry, 2026-10-04): HI-j, S16.
 - [x] Budget — no session budget; a ¥50 safety limit per turn; cost shown, red above ¥10 (Henry, 2026-10-04): HI-h, HI-k.
 - [ ] Plan card position (HI-c): top of the right panel. Decide by: Henry at QA.
-- [ ] Assumption: HI-f changes what `read_file` returns for files over 8 KB (start plus note instead of head plus tail). Existing tests that assert the old shape are updated. Decide by: during build.
-- [ ] Assumption: existing tests that rely on a command gate in Code mode (`test/core/agent.test.ts` S3, `test/core/modes.test.ts`, `e2e/gates.spec.ts`) move to a patch that deletes a file or to an injected policy. Decide by: during build.
+- [x] Assumption: HI-f changes what `read_file` returns for files over 8 KB (start plus note instead of head plus tail). Existing tests that assert the old shape are updated. Decide by: during build.
+- [x] Assumption: existing tests that rely on a command gate in Code mode (`test/core/agent.test.ts` S3, `test/core/modes.test.ts`, `e2e/gates.spec.ts`) move to a patch that deletes a file or to an injected policy. Decide by: during build.
 - [ ] After the build: one real-model eval run (11 cases × 1, deepseek-v4-flash, a few yen) to see whether the new prompt holds on the old cases. Decide by: Henry, before it is run.
 
 ## Build Progress
 | # | Unit | Proves | Status |
 |---|---|---|---|
-| 0 | Acceptance tests, fake-model scripts, eval cases and fixtures (commander) | all | 🔨 in progress |
-| 1 | Core: `update_plan` tool and `plan_updated` event | S1, S2, S3, S4; edge: two in progress | ⏳ pending |
-| 2 | Core: `read_file` ranges | S10; edge: bad ranges, over-long line | ⏳ pending |
-| 3 | Core: Code mode allows every command | S16 (unit) | ⏳ pending |
-| 4 | Turn cost limit: config, loop, store counters, engine new turn, `/config` | S12, S13, S15 (API); edges: old store, redirect | ⏳ pending |
-| 5 | Repo context: `src/core/repo-context.ts`, engine, eval | S8, S9; edges: old session, missing files, sandbox lost | ⏳ pending |
-| 6 | Engine: finish handling dispatched by `onFinish` | S7; runtime check: grep | ⏳ pending |
-| 7 | Prompts (Code, Review) | S11 | ⏳ pending |
-| 8 | Eval runner: `expect_changes`, `expect_no_findings` | S14 | ⏳ pending |
-| 9 | Web: plan card, gate note, header cost, composer | S5, S6, S15 (web, E2E), S16 (E2E); edges: empty plan, gate note | ⏳ pending |
-| 10 | Docs: `limits.md`, ADR amendments (commander) | Scope | ⏳ pending |
-| 11 | Runtime verification: `pnpm e2e`, browser pass, edge cases | all | ⏳ pending |
+| 0 | Acceptance tests, fake-model scripts, eval cases and fixtures (commander) | all | ✅ done |
+| 1 | Core: `update_plan` tool and `plan_updated` event | S1, S2, S3, S4; edge: two in progress | ✅ done |
+| 2 | Core: `read_file` ranges | S10; edge: bad ranges, over-long line | ✅ done |
+| 3 | Core: Code mode allows every command | S16 (unit) | ✅ done |
+| 4 | Turn cost limit: config, loop, store counters, engine new turn, `/config` | S12, S13, S15 (API); edges: old store, redirect | ✅ done |
+| 5 | Repo context: `src/core/repo-context.ts`, engine, eval | S8, S9; edges: old session, missing files, sandbox lost | ✅ done |
+| 6 | Engine: finish handling dispatched by `onFinish` | S7; runtime check: grep | ✅ done |
+| 7 | Prompts (Code, Review) | S11 | ✅ done |
+| 8 | Eval runner: `expect_changes`, `expect_no_findings` | S14 | ✅ done |
+| 9 | Web: plan card, gate note, header cost, composer | S5, S6, S15 (web, E2E), S16 (E2E); edges: empty plan, gate note | ✅ done |
+| 10 | Docs: `limits.md`, ADR amendments (commander) | Scope | ✅ done |
+| 11 | Runtime verification: `pnpm e2e`, browser pass, edge cases | all | ✅ done |
 
 Contracts fixed by the tests (so units agree): `PlanStep` and `plan_updated` in `src/core/events.ts`; `ToolResult.plan`; `AgentState.turnCost` / `turnTokens`; `AgentConfig.maxSteps?`, `maxTurnCost`, `maxTurnTokens`, `costNotice`; `REPO_CONTEXT_HEADER` and `buildRepoContext(sandbox, { agentsMd })` in `src/core/repo-context.ts`; `SessionView.plan`; `planNote(plan)` in `web/src/state/format.ts`; the `read_file` note `[lines A-B of N shown; continue with offset B+1]`.
+
+Build notes (2026-10-04):
+- Units 1–3, 4–5, 6–8 and 9 were built by the implementer (four runs); the commander wrote the tests, the eval cases and fixtures, the fake-model scripts and the docs, and made three small fixes itself (below).
+- Test fixes, with reasons: `engine.test.ts` "added once" checked transcript validity at a gate, where the pending `finish` call is open by design (assertion removed); `e2e/gates.spec.ts` matched "Apply" and "Don't apply" with one selector (now exact).
+- Added after the automated security review of the commits: repo names and commands in the context message stay on one line and are capped (200 chars, 30 scripts), and a review's context says it is the pull request's text; the turn limit is also checked before a model call (a turn over its limit at a gate gets no further call) and counts the request's estimated size when a provider reports no usage. Each has a test. `limits.md` L11 records that Code mode commands run without asking.
+- Differences from the text above: the header cost keeps the existing format (`¥3.00`, not `¥3`); the fake model's `[ask]` writes `scratch.txt` and then deletes it with a patch; a `[costly]` marker was added for S15.
+- Not verified in a browser: the composer after `budget_exceeded` (it needs about ¥50 of fake usage in one turn); covered by the engine API test and the reducer test.
+- Seen during the browser pass, for QA: a follow-up turn that makes no new plan still shows the first turn's plan and its gate note; the in-progress step keeps its spinner while the session waits at a gate.

@@ -22,7 +22,7 @@ test("a patch that deletes a file can be refused or applied", async ({ page, req
   const allowed = await createSession(request, "[ask] clean up");
   await page.goto(`/s/${allowed}`);
   await expect(s.approval).toContainText("Approval required · apply_patch", { timeout: 60_000 });
-  await s.approval.getByRole("button", { name: "Apply" }).click();
+  await s.approval.getByRole("button", { name: "Apply", exact: true }).click();
   await expect(s.approval).toContainText("Approval required · finish", { timeout: 90_000 });
   await expect(s.rows("apply_patch").first()).not.toContainText("declined");
   await expect(s.timeline.getByText("patch failed to apply")).toHaveCount(0);
