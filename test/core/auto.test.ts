@@ -19,8 +19,9 @@ describe("auto mode: sorting a turn", () => {
   });
 
   it("is daily when the answer is unclear, empty, or the call fails; a long task is cut", async () => {
-    const model = new ScriptedModelClient([{ text: "maybe" }, {}, new Error("down"), { text: "daily" }]);
+    const model = new ScriptedModelClient([{ text: "maybe" }, { text: "daily (not complex)" }, {}, new Error("down"), { text: "daily" }]);
     expect(await classifyTask(model, "a")).toBe("daily");
+    expect(await classifyTask(model, "a2")).toBe("daily");
     expect(await classifyTask(model, "b")).toBe("daily");
     expect(await classifyTask(model, "c")).toBe("daily");
     await classifyTask(model, "x".repeat(10_000));

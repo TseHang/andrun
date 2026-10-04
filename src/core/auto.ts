@@ -25,7 +25,7 @@ export async function classifyTask(model: ModelClient, task: string, signal?: Ab
       tools: [],
       ...(signal && { signal }),
     });
-    return /complex/i.test(res.content ?? "") ? "complex" : "daily";
+    return /^\W*complex\b/i.test(res.content ?? "") ? "complex" : "daily";
   } catch {
     return "daily";
   }

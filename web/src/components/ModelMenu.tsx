@@ -85,7 +85,11 @@ export function ModelMenu({ models, autoModel, current, onPick }: Props) {
             role="option"
             aria-selected={auto}
             title="Picks the model and reasoning for each message"
-            onClick={() => onPick({ model: autoModel })}
+            onClick={() => {
+              onPick({ model: autoModel });
+              setOpen(false);
+              button.current?.focus();
+            }}
             className="flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2 text-left hover:bg-black/6"
           >
             <span className="flex size-3 shrink-0">{auto && CHECK}</span>

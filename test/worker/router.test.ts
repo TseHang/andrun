@@ -291,8 +291,8 @@ describe("router (Phase 3: P3-c, P3-d)", () => {
     await expectError(await post(f.env, { mode: "code", task: "t", model: "" }), 400, /model/);
     await expectError(await post(f.env, { mode: "code", task: "t", model: "deepseek-ai/deepseek-v4-pro" }), 400, /model/); // no longer offered
     await expectError(await post(f.env, { mode: "code", task: "t", model: "zai-org/glm-5.3-flash", reasoning: "none" }), 400, /reasoning must be one of: low, high, max/);
-    await expectError(await post(f.env, { mode: "code", task: "t", model: "auto", reasoning: "high" }), 400, /reasoning/);
-    await expectError(await post(f.env, { mode: "code", task: "t", reasoning: "high" }), 400, /reasoning/);
+    await expectError(await post(f.env, { mode: "code", task: "t", model: "auto", reasoning: "high" }), 400, /auto picks the reasoning itself/);
+    await expectError(await post(f.env, { mode: "code", task: "t", reasoning: "high" }), 400, /reasoning needs a model/);
     expect(f.created).toHaveLength(n);
   });
 

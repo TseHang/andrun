@@ -206,6 +206,7 @@ export class SessionStore {
     let stored = event;
     if (event.type === "file_changed" && event.diff.length > MAX_DIFF_CHARS) stored = { ...event, diff: elide(event.diff) };
     if (event.type === "tool_output" && event.chunk.length > MAX_DIFF_CHARS) stored = { ...event, chunk: elide(event.chunk) };
+    if (event.type === "reasoning" && event.text.length > MAX_DIFF_CHARS) stored = { ...event, text: elide(event.text) };
     this.sql.exec("INSERT OR REPLACE INTO events (seq, json) VALUES (?, ?)", event.seq, JSON.stringify(stored));
   }
 

@@ -590,8 +590,11 @@ export class SessionEngine {
         const kind = await classifyTask(deps.model, users.at(-1)?.content ?? "", controller.signal);
         if (this.deleted) return;
         route = routeFor(kind);
-        this.emitFor(state, { type: "model_routed", task: kind, ...route });
-        store.saveState(state, this.now());
+        // A stop during the classifier call: the run below ends at once, and no route is recorded for a turn that never ran.
+        if (!controller.signal.aborted) {
+          this.emitFor(state, { type: "model_routed", task: kind, ...route });
+          store.saveState(state, this.now());
+        }
       }
       profile = { ...base, ...route };
     }

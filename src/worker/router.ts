@@ -52,7 +52,7 @@ async function createSession(request: Request, env: RouterEnv): Promise<Response
   }
   // Auto picks the effort itself; a model without one given runs on its first (cheapest) effort.
   if (reasoning !== undefined && (typeof reasoning !== "string" || !choice?.efforts.includes(reasoning))) {
-    return error(400, choice ? `reasoning must be one of: ${choice.efforts.join(", ")}` : "reasoning needs a model that is not auto");
+    return error(400, choice ? `reasoning must be one of: ${choice.efforts.join(", ")}` : model === AUTO_MODEL ? "auto picks the reasoning itself" : "reasoning needs a model");
   }
   const effort = choice ? ((reasoning as string | undefined) ?? choice.efforts[0]) : undefined;
 

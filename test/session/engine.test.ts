@@ -1569,6 +1569,23 @@ describe("Session UI: stop (UI-a, UI-b) and saved file content (UI-c)", () => {
     return { ...w, model, engine, replies, tookMs: Date.now() - started };
   }
 
+  it("stop while auto is sorting the turn records no route, and the next message is sorted again", async () => {
+    const w = world();
+    const model = new StoppableModel([], [{ text: "complex" }, { text: "On it." }]);
+    const engine = w.engine(model);
+    engine.create({ id: ID, mode: "code", task: TASK, model: "auto" });
+    await until(() => model.waiting);
+
+    expect(await send(engine, { type: "stop" })).toEqual([]);
+    expect(ofType(w.events(), "model_routed")).toEqual([]);
+    expect(engine.snapshot()).toMatchObject({ status: "awaiting_input" });
+
+    await send(engine, { type: "message", text: "Refactor it." });
+    await engine.idle();
+    expect(ofType(w.events(), "model_routed")).toEqual([expect.objectContaining({ task: "complex", model: "deepseek-ai/deepseek-v4.1-flash" })]);
+    expect(model.requests.at(-1)).toMatchObject({ model: "deepseek-ai/deepseek-v4.1-flash", reasoning: "high" });
+  });
+
   it("stop during a model call ends the turn at awaiting_input and keeps the changes", async () => {
     const w = world();
     const model = new StoppableModel([call("write_file", { path: "notes.txt", content: "hi\n" })]);
