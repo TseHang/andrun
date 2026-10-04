@@ -105,6 +105,7 @@ export interface PullFile {
 export interface PullDetail {
   number: number;
   title: string;
+  body: string;
   author: string;
   headRef: string;
   baseRef: string;
@@ -126,6 +127,13 @@ export async function getPull(n: number): Promise<PullDetail | "not_found"> {
   if (res.status === 429) throw new Error("Too many requests. Try again in 60 seconds.");
   const body = (await res.json().catch(() => null)) as { error?: string } | null;
   throw new Error(body?.error ?? "Could not load the pull request.");
+}
+
+/** A file at a pull request's head, null when there is none. */
+export async function getPullFile(n: number, path: string): Promise<string | null> {
+  const res = await fetch(`/pulls/${n}/files?path=${encodeURIComponent(path)}`);
+  if (!res.ok) return null;
+  return ((await res.json()) as { path: string; content: string }).content;
 }
 
 /** A changed file's saved content, null when there is none; throws on other failures. */

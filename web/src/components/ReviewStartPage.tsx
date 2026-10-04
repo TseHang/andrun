@@ -43,7 +43,7 @@ export function ReviewStartPage({ number }: { number: number }) {
       <Centered>
         <div className="text-[15px] font-semibold">Pull request not found.</div>
         <a href="/prs" className="text-accent-text">
-          Back to Pull requests
+          Back to Review PRs
         </a>
       </Centered>
     );

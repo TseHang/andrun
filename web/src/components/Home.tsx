@@ -54,9 +54,6 @@ export function Home({ sessions }: { sessions: SessionSummary[] }) {
               <button type="button" aria-pressed="true" className="h-7 cursor-pointer rounded-[7px] bg-white px-3.5 font-semibold shadow-[0_1px_2px_rgba(0,0,0,0.14),0_0_0_0.5px_rgba(0,0,0,0.04)]">
                 Code
               </button>
-              <a href="/prs" className="flex h-7 items-center rounded-[7px] px-3.5">
-                Review
-              </a>
               <button type="button" aria-pressed="false" disabled title="Not available yet" className="h-7 rounded-[7px] px-3.5 text-text-tertiary">
                 Task
               </button>
@@ -93,6 +90,7 @@ export function Home({ sessions }: { sessions: SessionSummary[] }) {
             <a key={s.id} href={`/s/${s.id}`} className="flex h-11 items-center gap-3 border-t border-black/8 px-1">
               {s.status === "running" ? <Spinner size={8} /> : <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${DOT[s.status]}`} />}
               <span className="min-w-0 grow truncate text-sm">{s.title}</span>
+              {s.mode === "review" && <span data-tag="review" className="rounded-full bg-fill px-1.5 text-[11px] text-text-secondary">Review</span>}
               <span className={`text-xs ${s.status === "awaiting_approval" || s.status === "awaiting_input" ? "text-accent-text" : s.status === "failed" || s.status === "budget_exceeded" ? "text-failed" : "text-text-secondary"}`}>{STATUS_TEXT[s.status]}</span>
               <span className="w-8 text-right text-xs text-text-tertiary">{relativeTime(s.updated_at, Date.now())}</span>
             </a>

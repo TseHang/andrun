@@ -111,6 +111,20 @@ async function getPull(request: Request, env: RouterEnv, n: string): Promise<Res
   }
 }
 
+async function getPullFile(request: Request, env: RouterEnv, n: string): Promise<Response> {
+  if (!/^[1-9]\d{0,14}$/.test(n)) return notFound();
+  const refused = await limited(env.githubReadLimiter, request);
+  if (refused) return refused;
+  const path = new URL(request.url).searchParams.get("path");
+  if (!path) return error(404, "no such file");
+  try {
+    const content = await env.github.getPullFile(Number(n), path);
+    return content === null ? error(404, "no such file") : json({ path, content });
+  } catch (err) {
+    return githubFailure(err);
+  }
+}
+
 function config(env: RouterEnv): Response {
   return json({
     repo: env.repo.name,
@@ -131,8 +145,8 @@ async function route(request: Request, env: RouterEnv): Promise<Response> {
   const method = request.method;
   if (parts[0] === "" && parts[1] === "config" && parts.length === 2) return method === "GET" ? config(env) : notFound();
   if (parts[0] === "" && parts[1] === "pulls") {
-    if (parts.length > 3) return notFound();
-    if (method !== "GET") return notFound();
+    if (parts.length > 4 || method !== "GET") return notFound();
+    if (parts.length === 4) return parts[3] === "files" ? getPullFile(request, env, parts[2]!) : notFound();
     return parts.length === 2 ? listPulls(request, env) : getPull(request, env, parts[2]!);
   }
   if (parts[0] !== "" || parts[1] !== "sessions") return notFound();

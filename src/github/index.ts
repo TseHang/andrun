@@ -5,7 +5,7 @@
 import { createAppAuth } from "./app-auth";
 import { GitHubError, createRequest } from "./client";
 import { publish, type PublishInput, type PublishResult } from "./publish";
-import { defaultBranchHead, getPull, listPulls, type PullDetail, type PullSummary } from "./pulls";
+import { defaultBranchHead, getPull, getPullFile, listPulls, type PullDetail, type PullSummary } from "./pulls";
 import { postReview, type ReviewInput } from "./review";
 
 export { GitHubError } from "./client";
@@ -31,6 +31,7 @@ export interface GitHub {
   publish(input: PublishInput): Promise<PublishResult>;
   listPulls(): Promise<PullSummary[]>;
   getPull(n: number): Promise<PullDetail>;
+  getPullFile(n: number, path: string): Promise<string | null>;
   postReview(input: ReviewInput): Promise<{ url: string }>;
 }
 
@@ -56,6 +57,7 @@ export function createGitHub(config: GitHubConfig): GitHub {
     publish: async (input) => publish(request, repo, await auth.token(), await auth.botLogin(), input),
     listPulls: async () => listPulls(request, repo, await auth.token(), await auth.botLogin()),
     getPull: async (n) => getPull(request, repo, await auth.token(), n),
+    getPullFile: async (n, path) => getPullFile(request, repo, await auth.token(), n, path),
     postReview: async (input) => postReview(request, repo, await userToken(), input),
   };
 }

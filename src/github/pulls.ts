@@ -1,6 +1,6 @@
 // Reading pull requests and the default branch, with the App's installation token.
 
-import type { Request } from "./client";
+import { GitHubError, type Request } from "./client";
 
 export interface PullSummary {
   number: number;
@@ -24,6 +24,7 @@ export interface PullFile {
 export interface PullDetail {
   number: number;
   title: string;
+  body: string;
   author: string;
   headRef: string;
   baseRef: string;
@@ -40,6 +41,7 @@ export interface PullDetail {
 interface RawPull {
   number: number;
   title: string;
+  body: string | null;
   state: string;
   html_url: string;
   updated_at: string;
@@ -78,6 +80,7 @@ export async function getPull(request: Request, repo: string, token: string, n: 
   return {
     number: p.number,
     title: p.title,
+    body: p.body ?? "",
     author: p.user.login,
     headRef: p.head.ref,
     baseRef: p.base.ref,
@@ -90,6 +93,24 @@ export async function getPull(request: Request, repo: string, token: string, n: 
     changedFiles: p.changed_files,
     files: files.map((f) => ({ path: f.filename, status: f.status, additions: f.additions, deletions: f.deletions, patch: f.patch ?? null })),
   };
+}
+
+/** A file's content at the pull request's head, null when it is not a readable file or the pull request is a fork. */
+export async function getPullFile(request: Request, repo: string, token: string, n: number, path: string): Promise<string | null> {
+  const p = (await request("GET", `/repos/${repo}/pulls/${n}`, token)) as RawPull;
+  if (p.head.repo?.full_name.toLowerCase() !== repo.toLowerCase()) return null;
+  const encoded = path.split("/").map(encodeURIComponent).join("/");
+  let raw: unknown;
+  try {
+    raw = await request("GET", `/repos/${repo}/contents/${encoded}?ref=${p.head.sha}`, token);
+  } catch (err) {
+    if (err instanceof GitHubError && err.status === 404) return null;
+    throw err;
+  }
+  const file = raw as { type?: string; encoding?: string; content?: string } | null;
+  if (!file || Array.isArray(file) || file.type !== "file" || file.encoding !== "base64" || !file.content) return null;
+  const bin = atob(file.content.replace(/\s/g, ""));
+  return new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
 }
 
 export async function defaultBranchHead(request: Request, repo: string, token: string): Promise<{ branch: string; sha: string }> {

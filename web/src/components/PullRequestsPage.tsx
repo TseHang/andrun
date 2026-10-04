@@ -12,7 +12,7 @@ const EMPTY: Record<Tab, string> = {
   "My PRs": "&run has not opened a pull request yet.",
 };
 
-const PILL = "flex h-[30px] w-[116px] shrink-0 items-center justify-center rounded-full font-semibold";
+const PILL = "flex h-[30px] w-[140px] shrink-0 items-center justify-center rounded-full font-semibold";
 
 function reviewState(status: Status | undefined): { text: string; className: string } {
   switch (status) {
@@ -60,7 +60,7 @@ function Row({ pull }: { pull: PullRow }) {
       )}
       {!reviewSession && (
         <a href={`/prs/${pull.number}`} className={`${PILL} bg-accent text-white`}>
-          Start review
+          Review with &run
         </a>
       )}
     </div>
@@ -76,7 +76,7 @@ export function PullRequestsPage({ pulls, error }: { pulls: PullRow[] | null; er
       <div className="flex w-[860px] flex-col gap-5">
         <div className="flex items-end gap-4">
           <div className="flex flex-col gap-0.5">
-            <h1 className="m-0 text-[28px] font-bold leading-[1.15] tracking-[-0.022em]">Pull requests</h1>
+            <h1 className="m-0 text-[28px] font-bold leading-[1.15] tracking-[-0.022em]">Review PRs</h1>
             <span className="text-text-secondary">{config.repo}, live from GitHub</span>
           </div>
           <span className="grow" />

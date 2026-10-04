@@ -32,14 +32,14 @@ export function Sidebar({ sessions, stale, path, live, pullCount }: Props) {
       </div>
       <div className="flex flex-col gap-px">
         <a href="/" aria-current={path === "/" ? "page" : undefined} className={`flex h-8 items-center rounded-lg px-2.5 font-medium ${path === "/" ? "bg-black/6" : ""}`}>
-          Sessions
+          Code
         </a>
         <a
           href="/prs"
           aria-current={onPrs ? "page" : undefined}
           className={`flex h-8 items-center justify-between rounded-lg px-2.5 font-medium ${onPrs ? "bg-black/6" : ""}`}
         >
-          <span>Pull requests</span>
+          <span>Review PRs</span>
           {pullCount !== null && <span className="text-text-secondary">{pullCount}</span>}
         </a>
       </div>
@@ -56,7 +56,10 @@ export function Sidebar({ sessions, stale, path, live, pullCount }: Props) {
               className={`flex flex-col gap-px rounded-lg px-2.5 py-1.5 ${openId === s.id ? "bg-black/6" : ""}`}
             >
               <span className="truncate font-medium">{s.title}</span>
-              <StatusLabel status={status} className={`text-[11px] ${LIST_COLOR(status)}`} />
+              <span className="flex items-center gap-1.5">
+                <StatusLabel status={status} className={`text-[11px] ${LIST_COLOR(status)}`} />
+                {s.mode === "review" && <span data-tag="review" className="rounded-full bg-fill px-1.5 text-[11px] text-text-secondary">Review</span>}
+              </span>
             </a>
           );
         })}
