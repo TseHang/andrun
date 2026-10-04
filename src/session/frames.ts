@@ -27,6 +27,8 @@ export function parseClientFrame(raw: string | ArrayBuffer): ParsedFrame {
       if (typeof f.text !== "string" || f.text.trim() === "") return bad("message needs text");
       if (f.text.length > MAX_TASK_CHARS) return bad(`message is longer than ${MAX_TASK_CHARS} characters`);
       return { ok: true, frame: { type: "message", text: f.text } };
+    case "stop":
+      return { ok: true, frame: { type: "stop" } };
     case "finding": {
       if (!nonEmpty(f.id)) return bad("finding needs an id");
       if (f.text === undefined && f.dismissed === undefined) return bad("finding needs text or dismissed");

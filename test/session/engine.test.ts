@@ -1452,3 +1452,248 @@ describe("Conversational flow: the session waits for the user (CF-a, CF-d, CF-e)
     }
   });
 });
+
+describe("Session UI: stop (UI-a, UI-b) and saved file content (UI-c)", () => {
+  /** Plays `before`, then one call that only ends when the request is aborted (like the real client), then `after`. */
+  class StoppableModel implements ModelClient {
+    waiting = false;
+    private calls = 0;
+    private readonly inner: ScriptedModelClient;
+    constructor(
+      private readonly before: ScriptStep[],
+      after: ScriptStep[] = [],
+    ) {
+      this.inner = new ScriptedModelClient([...before, ...after]);
+    }
+    get requests(): ModelRequest[] {
+      return this.inner.requests;
+    }
+    complete(req: ModelRequest, onDelta?: (text: string) => void): Promise<ModelResponse> {
+      if (this.calls++ !== this.before.length) return this.inner.complete(req, onDelta);
+      this.waiting = true;
+      return new Promise((_, reject) => {
+        req.signal?.addEventListener("abort", () => {
+          this.waiting = false;
+          reject(new Error("The operation was aborted"));
+        });
+      });
+    }
+  }
+
+  const SLOW = () =>
+    fixtureTarball(FIXTURE, {
+      "package.json": JSON.stringify({ name: "slow", private: true, type: "module", scripts: { test: "sleep 10" } }),
+    });
+
+  /** A run stopped while its command was running, with a write_file queued behind it in the same model turn. */
+  async function stoppedMidTurn(after: ScriptStep[] = []) {
+    const w = world({ tarball: SLOW() });
+    const model = new ScriptedModelClient([
+      { calls: [{ name: "run_command", args: { command: "npm test" } }, { name: "write_file", args: { path: "late.txt", content: "late\n" } }] },
+      ...after,
+    ]);
+    const engine = w.engine(model);
+    engine.create({ id: ID, mode: "code", task: TASK });
+    await until(() => w.frames.some((f) => f.type === "tool_call" && f.name === "run_command"));
+    await new Promise((r) => setTimeout(r, 300)); // the command is running
+    const started = Date.now();
+    const replies = await send(engine, { type: "stop" });
+    return { ...w, model, engine, replies, tookMs: Date.now() - started };
+  }
+
+  it("stop during a model call ends the turn at awaiting_input and keeps the changes", async () => {
+    const w = world();
+    const model = new StoppableModel([call("write_file", { path: "notes.txt", content: "hi\n" })]);
+    const engine = w.engine(model);
+    engine.create({ id: ID, mode: "code", task: TASK });
+    await until(() => model.waiting);
+
+    expect(await send(engine, { type: "stop" })).toEqual([]);
+
+    const events = w.events();
+    expect(types(events).slice(-2)).toEqual(["stopped", "status"]);
+    expect(statuses(events)).toEqual(["running", "awaiting_input"]);
+    expect(ofType(events, "error")).toEqual([]);
+    expect(engine.snapshot()).toMatchObject({ status: "awaiting_input", pending: null, sandboxRunning: true });
+    expect(w.upserts.at(-1)).toMatchObject({ id: ID, status: "awaiting_input" });
+    expect(w.alarms.at(-1)).toBeNull();
+    expect(w.container.destroyed).toBe(0);
+    expect(w.store().changes().map((c) => c.path)).toEqual(["notes.txt"]);
+    // The cut-off call added nothing: the transcript ends with the last finished tool call.
+    const { messages } = w.store().loadState()!;
+    expect(messages.at(-1)!.role).toBe("tool");
+    expectValidTranscript(messages);
+    expectIncreasingSeq(events);
+    // A fresh engine (the Durable Object was evicted) is still waiting.
+    expect(w.engine(model).snapshot()!.status).toBe("awaiting_input");
+  });
+
+  it("stop aborts the running command and answers the calls that did not start", async () => {
+    const w = await stoppedMidTurn();
+    expect(w.replies).toEqual([]);
+    expect(w.tookMs).toBeLessThan(8000); // the command (sleep 10) did not run to its end
+
+    const events = w.events();
+    const command = ofType(events, "tool_call").find((e) => e.name === "run_command")!;
+    const result = ofType(events, "tool_output").find((e) => e.callId === command.callId && e.stream === "result")!;
+    expect(result.exitCode).toBeNull();
+    expect(existsSync(join(w.container.workdir, "late.txt"))).toBe(false);
+    expect(w.store().changes()).toEqual([]);
+
+    const { messages } = w.store().loadState()!;
+    const results = messages.filter((m) => m.role === "tool");
+    expect(results).toHaveLength(2);
+    expect(results[1]!.content).toContain("stopped by the user");
+    // The cut-off command is reported as stopped, to the user and to the model, not as a timeout.
+    expect(results[0]!.content).toContain("stopped by the user");
+    expect(JSON.stringify(events)).not.toContain("timed out");
+    expectValidTranscript(messages);
+    expect(types(events).slice(-2)).toEqual(["stopped", "status"]);
+    expect(ofType(events, "stopped")).toHaveLength(1);
+    expect(ofType(events, "error").filter((e) => e.source !== "tool")).toEqual([]);
+    expect(w.engine.snapshot()).toMatchObject({ status: "awaiting_input", pending: null, sandboxRunning: true });
+    expect(w.model.requests).toHaveLength(1);
+  });
+
+  it("a message after a stop starts a new turn on a valid transcript", async () => {
+    const w = await stoppedMidTurn([call("finish", { summary: "Rewrote sum() with reduce." })]);
+    expect(await send(w.engine, { type: "message", text: "use reduce instead" })).toEqual([]);
+
+    const sent = w.model.requests[1]!.messages;
+    expect(sent.at(-1)).toEqual({ role: "user", content: "use reduce instead" });
+    expectValidTranscript(sent);
+    expect(statuses(w.events())).toEqual(["running", "awaiting_input", "running", "awaiting_approval"]);
+    expect(w.engine.snapshot()).toMatchObject({ status: "awaiting_approval", pending: { tool: "finish" } });
+  });
+
+  it("stop is refused when the agent is not running", async () => {
+    const REFUSED = [{ type: "rejected", reason: "The agent is not running." }];
+
+    // Waiting for the user.
+    const waiting = world();
+    const chat = waiting.engine(new ScriptedModelClient([{ text: "Which one?" }]));
+    chat.create({ id: ID, mode: "code", task: TASK });
+    await chat.idle();
+    let before = waiting.events().length;
+    expect(await send(chat, { type: "stop" })).toEqual(REFUSED);
+    expect(waiting.events()).toHaveLength(before);
+    expect(chat.snapshot()!.status).toBe("awaiting_input");
+
+    // At the approval gate, then done.
+    const gate = await atGate();
+    before = gate.events().length;
+    expect(await send(gate.engine, { type: "stop" })).toEqual(REFUSED);
+    expect(gate.events()).toHaveLength(before);
+    expect(gate.engine.snapshot()!.status).toBe("awaiting_approval");
+    await send(gate.engine, { type: "approve", approvalId: gate.approvalId });
+    expect(gate.engine.snapshot()!.status).toBe("done");
+    before = gate.events().length;
+    expect(await send(gate.engine, { type: "stop" })).toEqual(REFUSED);
+    expect(gate.events()).toHaveLength(before);
+
+    // A second stop while the first is taking effect.
+    const w = world();
+    const model = new StoppableModel([call("list_files", {})]);
+    const engine = w.engine(model);
+    engine.create({ id: ID, mode: "code", task: TASK });
+    await until(() => model.waiting);
+    const first: ServerFrame[] = [];
+    const second: ServerFrame[] = [];
+    engine.handleFrame(JSON.stringify({ type: "stop" }), (r) => first.push(r));
+    engine.handleFrame(JSON.stringify({ type: "stop" }), (r) => second.push(r));
+    await engine.idle();
+    expect(first).toEqual([]);
+    expect(second).toEqual(REFUSED);
+    expect(ofType(w.events(), "stopped")).toHaveLength(1);
+  });
+
+  it("a message queued before a stop starts the next turn", async () => {
+    const w = world();
+    const model = new StoppableModel([call("list_files", {})], [{ text: "Doing that instead." }]);
+    const engine = w.engine(model);
+    engine.create({ id: ID, mode: "code", task: TASK });
+    await until(() => model.waiting);
+
+    engine.handleFrame(JSON.stringify({ type: "message", text: "do the other thing" }), () => {});
+    expect(await send(engine, { type: "stop" })).toEqual([]);
+
+    const events = w.events();
+    expect(ofType(events, "stopped")).toHaveLength(1);
+    expect(statuses(events)).toEqual(["running", "awaiting_input", "running", "awaiting_input"]);
+    expect(ofType(events, "message").filter((e) => e.role === "user").map((e) => e.text)).toEqual([TASK, "do the other thing"]);
+    const stoppedAt = events.findIndex((e) => e.type === "stopped");
+    expect(events.findIndex((e) => e.type === "message" && e.role === "user" && e.text === "do the other thing")).toBeGreaterThan(stoppedAt);
+    expectValidTranscript(w.store().loadState()!.messages);
+  });
+
+  it("a stop that arrives while an approved finish is being published does not undo it", async () => {
+    const w = await atGate();
+    let publishing = false;
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    const engine = w.makeEngine(w.model, {
+      github: {
+        publish: async (input) => {
+          publishing = true;
+          await held;
+          return { number: 1, url: "https://github.com/TseHang/andrun-demo/pull/1", branch: `${input.branchPrefix}-1`, round: 1, updated: false };
+        },
+        postReview: async () => ({ url: "" }),
+        defaultBranchHead: async () => ({ branch: "main", sha: REPO.sha }),
+      },
+    });
+    engine.handleFrame(JSON.stringify({ type: "approve", approvalId: w.approvalId }), () => {});
+    await until(() => publishing);
+    engine.handleFrame(JSON.stringify({ type: "stop" }), () => {});
+    release();
+    await engine.idle();
+
+    expect(ofType(w.events(), "stopped")).toEqual([]);
+    expect(ofType(w.events(), "pr_opened")).toHaveLength(1);
+    expect(engine.snapshot()!.status).toBe("done");
+  });
+
+  it("fileContent returns saved content and null for deleted, skipped or unchanged paths", async () => {
+    const PAGE = "<!doctype html>\n<h1>Hi</h1>\n";
+    const tarball = fixtureTarball(FIXTURE, { "junk.txt": "junk\n" });
+    const w = world({ tarball });
+    const deletePatch = ["--- a/junk.txt", "+++ /dev/null", "@@ -1 +0,0 @@", "-junk", ""].join("\n");
+    const engine = w.engine(
+      new ScriptedModelClient([
+        call("write_file", { path: "site/index.html", content: PAGE }),
+        call("write_file", { path: "big.txt", content: "x".repeat(1_100_000) }),
+        call("apply_patch", { patch: deletePatch }),
+        call("finish", { summary: "Made a page." }),
+      ]),
+    );
+    expect(await engine.fileContent("site/index.html")).toBeNull(); // no session yet
+    engine.create({ id: ID, mode: "code", task: "make a page" });
+    await engine.idle();
+    await send(engine, { type: "approve", approvalId: engine.snapshot()!.pending!.approvalId }); // deleting a file needs approval
+    expect(engine.snapshot()!.pending!.tool).toBe("finish");
+
+    expect(await engine.fileContent("site/index.html")).toBe(PAGE);
+    for (const path of ["junk.txt", "big.txt", "src/sum.js", "index.html", "../site/index.html", "/site/index.html", ""]) {
+      expect(await engine.fileContent(path), path).toBeNull();
+    }
+    // Saved content does not need the sandbox.
+    await w.container.destroy();
+    expect(await w.engine(new ScriptedModelClient([])).fileContent("site/index.html")).toBe(PAGE);
+
+    await engine.remove();
+    expect(await engine.fileContent("site/index.html")).toBeNull();
+  });
+
+  it("fileContent waits for the save that follows a file event", async () => {
+    const w = world();
+    const PAGE = "<h1>v1</h1>\n";
+    const model = new StoppableModel([call("write_file", { path: "index.html", content: PAGE })]);
+    const engine = w.engine(model);
+    engine.create({ id: ID, mode: "code", task: TASK });
+    // The client asks for the content as soon as the event arrives, before the run pauses.
+    await until(() => w.frames.some((f) => f.type === "file_changed" && f.path === "index.html"));
+    expect(await engine.fileContent("index.html")).toBe(PAGE);
+    await until(() => model.waiting);
+    await send(engine, { type: "stop" });
+  });
+});

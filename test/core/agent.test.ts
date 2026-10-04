@@ -6,7 +6,7 @@ import { defaultConfig, type AgentConfig } from "../../src/core/config";
 import type { AgentEvent } from "../../src/core/events";
 import { getProfile } from "../../src/core/modes";
 import { autoApprove } from "../../src/core/policy";
-import type { AgentDeps, AgentState, Decision, ModelClient, PolicyInput, SandboxAdapter } from "../../src/core/types";
+import { STOP_REASON, type AgentDeps, type AgentState, type Decision, type ModelClient, type PolicyInput, type SandboxAdapter } from "../../src/core/types";
 import { MemorySandbox } from "../support/memory-sandbox";
 import { ScriptedModelClient, call, type ScriptStep } from "../support/scripted-model";
 
@@ -507,6 +507,23 @@ describe("loop edge cases", () => {
     expect(err && err.type === "error" && ["sandbox", "model"]).toContain(err && err.type === "error" && err.source);
     expect(err && err.type === "error" && err.message).toContain("sandbox destroyed");
     expect(events.at(-1)).toMatchObject({ type: "status", status: "failed" });
+  });
+
+  it("a stop ends the turn waiting for the user, not as a failure", async () => {
+    const ctrl = new AbortController();
+    const model = new ScriptedModelClient(Array.from({ length: 5 }, () => call("list_files")));
+    const { events, deps } = harness(model, new MemorySandbox({ "a.js": "" }), {
+      signal: ctrl.signal,
+      checkpoint: () => ctrl.abort(STOP_REASON),
+    });
+    const { outcome, state } = await runAgent(start(), profile, deps);
+    expect(outcome.kind).toBe("awaiting_input");
+    expect(state.status).toBe("awaiting_input");
+    expect(state.pending).toBeNull();
+    expect(model.requests).toHaveLength(1);
+    expect(events.filter((e) => e.type === "error")).toEqual([]);
+    expect(events.slice(-2).map((e) => e.type)).toEqual(["stopped", "status"]);
+    expect(events.at(-1)).toMatchObject({ type: "status", status: "awaiting_input" });
   });
 
   it("a run_command timeout is a visible tool error", async () => {

@@ -23,6 +23,7 @@ export type ClientFrame =
   | { type: "approve"; approvalId: string }
   | { type: "reject"; approvalId: string; comment: string }
   | { type: "message"; text: string }
+  | { type: "stop" }
   | { type: "finding"; id: string; text?: string; dismissed?: boolean }
   | { type: "post_review"; approvalId: string; verdict: ReviewVerdict };
 

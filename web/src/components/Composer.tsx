@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ClientFrame } from "../../../src/session/protocol";
 import { addPending, type SessionView } from "../state/reducer";
 
@@ -8,6 +8,11 @@ const BAR = "pointer-events-auto flex items-center gap-3 rounded-2xl border bord
 
 export function Composer({ view, running, waiting, code, send, update }: { view: SessionView; running: boolean; waiting: boolean; code: boolean; send: (f: ClientFrame) => boolean; update: (fn: (v: SessionView) => SessionView) => void }) {
   const [text, setText] = useState("");
+  // Stop was pressed: it takes effect at the agent's next check, and a second frame would only be refused.
+  const [stopping, setStopping] = useState(false);
+  useEffect(() => {
+    if (!running || view.refused) setStopping(false);
+  }, [running, view.refused]);
   const submit = () => {
     const t = text.trim();
     if (!t) return;
@@ -32,7 +37,7 @@ export function Composer({ view, running, waiting, code, send, update }: { view:
         className="h-9 min-w-0 grow rounded-[10px] bg-black/5 px-3 text-[14px] transition-[background-color,box-shadow] focus:bg-white focus:shadow-[0_0_0_1px_rgba(0,0,0,0.2)]"
       />
       {view.pr?.number !== undefined && !running && <span className="shrink-0 text-xs text-text-tertiary">Adds a commit to pull request #{view.pr.number}</span>}
-      {running && <span className="shrink-0 text-xs text-text-tertiary">Added at the next step</span>}
+      {running && <span className="shrink-0 text-xs text-text-tertiary">The agent reads your message after its current step</span>}
       {view.refused && (
         <span role="alert" className="shrink-0 text-xs text-failed">
           {view.refused}
@@ -45,6 +50,16 @@ export function Composer({ view, running, waiting, code, send, update }: { view:
           className="h-9 shrink-0 cursor-pointer rounded-[10px] bg-black/6 px-4 text-[13px] font-semibold text-text"
         >
           Open pull request
+        </button>
+      )}
+      {running && (
+        <button
+          type="button"
+          disabled={stopping}
+          onClick={() => setStopping(send({ type: "stop" }))}
+          className="h-9 shrink-0 cursor-pointer rounded-[10px] bg-black/6 px-4 text-[13px] font-semibold text-text disabled:cursor-default disabled:text-text-tertiary"
+        >
+          {stopping ? "Stopping" : "Stop"}
         </button>
       )}
       <button type="submit" disabled={!text.trim()} className="h-9 shrink-0 cursor-pointer rounded-[10px] bg-black/6 px-4 text-[13px] font-semibold text-text disabled:cursor-default disabled:bg-black/4 disabled:text-text-tertiary">

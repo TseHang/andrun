@@ -162,6 +162,13 @@ async function route(request: Request, env: RouterEnv): Promise<Response> {
     return notFound();
   }
 
+  if (rest === "files" && method === "GET") {
+    const path = new URL(request.url).searchParams.get("path");
+    if (!path) return error(404, "no such file");
+    const content = await env.session(id).file(path);
+    return content === null ? error(404, "no such file") : json({ path, content });
+  }
+
   if (rest === "ws" && method === "GET") {
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") return error(426, "expected a WebSocket upgrade");
     if (!(await env.session(id).snapshot())) return notFound();

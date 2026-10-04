@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import type { ClientFrame } from "../../../src/session/protocol";
 import { planNote, prTarget } from "../state/format";
 import { markSending, type GateView, type SessionView } from "../state/reducer";
+import { Markdown } from "./Markdown";
 import { Spinner } from "./Spinner";
 import type { SessionInfo } from "./Timeline";
 
@@ -48,7 +49,11 @@ export function ApprovalBar({ view, gate, session, send, update }: { view: Sessi
       </div>
       {gate.command && <div className="mt-2 rounded-lg bg-sidebar px-2.5 py-1.5 font-mono text-xs break-all">{gate.command}</div>}
       {gate.paths && gate.paths.length > 0 && <div className="mt-2 rounded-lg bg-sidebar px-2.5 py-1.5 font-mono text-xs break-all">{gate.paths.join(", ")}</div>}
-      {gate.summary && <div className="mt-2 text-[13px]">{gate.summary}</div>}
+      {gate.summary && (
+        <div data-slot="summary" className="mt-2 max-h-[30vh] overflow-y-auto">
+          <Markdown text={gate.summary} className="text-[13px] leading-normal" />
+        </div>
+      )}
       {note && <div className="mt-2 text-xs text-warning-text">{note}</div>}
       {(view.refused || offline) && (
         <div role="alert" className="mt-2 text-xs text-failed">

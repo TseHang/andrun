@@ -35,6 +35,8 @@ function fakeEnv(over: Partial<RouterEnv> = {}) {
   const touched: string[] = [];
   const indexRemoved: string[] = [];
   const killed: string[] = [];
+  /** Saved file content, the same for every session that exists. */
+  const files = new Map<string, string>();
   const index: SessionSummary[] = [];
   const create = limiter(5);
   const del = limiter(10);
@@ -55,6 +57,7 @@ function fakeEnv(over: Partial<RouterEnv> = {}) {
           killed.push(id);
           return true;
         },
+        file: async (path) => (sessions.has(id) ? (files.get(path) ?? null) : null),
         fetch: async () => new Response("upgraded", { headers: { "x-forwarded-to": id } }),
       };
     },
@@ -75,7 +78,7 @@ function fakeEnv(over: Partial<RouterEnv> = {}) {
     githubReadLimiter: ghRead.binding,
     ...over,
   };
-  return { env, sessions, created, touched, indexRemoved, killed, index, fake, createKeys: create.keys, deleteKeys: del.keys, readKeys: ghRead.keys };
+  return { env, sessions, created, touched, indexRemoved, killed, files, index, fake, createKeys: create.keys, deleteKeys: del.keys, readKeys: ghRead.keys };
 }
 
 const req = (method: string, path: string, opts: { body?: unknown; ip?: string; headers?: Record<string, string> } = {}) =>
@@ -449,5 +452,31 @@ describe("router (Phase 3: P3-c, P3-d)", () => {
       const text = await (await handle(req("GET", path), f.env)).text();
       expect(text).not.toMatch(/ghs_|github_pat_|PRIVATE KEY|installation/i);
     }
+  });
+});
+
+describe("Session UI: saved file content (UI-c, UI-d)", () => {
+  it("reads a changed file's saved content", async () => {
+    const { env, files } = fakeEnv();
+    const { id } = (await json(await post(env, { mode: "code", task: "make a page" }))) as { id: string };
+    files.set("index.html", "<h1>Hi</h1>");
+    files.set("site/my page.html", "<p>x</p>");
+
+    const res = await handle(req("GET", `/sessions/${id}/files?path=index.html`), env);
+    expect(res.status).toBe(200);
+    // JSON, never text/html: agent-written HTML must not be served as a page of this origin.
+    expect(res.headers.get("content-type")).toMatch(/^application\/json/);
+    expect(await json(res)).toEqual({ path: "index.html", content: "<h1>Hi</h1>" });
+
+    const nested = await handle(req("GET", `/sessions/${id}/files?path=${encodeURIComponent("site/my page.html")}`), env);
+    expect(await json(nested)).toEqual({ path: "site/my page.html", content: "<p>x</p>" });
+
+    for (const query of ["?path=old.txt", "?path=README.md", "", "?path=", "?path=../index.html", "?path=/index.html", "?file=index.html"]) {
+      await expectError(await handle(req("GET", `/sessions/${id}/files${query}`), env), 404);
+    }
+    await expectError(await handle(req("GET", `/sessions/${UNKNOWN}/files?path=index.html`), env), 404);
+    await expectError(await handle(req("GET", `/sessions/not-a-uuid/files?path=index.html`), env), 404);
+    await expectError(await handle(req("POST", `/sessions/${id}/files?path=index.html`, { body: {} }), env), 404);
+    await expectError(await handle(req("GET", `/sessions/${id}/files/index.html`), env), 404);
   });
 });

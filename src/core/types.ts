@@ -17,6 +17,9 @@ export type ChatMessage =
   | { role: "assistant"; content: string | null; tool_calls?: ToolCall[] }
   | { role: "tool"; tool_call_id: string; content: string };
 
+/** The abort reason of a stop: the run ends waiting for the user, not as a failure. */
+export const STOP_REASON = "stopped by the user";
+
 export interface ToolSpec {
   name: string;
   description: string;

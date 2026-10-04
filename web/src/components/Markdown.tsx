@@ -1,0 +1,58 @@
+import { createElement } from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
+import remarkGfm from "remark-gfm";
+
+/** An element with these classes; react-markdown's `node` prop is not a DOM attribute. */
+function styled(tag: string, className: string, extra: Record<string, string> = {}) {
+  return ({ node, className: given, ...props }: { node?: unknown; className?: string }) => {
+    void node;
+    // react-markdown's own class (a task list, a code language) is added, not swapped in.
+    return createElement(tag, { ...extra, ...props, className: given ? `${className} ${given}` : className });
+  };
+}
+
+// No rehype-raw: raw HTML in a reply is shown as text. react-markdown's default URL sanitising stays: a javascript: link gets no href.
+const COMPONENTS: Components = {
+  h1: styled("h1", "mt-4 mb-2 text-[18px] font-semibold first:mt-0"),
+  h2: styled("h2", "mt-4 mb-2 text-[17px] font-semibold first:mt-0"),
+  h3: styled("h3", "mt-3 mb-1.5 text-[16px] font-semibold first:mt-0"),
+  h4: styled("h4", "mt-3 mb-1.5 text-[15px] font-semibold first:mt-0"),
+  h5: styled("h5", "mt-3 mb-1.5 text-[15px] font-semibold first:mt-0"),
+  h6: styled("h6", "mt-3 mb-1.5 text-[15px] font-semibold first:mt-0"),
+  p: styled("p", "my-2 first:mt-0 last:mb-0"),
+  ul: styled("ul", "my-2 list-disc pl-6"),
+  ol: styled("ol", "my-2 list-decimal pl-6"),
+  li: styled("li", "my-0.5"),
+  a: styled("a", "text-accent-text", { target: "_blank", rel: "noreferrer" }),
+  code: styled("code", "rounded bg-fill px-1 py-0.5 font-mono text-[13px]"),
+  pre: styled("pre", "my-2 overflow-x-auto rounded-lg bg-sidebar p-3 font-mono text-[13px] whitespace-pre [&_code]:bg-transparent [&_code]:p-0"),
+  blockquote: styled("blockquote", "my-2 border-l-2 border-black/10 pl-3 text-text-secondary"),
+  hr: styled("hr", "my-3 border-black/10"),
+  table: ({ node, ...props }) => {
+    void node;
+    return (
+      <div className="my-2 overflow-x-auto">
+        <table className="border-collapse text-[14px]" {...props} />
+      </div>
+    );
+  },
+  // An image would be fetched as soon as the reply renders, which lets a reply send data out in the URL.
+  // It is shown as a link the user can choose to open.
+  img: ({ src, alt }) => (
+    <a href={typeof src === "string" ? src : undefined} target="_blank" rel="noreferrer" className="text-accent-text">
+      {alt || "image"}
+    </a>
+  ),
+  th: styled("th", "border border-black/10 px-2.5 py-1 text-left font-semibold"),
+  td: styled("td", "border border-black/10 px-2.5 py-1"),
+};
+
+export function Markdown({ text, className = "text-[15px] leading-relaxed" }: { text: string; className?: string }) {
+  return (
+    <div className={`break-words ${className}`}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={COMPONENTS}>
+        {text}
+      </ReactMarkdown>
+    </div>
+  );
+}

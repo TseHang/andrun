@@ -16,6 +16,8 @@
 //   [choose] turn 0 calls ask_user with two options; then the normal script plays
 //   [stop]   the normal script up to the first test run after the patch, then a text-only reply
 //            instead of finish; finish and the rest play after the user's next message
+//   [md]     turn 0 is a text-only reply written in markdown (heading, list, code, table, link)
+//   [html]   writes index.html (its script fills in the heading) and app.js, then replies with text
 // A Review session (system prompt of the review profile) gets REVIEW_SCRIPT instead.
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -100,6 +102,15 @@ const CHOOSE_TURN: Turn = {
   },
 };
 const STOP_TURN: Turn = { text: "Fixed the loop bound. Do you want anything else?" };
+const MD_TURN: Turn = {
+  text: ["## Two options", "", "I can fix this in **two** ways:", "", "- Fix the loop bound in `sum()`", "- Rewrite it with reduce", "", "```js", "values.reduce((a, b) => a + b, 0);", "```", "", "| Option | Lines |", "| - | - |", "| Loop bound | 1 |", "", "See the [docs](https://example.com/reduce)."].join("\n"),
+};
+const PAGE = ["<!doctype html>", "<title>Demo</title>", '<h1 id="title">Loading</h1>', '<script>document.getElementById("title").textContent = "Hello from the page";</script>', ""].join("\n");
+const HTML_TURNS: Turn[] = [
+  { text: "Writing the page.", call: { name: "write_file", args: { path: "index.html", content: PAGE } } },
+  { call: { name: "write_file", args: { path: "app.js", content: 'console.log("app");\n' } } },
+  { text: "The page is ready. Open the preview to see it." },
+];
 const LAST: Turn = { call: { name: "finish", args: { summary: "Nothing more to do." } } };
 
 interface ChatBody {
@@ -128,7 +139,7 @@ async function chat(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const played = messages.filter((m) => m.role === "assistant").length;
   const ask = task.includes("[ask]");
   const review = (messages.find((m) => m.role === "system")?.content ?? "").includes("code reviewer");
-  const script = review ? REVIEW_SCRIPT : task.includes("[plan]") ? PLAN_SCRIPT : ask
+  const script = review ? REVIEW_SCRIPT : task.includes("[md]") ? [MD_TURN, ...SCRIPT] : task.includes("[html]") ? HTML_TURNS : task.includes("[plan]") ? PLAN_SCRIPT : ask
           ? [...ASK_TURNS, ...SCRIPT]
           : task.includes("[chat]")
             ? [CHAT_TURN, ...SCRIPT]

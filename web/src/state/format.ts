@@ -1,6 +1,7 @@
 // Small pure formatters for the UI (no DOM).
 import type { PlanStep } from "../../../src/core/events";
-import type { ChangeView, StepRow } from "./reducer";
+import { STOP_REASON } from "../../../src/core/types";
+import type { ChangeView, SessionView, StepRow, Usage } from "./reducer";
 
 export function formatBytes(n: number): string {
   if (n < 1000) return `${n} B`;
@@ -31,6 +32,13 @@ export function planNote(plan: PlanStep[] | null): string | null {
   const open = plan.filter((s) => s.status !== "completed").length;
   if (open === 0) return null;
   return `${open} of ${plan.length} plan ${plan.length === 1 ? "step" : "steps"} not completed`;
+}
+
+/** A command on one line: its first non-empty line, with "…" when more follows. */
+export function firstLine(command: string): string {
+  const lines = command.split("\n").filter((l) => l.trim() !== "");
+  if (lines.length === 0) return "";
+  return lines.length > 1 ? `${lines[0]!.trim()} …` : lines[0]!.trim();
 }
 
 export function modelLabel(model: string): string {
@@ -76,6 +84,7 @@ export function rowSummary(row: StepRow): string {
   if (!row.done) return "";
   const parts: string[] = [];
   if (row.declined) parts.push("declined");
+  else if (row.error === STOP_REASON) parts.push("stopped");
   else if (row.error !== undefined) parts.push("failed");
   else if (row.name === "run_command" && row.exitCode !== undefined) parts.push(row.exitCode === null ? "timed out" : `exit ${row.exitCode}`);
   else if (row.name === "read_file" && row.meta?.bytes !== undefined) parts.push(formatBytes(row.meta.bytes));
@@ -88,6 +97,7 @@ export function rowSummary(row: StepRow): string {
 }
 
 export function rowTone(row: StepRow): "failed" | "ok" | "muted" {
+  if (row.error === STOP_REASON) return "muted";
   if (row.error !== undefined || (row.exitCode !== undefined && row.exitCode !== 0)) return "failed";
   return row.exitCode === 0 ? "ok" : "muted";
 }
@@ -96,4 +106,31 @@ export function rowTone(row: StepRow): "failed" | "ok" | "muted" {
 export function prTarget(branch: string | undefined, id: string, baseBranch: string | null): string {
   const from = branch ?? `agent/${id.slice(0, 8)}-1`;
   return baseBranch ? `${from} → ${baseBranch}` : from;
+}
+
+/** The short line under a reply, e.g. "5.4k in · 6.0k out · 34.3s". */
+export function usageLine(u: Usage): string {
+  return `${formatTokens(u.tokensIn)} in · ${formatTokens(u.tokensOut)} out · ${(u.latencyMs / 1000).toFixed(1)}s`;
+}
+
+/** What the agent is doing right now, null unless it is running. */
+export function activityLabel(view: SessionView): string | null {
+  if (view.status !== "running") return null;
+  const open = view.items.flatMap((i) => (i.kind === "steps" ? i.rows : [])).filter((r) => !r.done).at(-1);
+  if (open) {
+    if (open.name === "sandbox_setup") return "Starting sandbox";
+    if (open.name === "run_command") {
+      const command = firstLine(open.arg);
+      return `Running ${command.length > 60 ? `${command.slice(0, 60)}…` : command}`;
+    }
+    if (open.name === "write_file" || open.name === "apply_patch") return `Editing ${open.arg}`;
+    if (open.name === "read_file") return `Reading ${open.arg}`;
+    return "Working";
+  }
+  return view.items.some((i) => i.kind === "assistant" && i.streaming) ? "Writing a reply" : "Thinking";
+}
+
+/** Whether the file can be shown in the preview: HTML pages. */
+export function isPreviewable(path: string): boolean {
+  return /\.html?$/i.test(path);
 }

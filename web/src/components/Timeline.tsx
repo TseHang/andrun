@@ -1,6 +1,8 @@
 import { useLayoutEffect, useRef } from "react";
 import type { SessionView, TimelineItem } from "../state/reducer";
-import { modelLabel, prTarget } from "../state/format";
+import { activityLabel, prTarget, usageLine } from "../state/format";
+import { Activity } from "./Activity";
+import { Markdown } from "./Markdown";
 import { StepGroup } from "./StepGroup";
 
 const NOTE = "No files changed, so no pull request was opened.";
@@ -26,29 +28,26 @@ function Item({ item, session }: { item: TimelineItem; session: SessionInfo }) {
           <div data-item="user" className="max-w-[80%] rounded-2xl bg-fill px-3.5 py-2 text-[14px] break-words whitespace-pre-wrap">
             {item.text}
           </div>
-          {item.pending && <div className="mt-1 text-xs text-text-secondary">Queued for the next step</div>}
+          {item.pending && <div className="mt-1 text-xs text-text-secondary">Queued · read after the current step</div>}
         </div>
       );
     case "assistant": {
       const u = item.usage;
       return (
-        <div className="my-3">
-          <p className="text-[15px] leading-relaxed break-words whitespace-pre-wrap">
-            {item.text}
+        <div data-item="assistant" className="my-3 flex items-start gap-2">
+          <span role="img" aria-label="&run" className="w-4 shrink-0 text-[15px] leading-relaxed font-semibold text-accent">&</span>
+          <div className="min-w-0 grow">
+            <Markdown text={item.text} />
             {item.streaming && <span aria-hidden="true" className="ml-0.5 inline-block h-[1em] w-0.5 translate-y-0.5 bg-text" style={{ animation: "blink 1s steps(2) infinite" }} />}
-          </p>
-          {u && (
-            <div className="mt-1 text-xs text-text-tertiary">
-              {`${modelLabel(u.model)} · ${u.tokensIn.toLocaleString("en-US")} in · ${u.tokensOut.toLocaleString("en-US")} out · ${(u.latencyMs / 1000).toFixed(1)} s`}
-            </div>
-          )}
+            {u && <div className="mt-1 text-xs text-text-tertiary">{usageLine(u)}</div>}
+          </div>
         </div>
       );
     }
     case "question":
       return (
         <div className="my-3">
-          <p className="text-[15px] leading-relaxed break-words whitespace-pre-wrap">{item.question}</p>
+          <Markdown text={item.question} />
         </div>
       );
     case "steps":
@@ -106,15 +105,17 @@ export function Timeline({ view, session }: { view: SessionView; session: Sessio
     height.current = el.scrollHeight;
   });
 
+  const activity = activityLabel(view);
   return (
     <section aria-label="Timeline" ref={ref} className="min-h-0 min-w-0 grow overflow-y-auto">
-      <div className="mx-auto max-w-[720px] px-6 pt-4 pb-44">
+      <div className="mx-auto max-w-[720px] px-6 pt-4 pb-[calc(var(--bar-h,116px)+60px)]">
         {view.items.map((item, i) => (
           <div key={item.key}>
             <Item item={item} session={session} />
             {session.code && item.kind === "approved" && item.finish && view.items[i + 1]?.kind !== "pr" && <p className="text-center text-xs text-text-secondary">{NOTE}</p>}
           </div>
         ))}
+        {activity && <Activity label={activity} />}
       </div>
     </section>
   );

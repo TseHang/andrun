@@ -40,6 +40,13 @@ describe("S15: client frames are validated", () => {
     expect(parse({ type: "message", text: "x".repeat(MAX_TASK_CHARS) }).ok).toBe(true);
   });
 
+  it("parses a stop frame", () => {
+    expect(parse({ type: "stop" })).toEqual({ ok: true, frame: { type: "stop" } });
+    // Unknown fields are dropped, not passed on.
+    expect(parse({ type: "stop", force: true, approvalId: "a1" })).toEqual({ ok: true, frame: { type: "stop" } });
+    expect(parse({ type: "stopp" }).ok).toBe(false);
+  });
+
   it("titles are the first 80 characters of the task on one line", () => {
     expect(titleOf("make the failing test pass")).toBe("make the failing test pass");
     expect(titleOf("  fix\nthe   bug  ")).toBe("fix the bug");
