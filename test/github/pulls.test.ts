@@ -106,6 +106,13 @@ describe("pull requests (spec D2: list, read)", () => {
     expect(await github.getPullFile(30, "docs")).toBeNull(); // a directory
     expect(await github.getPullFile(30, "big.html")).toBeNull(); // GitHub sends no content over 1 MB
 
+    // A path that would leave /contents/ is refused without a contents request.
+    const count = fake.requests.length;
+    for (const bad of ["../../pulls/30", "docs/../../../git/refs", "./index.html", "/index.html", "docs//a.html", "docs/"]) {
+      expect(await github.getPullFile(30, bad), bad).toBeNull();
+    }
+    expect(fake.requests.slice(count).some((r) => !/\/pulls\/30$/.test(r.path))).toBe(false);
+
     // A fork's pull request: nothing is read (Henry, 2026-10-04).
     const before = fake.requests.length;
     expect(await github.getPullFile(31, "index.html")).toBeNull();

@@ -99,7 +99,10 @@ export async function getPull(request: Request, repo: string, token: string, n: 
 export async function getPullFile(request: Request, repo: string, token: string, n: number, path: string): Promise<string | null> {
   const p = (await request("GET", `/repos/${repo}/pulls/${n}`, token)) as RawPull;
   if (p.head.repo?.full_name.toLowerCase() !== repo.toLowerCase()) return null;
-  const encoded = path.split("/").map(encodeURIComponent).join("/");
+  // "." and ".." would be resolved by the URL and reach another API route.
+  const segments = path.split("/");
+  if (segments.some((s) => s === "" || s === "." || s === "..")) return null;
+  const encoded = segments.map(encodeURIComponent).join("/");
   let raw: unknown;
   try {
     raw = await request("GET", `/repos/${repo}/contents/${encoded}?ref=${p.head.sha}`, token);
