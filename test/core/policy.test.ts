@@ -58,6 +58,12 @@ describe("S3: policy gates risky tool calls", () => {
     for (const c of ["mkdir -p site", "node build.js", "grep -rn foo src | head", "rm -rf tmp", "find . -delete", "git diff --output=patch.txt", "ls & rm -rf src", "cat $HOME/x"]) {
       expect(policy.decide(cmd(c, "review")).kind, c).toBe("deny");
     }
+    // A trailing `2>&1` is a habit of models and changes nothing (output is already combined): it is ignored. Nothing else is.
+    for (const c of ["node --test 2>&1", "npm test 2>&1", "cat src/sum.js  2>&1 "]) expect(policy.decide(cmd(c, "review")), c).toEqual({ kind: "allow" });
+    for (const c of ['node --test 2>&1; echo "exit: $?"', "cat x 2>&1 | sh", "ls 2>&1 > out.txt", "ls 2>&1 2>&1", "node --test 2>out.txt", "node -e 1 2>&1", "2>&1"]) {
+      expect(policy.decide(cmd(c, "review")).kind, c).toBe("deny");
+    }
+    expect(policy.decide(cmd("node -e 1 2>&1", "review"))).toEqual({ kind: "deny", reason: "command not in allowlist: node" });
     const rm = policy.decide(cmd("rm -rf src", "review"));
     expect(rm.kind === "deny" && rm.reason).toContain("rm");
     // P4-b: a review ends at a gate ("Ready to post"), like a Code run.

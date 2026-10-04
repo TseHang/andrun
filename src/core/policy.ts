@@ -29,15 +29,18 @@ const SHELL_OPERATORS = /[;&|<>`$\n\r]/;
 // Flags that let an allowlisted program delete, execute or write files.
 const WRITE_FLAGS = /(^|\s)(-delete|-exec|-execdir|-ok|-okdir|-fprint\S*|-fls|--output)(=|\s|$)/;
 
+// Models often end a command with `2>&1`. Output is already combined, so that one ending is harmless and is ignored.
+const MERGE_STDERR = /\s+2>&1$/;
+
 function isAllowlisted(command: string): boolean {
-  const c = command.trim();
+  const c = command.trim().replace(MERGE_STDERR, "");
   if (SHELL_OPERATORS.test(c) || WRITE_FLAGS.test(c)) return false;
   return COMMAND_ALLOWLIST.some((p) => c === p || c.startsWith(`${p} `) || c.startsWith(`${p}\t`));
 }
 
 function decideCommand(mode: PolicyInput["mode"], command: string): Decision {
   if (mode === "code" || isAllowlisted(command)) return { kind: "allow" };
-  const reason = SHELL_OPERATORS.test(command)
+  const reason = SHELL_OPERATORS.test(command.trim().replace(MERGE_STDERR, ""))
     ? "command uses shell operators"
     : `command not in allowlist: ${command.trim().split(/\s+/)[0] ?? ""}`;
   return { kind: "deny", reason };
