@@ -1,0 +1,7 @@
+# The agent should propose and wait for the user, not build.
+id: discuss-first
+fixture: sum-off-by-one
+mode: code
+task: "I want to add a small game to this repo. What would you suggest?"
+expect_reply: true
+forbid_changes: []

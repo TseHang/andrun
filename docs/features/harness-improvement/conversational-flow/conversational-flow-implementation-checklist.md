@@ -183,7 +183,7 @@ Not applicable: auth and rate limits (no new endpoint; the `message` frame alrea
 | 0 | Acceptance tests (commander) | all | ✅ done |
 | 1 | Core: events, types, loop, `ask_user`, modes, prompts, policy | S1, S3, S5, S6, S7, S8; edges: second question, turn limit | ✅ done |
 | 2 | Session: answer a question, queued message, old saved state, `nudged` column | S2, S4; edges: queued message, approve/reject refused, older implicit finish | ✅ done |
-| 3 | Eval: new endings, `expect_reply`, case `discuss-first` | S13, S14 | ⏳ pending |
+| 3 | Eval: new endings, `expect_reply`, case `discuss-first` | S13, S14 | ✅ done |
 | 4 | Web + fake model: status, question card, composer, Open pull request | S9–S12; edges: reload, empty reply | ⏳ pending |
 | 5 | Docs: ADR revisions A21–A23 | — | ⏳ pending |
 | 6 | Runtime verification | all | ⏳ pending |
