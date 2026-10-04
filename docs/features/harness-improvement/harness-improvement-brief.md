@@ -123,7 +123,12 @@ v3（2026-10-04）：對照 Codex 與 Claude Code 的 harness 後改寫，並納
 | **C** | 6b：egress spike（先證明 HTTPS 攔截可行），再做 registries allowlist。修訂 ADR A13 | spike 結果 |
 | **D** | 依 C 的結果：放寬成 GET-only 全網域，或做 6a 的 Worker 端工具；搜尋服務到時再選。接上 7b | C |
 
-之後再看：停止鍵、auto mode。
+之後再看：auto mode。（停止鍵已在 session-ui 做完，PR #7。）
+
+### TODO（2026-10-04，真實模型測試後）
+
+- [ ] **模型寫完後過度檢查**：`deepseek-v4-flash` 做單檔 `index.html` 時，第 6 步就寫好檔案，之後又花 10 步做語法檢查、跑不相關的測試才呼叫 `finish`，費用從 ¥0.53 漲到 ¥2.70。做法：調 Code prompt（寫完、驗證一次就 finish；不跑和任務無關的測試），再跑 `static-page` 與 `sum-off-by-one` 的真實模型 eval 比對步數。跑 eval 前先問 Henry。
+- [ ] **預覽頁加 CSP（待討論，未決定要不要做）**：HTML 預覽會執行 agent 寫的 script，隔離在 `sandbox="allow-scripts"` 的 iframe，讀不到 app，但仍可對外發請求。可在預覽內容前插入 CSP（`default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'`）擋掉對外連線。代價：用 CDN 載入函式庫或外部圖片的頁面會壞。目前的行為是 Henry 同意的；要不要改等討論。
 
 ## 驗收（最低標準）
 
