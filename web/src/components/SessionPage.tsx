@@ -7,6 +7,7 @@ import { ApprovalBar } from "./ApprovalBar";
 import { ChangesPanel } from "./ChangesPanel";
 import { Composer } from "./Composer";
 import { DeleteDialog } from "./DeleteDialog";
+import { QuestionCard } from "./QuestionCard";
 import { PostBar, PostedBar } from "./ReviewBars";
 import { ReviewBody } from "./ReviewSession";
 import { SessionHeader } from "./SessionHeader";
@@ -146,8 +147,10 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
             ) : (
               <ApprovalBar view={view} gate={view.gate} session={session} send={send} update={update} />
             )
+          ) : !review && view.question && status === "awaiting_input" ? (
+            <QuestionCard view={view} question={view.question} send={send} />
           ) : (
-            <Composer view={view} running={status === "running"} send={send} update={update} />
+            <Composer view={view} running={status === "running"} waiting={status === "awaiting_input"} code={snap.mode === "code"} send={send} update={update} />
           )}
         </div>
       </div>

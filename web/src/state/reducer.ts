@@ -1,7 +1,7 @@
 // The session's view model: reduce(view, frame) folds the event stream into what the UI shows (P3-a).
 // Pure and free of React, so a live run and a replay of the stored log give the same items.
 
-import type { AgentEvent, DiffSummary, ErrorSource, PlanStep, ReviewVerdict, Severity, Status } from "../../../src/core/events";
+import type { AgentEvent, DiffSummary, ErrorSource, PlanStep, QuestionOption, ReviewVerdict, Severity, Status } from "../../../src/core/events";
 import { RESTORED_NOTE, type ServerFrame } from "../../../src/session/protocol";
 import { parseDiff } from "./diff";
 import { isTestPath } from "./format";
@@ -34,6 +34,7 @@ export type TimelineItem =
   | { key: string; kind: "user"; text: string; pending: boolean }
   | { key: string; kind: "assistant"; text: string; streaming: boolean; stepId?: string; usage?: Usage }
   | { key: string; kind: "steps"; rows: StepRow[] }
+  | { key: string; kind: "question"; question: string }
   | { key: string; kind: "notice"; title: string; message: string }
   | { key: string; kind: "failure"; source: ErrorSource; title: string; message: string; next?: string }
   | { key: string; kind: "approved"; finish: boolean }
@@ -92,6 +93,8 @@ export interface SessionView {
   posted: { url: string; verdict: ReviewVerdict } | null;
   /** The agent's current plan; each plan_updated replaces it. */
   plan: PlanStep[] | null;
+  /** The question the agent is waiting on, until the user answers. */
+  question: { id: string; question: string; options: QuestionOption[] } | null;
 }
 
 export function initialView(): SessionView {
@@ -112,6 +115,7 @@ export function initialView(): SessionView {
     findings: [],
     posted: null,
     plan: null,
+    question: null,
   };
 }
 
@@ -269,7 +273,7 @@ function failureOf(ev: Extract<AgentEvent, { type: "error" }>): TimelineItem {
 function apply(view: SessionView, ev: AgentEvent): SessionView {
   switch (ev.type) {
     case "message": {
-      if (ev.role === "user") return { ...view, items: withUser(view.items, `u:${ev.id}`, ev.text) };
+      if (ev.role === "user") return { ...view, question: null, items: withUser(view.items, `u:${ev.id}`, ev.text) };
       const key = `a:${ev.id}`;
       const usage = (ev.stepId && view.usageByStep[ev.stepId]) || undefined;
       const item: TimelineItem = { key, kind: "assistant", text: ev.text, streaming: false, ...(ev.stepId && { stepId: ev.stepId }), ...(usage && { usage }) };
@@ -297,7 +301,7 @@ function apply(view: SessionView, ev: AgentEvent): SessionView {
       };
     }
     case "tool_call": {
-      if (ev.name === "finish" || ev.name === "update_plan") return view;
+      if (ev.name === "finish" || ev.name === "update_plan" || ev.name === "ask_user") return view;
       const row = newRow(ev);
       const last = view.items.at(-1);
       const items: TimelineItem[] =
@@ -306,6 +310,8 @@ function apply(view: SessionView, ev: AgentEvent): SessionView {
           : [...view.items, { key: `s:${ev.callId}`, kind: "steps", rows: [row] }];
       return { ...view, items };
     }
+    case "question":
+      return { ...view, question: { id: ev.id, question: ev.question, options: ev.options }, items: [...view.items, { key: `q:${ev.id}`, kind: "question", question: ev.question }] };
     case "tool_output": {
       const row = allRows(view).find((r) => r.callId === ev.callId);
       if (!row) return view;
@@ -384,7 +390,10 @@ function apply(view: SessionView, ev: AgentEvent): SessionView {
     case "status": {
       const closes = ev.status === "done" || ev.status === "failed" || ev.status === "budget_exceeded";
       const items = closes ? mapRows(view.items, (r) => (r.done ? r : settle({ ...r, done: true }))) : view.items;
-      return { ...view, items, status: ev.status, composerEnabled: true };
+      const last = items.at(-1);
+      const silent = ev.status === "awaiting_input" && view.question === null && last?.kind !== "assistant";
+      const notice: TimelineItem = { key: `n:${ev.seq}`, kind: "notice", title: "The agent stopped without a reply.", message: "Send a message to continue." };
+      return { ...view, items: silent ? [...items, notice] : items, status: ev.status, composerEnabled: true };
     }
     default:
       return view;
