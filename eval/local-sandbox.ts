@@ -35,14 +35,15 @@ export class LocalSandbox implements SandboxAdapter {
     readonly baseline: string,
   ) {}
 
-  static async fromFixture(fixtureDir: string): Promise<LocalSandbox> {
+  static async fromFixture(fixtureDir: string | null): Promise<LocalSandbox> {
     const root = await mkdtemp(join(tmpdir(), "andrun-eval-"));
     try {
-      await cp(fixtureDir, root, { recursive: true });
-      for (const args of [["init", "-q"], ["add", "-A"], ["commit", "-q", "-m", "baseline"]]) {
+      if (fixtureDir !== null) await cp(fixtureDir, root, { recursive: true });
+      for (const args of [["init", "-q"], ["add", "-A"], ["commit", "--allow-empty", "-q", "-m", "baseline"]]) {
         const r = await git(root, args);
         if (r.code !== 0) throw new Error(`git ${args[0]} failed: ${r.stderr}`);
       }
+      if (fixtureDir === null) await writeFile(join(root, ".git/info/exclude"), "node_modules/\n");
       const head = await git(root, ["rev-parse", "HEAD"]);
       const baseline = head.stdout.trim();
       if (head.code !== 0 || !/^[0-9a-f]{40}$/.test(baseline)) throw new Error(`git rev-parse failed: ${head.stderr}`);

@@ -314,7 +314,7 @@ describe("HI-i: cases beyond 'fix the test'", () => {
   it("scores feature, refactor, add-tests, static-page and clean-review cases", async () => {
     const cases = await loadCases(CASES);
     expect(cases.map((c) => c.id).sort()).toEqual(ALL_CASES);
-    expect(cases).toHaveLength(12);
+    expect(cases).toHaveLength(13);
     expect(cases.find((c) => c.id === "add-tests")).toMatchObject({ mode: "code", expect_changes: ["test/**"], forbid_changes: ["src/**", "package.json"] });
     expect(cases.find((c) => c.id === "review-clean")).toMatchObject({ mode: "review", expect_no_findings: true });
     expect(cases.find((c) => c.id === "static-page")!.max_steps).toBeUndefined();
@@ -367,11 +367,11 @@ describe("HI-i: cases beyond 'fix the test'", () => {
 
   it("all cases load", async () => {
     const cases = await loadCases(CASES);
-    expect(cases).toHaveLength(12);
+    expect(cases).toHaveLength(13);
     const discuss = cases.find((c) => c.id === "discuss-first")!;
     expect(discuss).toMatchObject({ mode: "code", expect_reply: true, task: "I want to add a small game to this repo. What would you suggest?" });
     expect(discuss.check).toBeUndefined();
-    expect(existsSync(join(FIXTURES, discuss.fixture))).toBe(true);
+    expect(existsSync(join(FIXTURES, discuss.fixture!))).toBe(true);
   });
 
   it("runs that end waiting for the user are scored", async () => {
