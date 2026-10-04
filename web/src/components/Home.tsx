@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { SessionSummary } from "../../../src/session/protocol";
-import { createSession } from "../api";
+import { createSession, defaultChoice, type ModelChoice } from "../api";
 import { useApp } from "../context";
 import { relativeTime } from "../state/format";
 import { Spinner } from "./Spinner";
@@ -10,7 +10,7 @@ import { DOT, STATUS_TEXT } from "./StatusLabel";
 export function Home({ sessions }: { sessions: SessionSummary[] }) {
   const { config, navigate, refreshList } = useApp();
   const [task, setTask] = useState("");
-  const [model, setModel] = useState<string | null>(null);
+  const [choice, setChoice] = useState<ModelChoice | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const canRun = task.trim() !== "" && !busy;
@@ -19,7 +19,7 @@ export function Home({ sessions }: { sessions: SessionSummary[] }) {
     if (!canRun) return;
     setBusy(true);
     setError(null);
-    const res = await createSession(task, model ?? config.defaultModel);
+    const res = await createSession(task, choice ?? defaultChoice(config));
     setBusy(false);
     if (!res.ok) return setError(res.error);
     refreshList();
@@ -58,7 +58,7 @@ export function Home({ sessions }: { sessions: SessionSummary[] }) {
                 Task
               </button>
             </div>
-            <ModelMenu models={config.models} current={model ?? config.defaultModel} onPick={setModel} />
+            <ModelMenu models={config.models} autoModel={config.autoModel} current={choice ?? defaultChoice(config)} onPick={setChoice} />
             <span className="grow" />
             <button
               type="button"

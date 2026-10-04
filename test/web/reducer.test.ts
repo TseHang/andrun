@@ -114,6 +114,28 @@ describe("view state (P3-a)", () => {
     expect(reduce(live, late).items).toEqual(live.items);
   });
 
+  it("reasoning streams into its own item, the stored event replaces it, and a routed turn says its model", () => {
+    const e = script();
+    const routed = e({ type: "model_routed", task: "complex", model: "deepseek-ai/deepseek-v4.1-flash", reasoning: "high" });
+    const d1 = e({ type: "reasoning_delta", id: "m1", text: "The loop " }, { step: 1 });
+    const d2 = e({ type: "reasoning_delta", id: "m1", text: "stops early." }, { step: 1 });
+    const final = e({ type: "reasoning", id: "m1", text: "The loop stops early." }, { step: 1 });
+    const message = e({ type: "message", id: "m1", role: "assistant", text: "Fixing it." }, { step: 1 });
+
+    const streaming = run([routed, d1, d2]);
+    expect(streaming.items).toEqual([
+      expect.objectContaining({ kind: "routed", task: "complex", model: "deepseek-ai/deepseek-v4.1-flash", reasoning: "high" }),
+      expect.objectContaining({ kind: "reasoning", text: "The loop stops early.", streaming: true }),
+    ]);
+    expect(dropStreaming(streaming).items.map((i) => i.kind)).toEqual(["routed"]);
+
+    const live = reduce(reduce(streaming, final), message);
+    const replay = run([routed, final, message]);
+    expect(live.items).toEqual(replay.items);
+    expect(live.items.map((i) => i.kind)).toEqual(["routed", "reasoning", "assistant"]);
+    expect(live.items[1]).toMatchObject({ text: "The loop stops early.", streaming: false });
+  });
+
   it("command rows show streamed chunks once; non-stream tools show the result", () => {
     const e = script();
     const v = run([

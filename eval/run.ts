@@ -219,7 +219,7 @@ async function runOne(
       policy: autoApprove(profile.policy),
       config,
       emit: (e) => {
-        if (e.type === "message_delta") return; // never persisted (D7)
+        if (e.type === "message_delta" || e.type === "reasoning_delta") return; // never persisted (D7)
         appendFileSync(file, JSON.stringify(e) + "\n");
         if (e.type === "review_finding") findings.push({ path: e.path, line: e.line });
         if (e.type === "usage") {

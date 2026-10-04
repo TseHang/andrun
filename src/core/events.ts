@@ -34,6 +34,11 @@ export type EventBody =
   | { type: "message"; id: string; role: "user" | "assistant"; text: string }
   /** Streamed token text. Broadcast only, never persisted (D7). */
   | { type: "message_delta"; id: string; text: string }
+  /** The model's thinking for one step. `reasoning_delta` is broadcast only, like `message_delta`. */
+  | { type: "reasoning"; id: string; text: string }
+  | { type: "reasoning_delta"; id: string; text: string }
+  /** Auto mode chose this model and effort for the turn that starts here. */
+  | { type: "model_routed"; task: "daily" | "complex"; model: string; reasoning: string }
   | { type: "tool_call"; callId: string; name: string; args: unknown; summary: string }
   /**
    * Output of a tool call. Commands stream several chunks; the final one carries `exitCode`

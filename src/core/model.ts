@@ -23,7 +23,7 @@ interface ChunkToolCall {
 
 interface Chunk {
   model?: string;
-  choices?: { delta?: { content?: string | null; tool_calls?: ChunkToolCall[] } }[];
+  choices?: { delta?: { content?: string | null; reasoning?: string | null; tool_calls?: ChunkToolCall[] } }[];
   usage?: { prompt_tokens?: number; completion_tokens?: number } | null;
 }
 
@@ -44,7 +44,7 @@ export class OpenAICompatModelClient implements ModelClient {
     this.backoffMs = opts.backoffMs ?? 500;
   }
 
-  async complete(req: ModelRequest, onDelta?: (text: string) => void): Promise<ModelResponse> {
+  async complete(req: ModelRequest, onDelta?: (text: string, kind?: "reasoning") => void): Promise<ModelResponse> {
     const started = Date.now();
     const body: Record<string, unknown> = {
       model: req.model,
@@ -52,6 +52,7 @@ export class OpenAICompatModelClient implements ModelClient {
       stream: true,
       stream_options: { include_usage: true },
     };
+    if (req.reasoning !== undefined) body.reasoning_effort = req.reasoning;
     if (req.tools.length > 0) {
       body.tools = req.tools.map((t) => ({
         type: "function",
@@ -111,9 +112,10 @@ export class OpenAICompatModelClient implements ModelClient {
     res: Response,
     req: ModelRequest,
     started: number,
-    onDelta?: (text: string) => void,
+    onDelta?: (text: string, kind?: "reasoning") => void,
   ): Promise<ModelResponse> {
     let content = "";
+    let reasoning = "";
     let model: string | undefined;
     const usage = { tokens_in: 0, tokens_out: 0 };
     const calls = new Map<number, { id?: string; name: string; arguments: string }>();
@@ -127,6 +129,10 @@ export class OpenAICompatModelClient implements ModelClient {
       }
       const delta = chunk.choices?.[0]?.delta;
       if (!delta) return;
+      if (delta.reasoning) {
+        reasoning += delta.reasoning;
+        onDelta?.(delta.reasoning, "reasoning");
+      }
       if (delta.content) {
         content += delta.content;
         onDelta?.(delta.content);
@@ -207,6 +213,7 @@ export class OpenAICompatModelClient implements ModelClient {
 
     return {
       content: content === "" ? null : content,
+      ...(reasoning !== "" && { reasoning }),
       toolCalls,
       usage,
       latency_ms: Date.now() - started,

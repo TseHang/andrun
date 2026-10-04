@@ -8,13 +8,21 @@ test("the picked model is sent and shown", async ({ page }) => {
   await model.click();
   const menu = page.getByRole("listbox", { name: "Model" });
   const options = menu.getByRole("option");
-  await expect(options).toHaveCount(5);
-  await expect(options).toHaveText([/^deepseek-v4-flash$/, /^deepseek-v4-pro$/, /^kimi-k2\.7-code$/, /^glm-5\.3$/, /Auto.*Not available yet/]);
-  await expect(menu.getByRole("option", { name: "deepseek-v4-flash" })).toHaveAttribute("aria-selected", "true");
-  await expect(menu.getByRole("option", { name: /Auto/ })).toBeDisabled();
-  await menu.getByRole("option", { name: "deepseek-v4-pro" }).click();
+  await expect(options).toHaveCount(4);
+  await expect(options).toHaveText([/^deepseek-v4-flash$/, /^deepseek-v4\.1-flash$/, /^glm-5\.3-flash$/, /^Auto/]);
+  await expect(menu.getByRole("option", { name: "deepseek-v4-flash", exact: true })).toHaveAttribute("aria-selected", "true");
+  const efforts = menu.getByRole("group", { name: "Reasoning" }).getByRole("button");
+  await expect(efforts).toHaveText(["none", "high", "max"]);
+  await expect(efforts.nth(0)).toHaveAttribute("aria-pressed", "true");
+
+  // An effort the next model does not have falls back to that model's first one; the menu stays open for the effort.
+  await menu.getByRole("option", { name: "glm-5.3-flash" }).click();
+  await expect(efforts).toHaveText(["low", "high", "max"]);
+  await expect(efforts.nth(0)).toHaveAttribute("aria-pressed", "true");
+  await efforts.nth(1).click();
+  await page.keyboard.press("Escape");
   await expect(menu).toHaveCount(0);
-  await expect(model).toHaveText(/deepseek-v4-pro/);
+  await expect(model).toHaveText(/glm-5\.3-flash\s*high/);
 
   const mode = page.getByRole("group", { name: "Mode" });
   // A review starts from a pull request (Review PRs in the sidebar), so the switch has no Review.
@@ -27,9 +35,40 @@ test("the picked model is sent and shown", async ({ page }) => {
     page.waitForRequest((r) => r.method() === "POST" && new URL(r.url()).pathname === "/sessions"),
     page.getByRole("button", { name: "Run" }).click(),
   ]);
-  expect(req.postDataJSON()).toEqual({ mode: "code", task: "make the failing test pass", model: "deepseek-ai/deepseek-v4-pro" });
+  expect(req.postDataJSON()).toEqual({ mode: "code", task: "make the failing test pass", model: "zai-org/glm-5.3-flash", reasoning: "high" });
+
+  // The model's reasoning is in the timeline, folded once the step is done.
+  await expect(ui(page).timeline.locator('[data-item="reasoning"]').first()).toContainText("Reasoning");
 
   await expect(ui(page).timeline.getByText(/^[\d.]+k? in · [\d.]+k? out · \d+\.\ds$/).first()).toBeVisible({ timeout: 60_000 });
+});
+
+test("auto picks the model for each message and says which", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Model" }).click();
+  const menu = page.getByRole("listbox", { name: "Model" });
+  await menu.getByRole("option", { name: /Auto/ }).click();
+  await expect(menu.getByRole("group", { name: "Reasoning" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Model" })).toHaveText(/^Auto$/);
+
+  await page.getByLabel("Task").fill("[chat] what does sum do?");
+  const [req] = await Promise.all([
+    page.waitForRequest((r) => r.method() === "POST" && new URL(r.url()).pathname === "/sessions"),
+    page.getByRole("button", { name: "Run" }).click(),
+  ]);
+  expect(req.postDataJSON()).toEqual({ mode: "code", task: "[chat] what does sum do?", model: "auto" });
+
+  const routed = ui(page).timeline.locator('[data-item="routed"]');
+  await expect(routed.first()).toHaveText(/Auto · daily coding → deepseek-v4-flash · high/, { timeout: 60_000 });
+  const input = ui(page).composer.getByRole("textbox", { name: "Message to the agent" });
+  await expect(input).toHaveAttribute("placeholder", "Reply to the agent", { timeout: 60_000 });
+
+  // The next message is sorted again: this one goes to the model for complex work.
+  await input.fill("[complex] now fix it properly");
+  await ui(page).composer.getByRole("button", { name: "Send" }).click();
+  await expect(routed).toHaveCount(2, { timeout: 60_000 });
+  await expect(routed.nth(1)).toHaveText(/Auto · complex task → deepseek-v4\.1-flash · high/);
 });
 
 test("429, 503 and 400 are shown without losing the task", async ({ page }) => {

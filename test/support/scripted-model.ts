@@ -2,6 +2,7 @@ import type { ModelClient, ModelRequest, ModelResponse, ToolCall } from "../../s
 
 export interface ScriptTurn {
   text?: string;
+  reasoning?: string;
   /** `args` may be a raw string to simulate malformed JSON from the model. */
   calls?: { name: string; args: unknown }[];
   usage?: { in: number; out: number };
@@ -19,13 +20,14 @@ export class ScriptedModelClient implements ModelClient {
     private readonly modelId = "scripted",
   ) {}
 
-  async complete(req: ModelRequest, onDelta?: (text: string) => void): Promise<ModelResponse> {
+  async complete(req: ModelRequest, onDelta?: (text: string, kind?: "reasoning") => void): Promise<ModelResponse> {
     this.requests.push(structuredClone({ ...req, signal: undefined }));
     const next = this.steps.shift();
     if (next === undefined) throw new Error("script exhausted");
     if (next instanceof Error) throw next;
     const turn = typeof next === "function" ? next(req) : next;
 
+    if (turn.reasoning) onDelta?.(turn.reasoning, "reasoning");
     if (turn.text && onDelta) {
       const mid = Math.ceil(turn.text.length / 2);
       onDelta(turn.text.slice(0, mid));
@@ -41,6 +43,7 @@ export class ScriptedModelClient implements ModelClient {
     }));
     return {
       content: turn.text ?? null,
+      ...(turn.reasoning && { reasoning: turn.reasoning }),
       toolCalls,
       usage: { tokens_in: turn.usage?.in ?? 100, tokens_out: turn.usage?.out ?? 20 },
       latency_ms: 1,

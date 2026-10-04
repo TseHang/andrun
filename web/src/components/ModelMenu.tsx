@@ -1,13 +1,23 @@
 import { useEffect, useRef, useState } from "react";
+import type { ModelChoice } from "../api";
 import { modelLabel } from "../state/format";
 
 interface Props {
-  models: { id: string }[];
-  current: string;
-  onPick: (id: string) => void;
+  models: { id: string; efforts: string[] }[];
+  autoModel: string;
+  current: ModelChoice;
+  onPick: (choice: ModelChoice) => void;
 }
 
-export function ModelMenu({ models, current, onPick }: Props) {
+const CHECK = (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M2.5 6.5L5 9l4.5-5.5" />
+  </svg>
+);
+
+export function ModelMenu({ models, autoModel, current, onPick }: Props) {
+  const auto = current.model === autoModel;
+  const efforts = models.find((m) => m.id === current.model)?.efforts ?? [];
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -44,7 +54,8 @@ export function ModelMenu({ models, current, onPick }: Props) {
         onClick={() => setOpen((o) => !o)}
         className="flex h-8 cursor-pointer items-center gap-1 rounded-lg px-1.5 pl-2.5 text-text-secondary"
       >
-        <span>{modelLabel(current)}</span>
+        <span>{auto ? "Auto" : modelLabel(current.model)}</span>
+        {current.reasoning !== undefined && <span className="text-text-tertiary">{current.reasoning}</span>}
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M4 4.5l2-2 2 2M4 7.5l2 2 2-2" />
         </svg>
@@ -61,29 +72,49 @@ export function ModelMenu({ models, current, onPick }: Props) {
               key={m.id}
               type="button"
               role="option"
-              aria-selected={m.id === current}
-              onClick={() => {
-                onPick(m.id);
-                setOpen(false);
-                button.current?.focus();
-              }}
+              aria-selected={m.id === current.model}
+              onClick={() => onPick({ model: m.id, reasoning: m.efforts.includes(current.reasoning ?? "") ? current.reasoning! : m.efforts[0]! })}
               className="flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2 text-left hover:bg-black/6"
             >
-              <span className="flex size-3 shrink-0">
-                {m.id === current && (
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M2.5 6.5L5 9l4.5-5.5" />
-                  </svg>
-                )}
-              </span>
+              <span className="flex size-3 shrink-0">{m.id === current.model && CHECK}</span>
               <span>{modelLabel(m.id)}</span>
             </button>
           ))}
-          <div role="separator" className="mx-2 my-[5px] h-px bg-black/10" />
-          <button type="button" role="option" aria-selected="false" disabled className="flex h-7 items-center justify-between rounded-md pl-[26px] pr-2 text-left text-text-tertiary">
-            <span>Auto</span>
-            <span className="text-[11px]">Not available yet</span>
+          <button
+            type="button"
+            role="option"
+            aria-selected={auto}
+            title="Picks the model and reasoning for each message"
+            onClick={() => {
+              onPick({ model: autoModel });
+              setOpen(false);
+              button.current?.focus();
+            }}
+            className="flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2 text-left hover:bg-black/6"
+          >
+            <span className="flex size-3 shrink-0">{auto && CHECK}</span>
+            <span className="grow">Auto</span>
+            <span className="text-[11px] text-text-tertiary">Picks per message</span>
           </button>
+          {efforts.length > 0 && (
+            <>
+              <div role="separator" className="mx-2 my-[5px] h-px bg-black/10" />
+              <div className="px-2 pb-1 text-[11px] text-text-tertiary">Reasoning</div>
+              <div role="group" aria-label="Reasoning" className="mx-1.5 mb-1 flex rounded-[7px] bg-black/6 p-0.5">
+                {efforts.map((e) => (
+                  <button
+                    key={e}
+                    type="button"
+                    aria-pressed={e === current.reasoning}
+                    onClick={() => onPick({ model: current.model, reasoning: e })}
+                    className={`h-6 grow cursor-pointer rounded-[5px] ${e === current.reasoning ? "bg-white font-semibold shadow-[0_1px_2px_rgba(0,0,0,0.14)]" : "text-text-secondary"}`}
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

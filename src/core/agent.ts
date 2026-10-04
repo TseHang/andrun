@@ -179,8 +179,8 @@ async function loop(ctx: RunContext): Promise<RunOutcome> {
     let response;
     try {
       response = await deps.model.complete(
-        { model: profile.model, messages: requestMessages, tools, signal: deps.signal },
-        (text) => emit(ctx, { type: "message_delta", id: messageId, text }),
+        { model: profile.model, ...(profile.reasoning !== undefined && { reasoning: profile.reasoning }), messages: requestMessages, tools, signal: deps.signal },
+        (text, kind) => emit(ctx, { type: kind === "reasoning" ? "reasoning_delta" : "message_delta", id: messageId, text }),
       );
     } catch (err) {
       // The call was cut off by a stop: nothing of it is kept.
@@ -207,6 +207,7 @@ async function loop(ctx: RunContext): Promise<RunOutcome> {
       ...(price && { cost }),
     });
 
+    if (response.reasoning) emit(ctx, { type: "reasoning", id: messageId, text: response.reasoning });
     if (response.content) emit(ctx, { type: "message", id: messageId, role: "assistant", text: response.content });
     state.messages.push({
       role: "assistant",

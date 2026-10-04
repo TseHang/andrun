@@ -3,6 +3,8 @@
 // so a new engine over the same SQLite behaves like the old one (the Durable Object can be evicted at any time).
 
 import { createSession, resume, runAgent, type RunResult } from "../core/agent";
+import { classifyTask, routeFor } from "../core/auto";
+import { AUTO_MODEL } from "../core/config";
 import type { AgentEvent, EventBody } from "../core/events";
 import { getProfile } from "../core/modes";
 import { REPO_CONTEXT_HEADER, buildRepoContext } from "../core/repo-context";
@@ -92,6 +94,7 @@ export class SessionEngine {
     mode: "code" | "review";
     task: string;
     model?: string;
+    reasoning?: string;
     sha?: string;
     baseBranch?: string;
     pr?: { number: number; title: string; files: PullFile[] };
@@ -111,7 +114,7 @@ export class SessionEngine {
         sha: input.sha ?? this.deps.repo.sha,
         created_at: now,
         updated_at: now,
-        ...(input.model !== undefined && { model: input.model }),
+        ...(input.model !== undefined && { model: input.reasoning !== undefined ? `${input.model}@${input.reasoning}` : input.model }),
       },
       state,
     );
@@ -564,7 +567,8 @@ export class SessionEngine {
     const state = this.deleted ? null : store.loadState();
     if (!state) return;
     const base = getProfile(state.mode, deps.config);
-    const profile = { ...base, model: store.meta()?.model ?? base.model };
+    const [model = base.model, reasoning] = (store.meta()?.model ?? "").split("@").filter(Boolean);
+    let profile = { ...base, model, ...(reasoning !== undefined && { reasoning }) };
 
     // The repo context goes after the task (the first user message is the pull request's Task) and is not an event.
     if (needSandbox && state.step === 0 && !state.messages.some((m) => m.role === "user" && m.content.startsWith(REPO_CONTEXT_HEADER))) {
@@ -577,6 +581,22 @@ export class SessionEngine {
         await this.failSession(messageOf(err));
         return;
       }
+    }
+    if (model === AUTO_MODEL) {
+      // A new turn is sorted and routed; a turn that continues after a gate keeps the model it started on.
+      let route = decision ? store.lastRoute() : null;
+      if (!route) {
+        const users = state.messages.filter((m) => m.role === "user" && !m.content.startsWith(REPO_CONTEXT_HEADER));
+        const kind = await classifyTask(deps.model, users.at(-1)?.content ?? "", controller.signal);
+        if (this.deleted) return;
+        route = routeFor(kind);
+        // A stop during the classifier call: the run below ends at once, and no route is recorded for a turn that never ran.
+        if (!controller.signal.aborted) {
+          this.emitFor(state, { type: "model_routed", task: kind, ...route });
+          store.saveState(state, this.now());
+        }
+      }
+      profile = { ...base, ...route };
     }
     const agentDeps: AgentDeps = {
       model: deps.model,

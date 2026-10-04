@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createReview, type PullDetail } from "../api";
+import { createReview, defaultChoice, type ModelChoice, type PullDetail } from "../api";
 import { useApp } from "../context";
 import { Avatar } from "./Avatar";
 import { ModelMenu } from "./ModelMenu";
@@ -16,7 +16,7 @@ export function blockedReason(pull: PullDetail): string | null {
 export function ReviewCard({ pull }: { pull: PullDetail }) {
   const { config, navigate, refreshList } = useApp();
   const [brief, setBrief] = useState(config.reviewBrief);
-  const [model, setModel] = useState<string | null>(null);
+  const [choice, setChoice] = useState<ModelChoice | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const blocked = blockedReason(pull);
@@ -26,7 +26,7 @@ export function ReviewCard({ pull }: { pull: PullDetail }) {
     if (!canStart) return;
     setBusy(true);
     setError(null);
-    const res = await createReview(pull.number, brief, model ?? config.defaultModel);
+    const res = await createReview(pull.number, brief, choice ?? defaultChoice(config));
     setBusy(false);
     if (!res.ok) return setError(res.error);
     refreshList();
@@ -56,7 +56,7 @@ export function ReviewCard({ pull }: { pull: PullDetail }) {
           Reset to default
         </button>
         <span className="grow" />
-        <ModelMenu models={config.models} current={model ?? config.defaultModel} onPick={setModel} />
+        <ModelMenu models={config.models} autoModel={config.autoModel} current={choice ?? defaultChoice(config)} onPick={setChoice} />
       </div>
       {blocked && <div className="text-text-secondary">{blocked}</div>}
       {error && (

@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import type { SessionView, TimelineItem } from "../state/reducer";
-import { activityLabel, prTarget, usageLine } from "../state/format";
+import { activityLabel, modelLabel, prTarget, usageLine } from "../state/format";
 import { Activity } from "./Activity";
 import { Markdown } from "./Markdown";
 import { StepGroup } from "./StepGroup";
@@ -44,6 +44,19 @@ function Item({ item, session }: { item: TimelineItem; session: SessionInfo }) {
         </div>
       );
     }
+    case "reasoning":
+      return (
+        <details data-item="reasoning" open={item.streaming} className="my-3 pl-6 text-xs text-text-secondary">
+          <summary className="cursor-pointer select-none">{item.streaming ? "Reasoning…" : "Reasoning"}</summary>
+          <div className="mt-1.5 border-l-2 border-black/10 pl-3 leading-relaxed break-words whitespace-pre-wrap text-text-tertiary">{item.text}</div>
+        </details>
+      );
+    case "routed":
+      return (
+        <div data-item="routed" className="my-3 pl-6 text-xs text-text-secondary">
+          Auto · {item.task === "complex" ? "complex task" : "daily coding"} → <span className="font-mono text-[11px]">{modelLabel(item.model)}</span> · {item.reasoning}
+        </div>
+      );
     case "question":
       return (
         <div className="my-3">

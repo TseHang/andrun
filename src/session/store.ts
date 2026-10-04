@@ -202,11 +202,20 @@ export class SessionStore {
   }
 
   appendEvent(event: AgentEvent): void {
-    if (event.type === "message_delta") return;
+    if (event.type === "message_delta" || event.type === "reasoning_delta") return;
     let stored = event;
     if (event.type === "file_changed" && event.diff.length > MAX_DIFF_CHARS) stored = { ...event, diff: elide(event.diff) };
     if (event.type === "tool_output" && event.chunk.length > MAX_DIFF_CHARS) stored = { ...event, chunk: elide(event.chunk) };
+    if (event.type === "reasoning" && event.text.length > MAX_DIFF_CHARS) stored = { ...event, text: elide(event.text) };
     this.sql.exec("INSERT OR REPLACE INTO events (seq, json) VALUES (?, ?)", event.seq, JSON.stringify(stored));
+  }
+
+  /** The model auto mode chose for the current turn: the newest `model_routed` event. */
+  lastRoute(): { model: string; reasoning: string } | null {
+    const row = this.read<{ json: string }>(`SELECT json FROM events WHERE json LIKE '%"type":"model_routed"%' ORDER BY seq DESC LIMIT 1`)[0];
+    if (!row) return null;
+    const event = JSON.parse(row.json) as AgentEvent;
+    return event.type === "model_routed" ? { model: event.model, reasoning: event.reasoning } : null;
   }
 
   eventsAfter(seq: number): AgentEvent[] {

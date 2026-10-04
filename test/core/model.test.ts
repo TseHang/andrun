@@ -94,6 +94,23 @@ describe("S8: SSE tool-call assembly", () => {
     expect(res.usage.tokens_in).toBeGreaterThan(0);
   });
 
+  it.skipIf(!existsSync(recorded))("returns and streams the reasoning of a recorded ai& stream, apart from the text", async () => {
+    const f = fakeFetch([sse(readFileSync(recorded, "utf8"))]);
+    const deltas: [string, string | undefined][] = [];
+    const res = await client(f.fn).complete({ model: "x", messages: [{ role: "user", content: "hi" }], tools: [] }, (text, kind) => deltas.push([text, kind]));
+    expect(res.reasoning).toMatch(/^Let me read both files simultaneously\./);
+    expect(deltas.filter(([, kind]) => kind === "reasoning").map(([text]) => text).join("")).toBe(res.reasoning);
+    expect(res.content ?? "").not.toContain("Let me read both files");
+  });
+
+  it("sends the reasoning effort only when one is given", async () => {
+    const f = fakeFetch([sse("data: [DONE]\n\n"), sse("data: [DONE]\n\n")]);
+    await client(f.fn).complete({ model: "m1", reasoning: "high", messages: [{ role: "user", content: "hi" }], tools: [] });
+    await client(f.fn).complete({ model: "m1", messages: [{ role: "user", content: "hi" }], tools: [] });
+    expect(JSON.parse(String(f.calls[0]!.init.body))).toMatchObject({ model: "m1", reasoning_effort: "high" });
+    expect(JSON.parse(String(f.calls[1]!.init.body))).not.toHaveProperty("reasoning_effort");
+  });
+
   it("sends an OpenAI-compatible streaming request with the bearer key", async () => {
     const f = fakeFetch([sse(readFileSync(join(FIXTURES, "openai-sse/tool-call.txt"), "utf8"))]);
     await client(f.fn).complete({

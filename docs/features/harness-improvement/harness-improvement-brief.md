@@ -131,6 +131,20 @@ v3（2026-10-04）：對照 Codex 與 Claude Code 的 harness 後改寫，並納
 - [ ] **預覽頁加 CSP（待討論，未決定要不要做）**：HTML 預覽會執行 agent 寫的 script，隔離在 `sandbox="allow-scripts"` 的 iframe，讀不到 app，但仍可對外發請求。可在預覽內容前插入 CSP（`default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'`）擋掉對外連線。代價：用 CDN 載入函式庫或外部圖片的頁面會壞。目前的行為是 Henry 同意的；要不要改等討論。
 - [ ] **HTML 預覽會執行不受信任的 script（2026-10-04，Review UX 後）**：預覽現在有兩個入口，Code session 的變更檔與 Review PRs 的 PR 檔案（`GET /pulls/:n/files`，從 GitHub 讀 head commit）。PR 的內容不是 agent 依你的指令寫的，而是 PR 作者寫的。目前的防線：`sandbox="allow-scripts"`、沒有 `allow-same-origin`；fork PR 不顯示 Preview、API 也不回內容，所以來源只限對 repo 有寫入權限的人與 &run。剩下的風險同上一項（script 可對外連線、可在框內畫假畫面、可吃 CPU）。和上一項的 CSP 一起討論、一起決定。
 
+### TODO（2026-10-04，auto mode 之後）
+
+- [ ] **Auto-approve 指令的權限策略（Henry，2026-10-04）**：原本規劃的 auto-approve（ADR「Bonus — Auto-approve policy」）沒有做；code mode 的指令核准已直接放寬成沙箱內一律放行（第 3 項、ADR A17）。目前這樣可以，之後要補回分層判斷：
+  - 明確安全 → allowlist 直接允許
+  - 明確危險 → denylist 直接拒絕
+  - 無法確定 → 小模型 classifier 判斷（可沿用 auto mode 的 `deepseek-v4-flash` / `none`）
+  - GitHub write → 永遠由使用者核准
+- [ ] **Auto mode 的後續**（現況見 ADR A18）：
+  - 快取：一輪內不換模型，但跨輪換模型時 prompt cache 會失效。要讓快取最大化需要 ai& 內部支援路由，現在先不管。
+  - 花費：classifier 那次呼叫沒有算進 header 的花費與每輪上限（每次約 ¥0.001）。
+  - 分類只看該輪的使用者訊息（前 4000 字），不看對話歷史與 repo；分錯時沒有中途升級模型的機制。
+  - 兩條路由是寫死的（`autoConfig`），沒有用 eval 比較過成本與成功率。跑真實模型 eval 前先問 Henry。
+- [ ] **Reasoning 沒有回傳給模型**：`delta.reasoning` 只顯示在 UI，不放進下一次請求的 messages。高 effort 的多步任務是否需要回傳、對品質有沒有影響，沒有驗證過。
+
 ## 驗收（最低標準）
 
 | 項目 | 驗收 |

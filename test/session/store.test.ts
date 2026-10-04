@@ -91,6 +91,16 @@ describe("SessionStore (ADR D8)", () => {
     expect(store.loadState()).toEqual(resolved);
   });
 
+  it("cuts a very long reasoning text and never stores its deltas", () => {
+    const store = new SessionStore(nodeSql().sql);
+    store.create(meta, state());
+    store.appendEvent(ev(1, { type: "reasoning_delta", id: "m1", text: "Let" }));
+    store.appendEvent(ev(2, { type: "reasoning", id: "m1", text: "x".repeat(300_000) }));
+    const [stored] = store.eventsAfter(0);
+    expect(stored).toMatchObject({ seq: 2, type: "reasoning" });
+    expect((stored as { text: string }).text).toMatch(/^x{256000}\n\[… 44000 bytes elided\]$/);
+  });
+
   it("returns events after a seq, in order, and never stores message_delta", () => {
     const { store } = fresh();
     store.create(meta, state());

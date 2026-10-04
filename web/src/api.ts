@@ -7,8 +7,9 @@ export interface Config {
   sha: string | null;
   githubWrites: boolean;
   reviewBrief: string;
-  models: { id: string; contextWindow: number }[];
+  models: { id: string; contextWindow: number; efforts: string[] }[];
   defaultModel: string;
+  autoModel: string;
   maxTurnCost: number;
   costNotice: number;
   maxTaskChars: number;
@@ -49,9 +50,20 @@ async function create(body: object): Promise<CreateResult> {
   }
 }
 
-export const createSession = (task: string, model: string): Promise<CreateResult> => create({ mode: "code", task, model });
+/** A model with its reasoning effort; auto has no effort (it picks one per message). */
+export interface ModelChoice {
+  model: string;
+  reasoning?: string;
+}
 
-export const createReview = (pr: number, task: string, model: string): Promise<CreateResult> => create({ mode: "review", pr, task, model });
+export const defaultChoice = (config: Config): ModelChoice => {
+  const reasoning = config.models.find((m) => m.id === config.defaultModel)?.efforts[0];
+  return { model: config.defaultModel, ...(reasoning !== undefined && { reasoning }) };
+};
+
+export const createSession = (task: string, choice: ModelChoice): Promise<CreateResult> => create({ mode: "code", task, ...choice });
+
+export const createReview = (pr: number, task: string, choice: ModelChoice): Promise<CreateResult> => create({ mode: "review", pr, task, ...choice });
 
 /** The snapshot, null when the session does not exist; throws on other failures. */
 export async function getSnapshot(id: string): Promise<SessionSnapshot | null> {

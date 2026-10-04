@@ -33,6 +33,8 @@ export interface Usage {
 export type TimelineItem =
   | { key: string; kind: "user"; text: string; pending: boolean }
   | { key: string; kind: "assistant"; text: string; streaming: boolean; stepId?: string; usage?: Usage }
+  | { key: string; kind: "reasoning"; text: string; streaming: boolean }
+  | { key: string; kind: "routed"; task: "daily" | "complex"; model: string; reasoning: string }
   | { key: string; kind: "steps"; rows: StepRow[] }
   | { key: string; kind: "question"; question: string }
   | { key: string; kind: "notice"; title: string; message: string }
@@ -133,7 +135,7 @@ export function markSending(view: SessionView): SessionView {
  * one that was delivered comes back through the replay as a message.
  */
 export function dropStreaming(view: SessionView): SessionView {
-  return { ...view, sending: false, items: view.items.filter((i) => !(i.kind === "assistant" && i.streaming) && !(i.kind === "user" && i.pending)) };
+  return { ...view, sending: false, items: view.items.filter((i) => !((i.kind === "assistant" || i.kind === "reasoning") && i.streaming) && !(i.kind === "user" && i.pending)) };
 }
 
 export function reduce(view: SessionView, frame: ServerFrame): SessionView {
@@ -290,6 +292,20 @@ function apply(view: SessionView, ev: AgentEvent): SessionView {
       if (cur.kind !== "assistant" || !cur.streaming) return view;
       return { ...view, items: view.items.map((i) => (i === cur ? { ...cur, text: cur.text + ev.text } : i)) };
     }
+    case "reasoning": {
+      const item: TimelineItem = { key: `r:${ev.id}`, kind: "reasoning", text: ev.text, streaming: false };
+      const has = view.items.some((i) => i.key === item.key);
+      return { ...view, items: has ? view.items.map((i) => (i.key === item.key ? item : i)) : [...view.items, item] };
+    }
+    case "reasoning_delta": {
+      const key = `r:${ev.id}`;
+      const cur = view.items.find((i) => i.key === key);
+      if (!cur) return { ...view, items: [...view.items, { key, kind: "reasoning", text: ev.text, streaming: true }] };
+      if (cur.kind !== "reasoning" || !cur.streaming) return view;
+      return { ...view, items: view.items.map((i) => (i === cur ? { ...cur, text: cur.text + ev.text } : i)) };
+    }
+    case "model_routed":
+      return { ...view, items: [...view.items, { key: `mr:${ev.seq}`, kind: "routed", task: ev.task, model: ev.model, reasoning: ev.reasoning }] };
     case "usage": {
       const usage: Usage = { model: ev.model, tokensIn: ev.tokens_in, tokensOut: ev.tokens_out, latencyMs: ev.latency_ms };
       const items = view.items.map((i) => (i.kind === "assistant" && ev.stepId && i.stepId === ev.stepId ? { ...i, usage } : i));
@@ -390,7 +406,7 @@ function apply(view: SessionView, ev: AgentEvent): SessionView {
     case "stopped": {
       // Deltas are not persisted, so a half-written reply goes: a replay then shows the same timeline.
       const items = mapRows(
-        view.items.filter((i) => !(i.kind === "assistant" && i.streaming)),
+        view.items.filter((i) => !((i.kind === "assistant" || i.kind === "reasoning") && i.streaming)),
         (r) => (r.done ? r : settle({ ...r, done: true })),
       );
       const notice: TimelineItem = { key: `st:${ev.seq}`, kind: "notice", title: "Stopped", message: "Changes so far are kept. Send a message to continue." };
