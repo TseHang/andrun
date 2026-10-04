@@ -54,11 +54,12 @@ export function Home({ sessions }: { sessions: SessionSummary[] }) {
               <button type="button" aria-pressed="true" className="h-7 cursor-pointer rounded-[7px] bg-white px-3.5 font-semibold shadow-[0_1px_2px_rgba(0,0,0,0.14),0_0_0_0.5px_rgba(0,0,0,0.04)]">
                 Code
               </button>
-              {["Review", "Task"].map((m) => (
-                <button key={m} type="button" aria-pressed="false" disabled title="Not available yet" className="h-7 rounded-[7px] px-3.5 text-text-tertiary">
-                  {m}
-                </button>
-              ))}
+              <a href="/prs" className="flex h-7 items-center rounded-[7px] px-3.5">
+                Review
+              </a>
+              <button type="button" aria-pressed="false" disabled title="Not available yet" className="h-7 rounded-[7px] px-3.5 text-text-tertiary">
+                Task
+              </button>
             </div>
             <ModelMenu models={config.models} current={model ?? config.defaultModel} onPick={setModel} />
             <span className="grow" />
@@ -79,7 +80,7 @@ export function Home({ sessions }: { sessions: SessionSummary[] }) {
         )}
         <div className="flex items-center gap-1.5 px-1 text-xs text-text-secondary">
           <span className="font-mono text-[11px]">{config.repo}</span>
-          <span>at {config.sha.slice(0, 7)}</span>
+          <span>{config.sha ? `at ${config.sha.slice(0, 7)}` : "latest commit on the default branch"}</span>
           <span className="grow" />
           <span>Runs in a sandbox with no network access</span>
         </div>

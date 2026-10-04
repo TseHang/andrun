@@ -59,7 +59,13 @@ const SPECS: Record<ToolName, ToolSpec> = {
   finish: {
     name: "finish",
     description: "Call when the task is done. The summary is shown to the human.",
-    parameters: schema({ summary: str("Short summary of what you did or found.") }, ["summary"]),
+    parameters: schema(
+      {
+        summary: str("Short summary of what you did or found."),
+        title: str("A short pull request title for the change, in the imperative. Code mode only."),
+      },
+      ["summary"],
+    ),
   },
 };
 

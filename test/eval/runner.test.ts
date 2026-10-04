@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -82,9 +82,10 @@ afterEach(() => {
 describe("S12: eval runner writes a trajectory and scores honestly", () => {
   it("loads the seeded cases", async () => {
     const cases = await loadCases(CASES);
-    expect(cases.map((c) => c.id).sort()).toEqual(["cli-flag", "empty-array", "multi-file", "slugify", "sum-off-by-one"]);
+    expect(cases.map((c) => c.id).sort()).toEqual(["cli-flag", "empty-array", "multi-file", "review-slugify", "slugify", "sum-off-by-one"]);
     for (const c of cases) {
-      expect(c).toMatchObject({ mode: "code", check: { cmd: "npm test", expect_exit: 0 }, forbid_changes: ["test/**", "package.json"] });
+      // The review case (Phase 4) is checked in the S20 describe below.
+      if (c.mode === "code") expect(c).toMatchObject({ check: { cmd: "npm test", expect_exit: 0 }, forbid_changes: ["test/**", "package.json"] });
       expect(existsSync(join(FIXTURES, c.fixture))).toBe(true);
     }
     expect(await loadCases(CASES, "sum-off-by-one")).toHaveLength(1);
@@ -179,5 +180,53 @@ describe("S12: eval runner writes a trajectory and scores honestly", () => {
     expect(results[0]!.cost! + results[1]!.cost!).toBeLessThan(0.8 + 0.12); // at most one request over
     expect(lines.join("\n")).toContain("max cost");
     expect(readFileSync(join(outDir, "summary.md"), "utf8")).toContain("max cost");
+  });
+});
+
+describe("S20: the review case (spec §10)", () => {
+  const finding = (line: number, path = "src/slugify.js") => call("report_finding", { path, line, severity: "high", text: "Runs of separators are not collapsed." });
+  const scripts = [
+    // 1: finds the planted bug on the expected line
+    () => new ScriptedModelClient([call("read_file", { path: "src/slugify.js" }), finding(2), call("finish", { summary: "One finding." })]),
+    // 2: a finding, but on the wrong line
+    () => new ScriptedModelClient([finding(30), call("finish", { summary: "One finding." })]),
+    // 3: the right line in the wrong file
+    () => new ScriptedModelClient([finding(2, "test/slugify.test.js"), call("finish", { summary: "One finding." })]),
+    // 4: no finding at all
+    () => new ScriptedModelClient([call("finish", { summary: "Looks fine." })]),
+  ];
+
+  it("a review case passes on an expected finding and no changes", async () => {
+    const [reviewCase] = await loadCases(CASES, "review-slugify");
+    expect(reviewCase).toMatchObject({ mode: "review", fixture: "slugify", expect_finding: { path: "src/slugify.js", lines: [2] } });
+
+    const outDir = mkdtempSync(join(tmpdir(), "andrun-eval-"));
+    dirs.push(outDir);
+    const results = await runEval({
+      cases: [reviewCase!],
+      runs: 4,
+      makeModel: (_c, run) => scripts[run - 1]!(),
+      outDir,
+      fixturesDir: FIXTURES,
+      config: defaultConfig,
+    });
+
+    expect(results.map((r) => r.pass)).toEqual([true, false, false, false]);
+    expect(results[0]).toMatchObject({ type: "result", case: "review-slugify", run: 1, outcome: "finished", edited_tests: false, changed_files: [] });
+    expect(results[0]!.auto_approved).toBe(1); // the review's finish gate (P4-b)
+
+    // The same JSONL shape as a Code case: events, then one result line.
+    const rows = readFileSync(join(outDir, "review-slugify-1.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l) as Record<string, unknown>);
+    expect(rows.at(-1)).toMatchObject({ type: "result", pass: true });
+    expect(rows.some((e) => e["type"] === "review_finding" && e["line"] === 2)).toBe(true);
+  });
+
+  it("a review case needs expect_finding, and a code case needs check", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "andrun-cases-"));
+    dirs.push(dir);
+    writeFileSync(join(dir, "bad.yaml"), "id: bad\nfixture: slugify\nmode: review\ntask: review it\nforbid_changes: []\n");
+    await expect(loadCases(dir)).rejects.toThrow(/expect_finding/);
+    writeFileSync(join(dir, "bad.yaml"), "id: bad\nfixture: slugify\nmode: code\ntask: fix it\nforbid_changes: []\n");
+    await expect(loadCases(dir)).rejects.toThrow(/check/);
   });
 });

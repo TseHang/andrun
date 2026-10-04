@@ -13,6 +13,7 @@
     "e2e": "playwright test",
     "deploy": "vite build && wrangler deploy",
     "fake-model": "tsx test/support/fake-sse-server.ts",
+    "fake-github": "tsx test/support/fake-github.ts",
     "smoke": "tsx test/support/smoke.ts"
   },
   "devDependencies": {

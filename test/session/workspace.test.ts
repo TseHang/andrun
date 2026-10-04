@@ -32,6 +32,13 @@ function session(model: ModelClient, upsert: (row: SessionSummary) => Promise<vo
     model,
     config: defaultConfig,
     repo: { name: "TseHang/andrun-demo", sha: "0df6f53ec8a51785899d574c43db212513347537" },
+    // Phase 4 ports; these tests only need an approve to succeed.
+    github: {
+      publish: async (input) => ({ number: 1, url: "https://github.com/TseHang/andrun-demo/pull/1", branch: `${input.branchPrefix}-1`, round: 1, updated: false }),
+      postReview: async () => ({ url: "" }),
+      defaultBranchHead: async () => ({ branch: "main", sha: "0df6f53ec8a51785899d574c43db212513347537" }),
+    },
+    guard: { githubWrite: async () => null },
     broadcast: () => {},
     index: { upsert },
     setAlarm: () => {},
@@ -91,5 +98,31 @@ describe("S12: the session index follows status changes (D16)", () => {
     expect(engine.snapshot()).toMatchObject({ status: "awaiting_approval" });
     expect(calls).toBe(2);
     expect(index.list()).toMatchObject([{ id: FIRST, status: "awaiting_approval", title: "first task" }]);
+  });
+});
+
+describe("the index knows a session's pull request (Phase 4, P4-k)", () => {
+  const base = { mode: "code" as const, title: "t", status: "done" as const, created_at: 1, updated_at: 1 };
+
+  it("stores and returns pr, and leaves it out when there is none", () => {
+    const index = new WorkspaceIndex(nodeSql().sql);
+    index.upsert({ id: FIRST, ...base });
+    index.upsert({ id: SECOND, ...base, mode: "review", created_at: 2, pr: 14 });
+    expect(index.list()).toEqual([
+      { id: SECOND, ...base, mode: "review", created_at: 2, pr: 14 },
+      { id: FIRST, ...base },
+    ]);
+    index.upsert({ id: FIRST, ...base, pr: 12 }); // a Code session gets its pull request when it is approved
+    expect(index.list()[1]).toMatchObject({ id: FIRST, pr: 12 });
+  });
+
+  it("a table created before Phase 4 gets the column", () => {
+    const db = nodeSql();
+    db.sql.exec(`CREATE TABLE sessions (id TEXT PRIMARY KEY, mode TEXT NOT NULL, title TEXT NOT NULL, status TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
+    db.sql.exec("INSERT INTO sessions VALUES (?, 'code', 'old', 'done', 1, 1)", FIRST);
+    const index = new WorkspaceIndex(db.sql);
+    expect(index.list()).toEqual([{ id: FIRST, mode: "code", title: "old", status: "done", created_at: 1, updated_at: 1 }]);
+    index.upsert({ id: SECOND, ...base, created_at: 2, pr: 12 });
+    expect(index.list()[0]).toMatchObject({ id: SECOND, pr: 12 });
   });
 });

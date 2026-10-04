@@ -1,7 +1,7 @@
 // The session's Durable Object SQLite tables (ADR D8). Platform-free: only the SqlStore port.
 // DO SQLite rules: one statement per exec, bindings are string | number | null, no BEGIN/COMMIT, no PRAGMA.
 
-import type { AgentEvent } from "../core/events";
+import type { AgentEvent, Severity } from "../core/events";
 import type { AgentState, ChatMessage, PendingApproval } from "../core/types";
 import type { SessionMeta, SqlStore, StoredChange } from "./ports";
 
@@ -20,6 +20,44 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS changes (
     path TEXT PRIMARY KEY, before_sha TEXT, after_sha TEXT, content TEXT, deleted INTEGER NOT NULL, skipped INTEGER NOT NULL)`,
 ];
+
+// Created on first write, not in SCHEMA: the `session` table is never altered (P4-p), so older sessions still open.
+const FINDINGS_DDL = `CREATE TABLE IF NOT EXISTS findings (
+  id TEXT PRIMARY KEY, n INTEGER NOT NULL, path TEXT NOT NULL, line INTEGER NOT NULL, severity TEXT NOT NULL,
+  text TEXT NOT NULL, inline INTEGER NOT NULL, dismissed INTEGER NOT NULL, edited INTEGER NOT NULL)`;
+const GITHUB_STATE_DDL = `CREATE TABLE IF NOT EXISTS github_state (id INTEGER PRIMARY KEY CHECK (id = 1), json TEXT NOT NULL)`;
+
+/** One review finding as stored; `n` keeps the order they were reported in. */
+export interface StoredFinding {
+  id: string;
+  path: string;
+  line: number;
+  severity: Severity;
+  text: string;
+  inline: boolean;
+  dismissed: boolean;
+  edited: boolean;
+}
+
+/** Everything about GitHub that the `session` table does not hold. */
+export interface GitHubState {
+  pr?: { number: number; url: string; branch: string };
+  round?: number;
+  baseBranch?: string;
+  review?: { number: number; title: string; lines: Record<string, number[]> };
+  posted?: { url: string; verdict: string };
+}
+
+interface FindingRow {
+  id: string;
+  path: string;
+  line: number;
+  severity: Severity;
+  text: string;
+  inline: number;
+  dismissed: number;
+  edited: number;
+}
 
 interface SessionRow {
   id: string;
@@ -177,6 +215,48 @@ export class SessionStore {
     this.sql.exec("DELETE FROM changes WHERE path = ?", path);
   }
 
+  githubState(): GitHubState {
+    const row = this.read<{ json: string }>("SELECT json FROM github_state LIMIT 1")[0];
+    return row ? (JSON.parse(row.json) as GitHubState) : {};
+  }
+
+  /** Merges `patch` into the stored state. */
+  saveGithubState(patch: GitHubState): void {
+    this.sql.exec(GITHUB_STATE_DDL);
+    this.sql.exec("INSERT OR REPLACE INTO github_state (id, json) VALUES (1, ?)", JSON.stringify({ ...this.githubState(), ...patch }));
+  }
+
+  addFinding(f: StoredFinding): void {
+    this.sql.exec(FINDINGS_DDL);
+    const n = this.read<{ n: number | null }>("SELECT MAX(n) AS n FROM findings")[0]?.n ?? 0;
+    this.sql.exec(
+      "INSERT OR REPLACE INTO findings (id, n, path, line, severity, text, inline, dismissed, edited) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      f.id,
+      n + 1,
+      f.path,
+      f.line,
+      f.severity,
+      f.text,
+      f.inline ? 1 : 0,
+      f.dismissed ? 1 : 0,
+      f.edited ? 1 : 0,
+    );
+  }
+
+  findings(): StoredFinding[] {
+    return this.read<FindingRow>("SELECT * FROM findings ORDER BY n").map(findingOf);
+  }
+
+  finding(id: string): StoredFinding | null {
+    const row = this.read<FindingRow>("SELECT * FROM findings WHERE id = ?", id)[0];
+    return row ? findingOf(row) : null;
+  }
+
+  updateFinding(id: string, patch: { text?: string; dismissed?: boolean }): void {
+    if (patch.text !== undefined) this.sql.exec("UPDATE findings SET text = ?, edited = 1 WHERE id = ?", patch.text, id);
+    if (patch.dismissed !== undefined) this.sql.exec("UPDATE findings SET dismissed = ? WHERE id = ?", patch.dismissed ? 1 : 0, id);
+  }
+
   changes(): StoredChange[] {
     return this.read<ChangeRow>("SELECT * FROM changes ORDER BY path").map((r) => ({
       path: r.path,
@@ -187,4 +267,8 @@ export class SessionStore {
       skipped: r.skipped === 1,
     }));
   }
+}
+
+function findingOf(r: FindingRow): StoredFinding {
+  return { id: r.id, path: r.path, line: r.line, severity: r.severity, text: r.text, inline: r.inline === 1, dismissed: r.dismissed === 1, edited: r.edited === 1 };
 }

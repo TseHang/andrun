@@ -2,6 +2,7 @@
 // ones; tests provide node:sqlite and a fake container. No platform imports here.
 
 import type { AgentConfig } from "../core/config";
+import type { GitHub } from "../github";
 import type { ModelClient, SandboxAdapter } from "../core/types";
 import type { ServerFrame, SessionSummary } from "./protocol";
 
@@ -43,6 +44,10 @@ export interface EngineDeps {
   config: AgentConfig;
   /** The configured repo (P2-h); copied into the session row at create. */
   repo: { name: string; sha: string };
+  /** The configured repo's GitHub client: publishing on approve, posting a review. */
+  github: Pick<GitHub, "publish" | "postReview" | "defaultBranchHead">;
+  /** Checked before every GitHub write (kill switch, rate limit). `null` allows it; a string is the refusal shown to the user. */
+  guard: { githubWrite(ip: string): Promise<string | null> };
   /** Sends a frame to every connected socket. */
   broadcast(frame: ServerFrame): void;
   /** The WorkspaceDO session index (ADR D16). Failures are logged, never thrown into the session. */

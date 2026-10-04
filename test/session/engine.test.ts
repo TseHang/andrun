@@ -98,6 +98,13 @@ function world(opts: { tarball?: Uint8Array; config?: AgentConfig } = {}) {
       model,
       config: opts.config ?? defaultConfig,
       repo: REPO,
+      // Phase 4: approving a finish opens a pull request. These tests only need it to succeed.
+      github: {
+        publish: async (input) => ({ number: 1, url: "https://github.com/TseHang/andrun-demo/pull/1", branch: `${input.branchPrefix}-1`, round: 1, updated: false }),
+        postReview: async () => ({ url: "https://github.com/TseHang/andrun-demo/pull/1#pullrequestreview-1" }),
+        defaultBranchHead: async () => ({ branch: "main", sha: REPO.sha }),
+      },
+      guard: { githubWrite: async () => null },
       broadcast: (frame) => frames.push(frame),
       index: {
         upsert: async (row) => {
@@ -257,7 +264,7 @@ describe("S2: a reconnecting client gets exactly the events it missed", () => {
     const last = all.at(-1)!.seq;
     await send(engine, { type: "approve", approvalId });
     const next = engine.replay(last)!;
-    expect(types(next)).toEqual(["approval_resolved", "status", "status"]);
+    expect(types(next)).toEqual(["pr_opened", "approval_resolved", "status", "status"]);
     expect(statuses(next)).toEqual(["running", "done"]);
     expect(next.every((e) => e.seq > last)).toBe(true);
   });
@@ -277,6 +284,7 @@ describe("S3: approve and reject work over the socket", () => {
       expect(await send(engine, { type: "approve", approvalId })).toEqual([]);
       const added = events().slice(before);
       expect(added).toMatchObject([
+        { type: "pr_opened" },
         { type: "approval_resolved", approvalId, approved: true },
         { type: "status", status: "running" },
         { type: "status", status: "done" },
@@ -386,6 +394,7 @@ describe("S4: the pause survives an evicted Durable Object", () => {
     const after = w.events();
     expect(after.slice(0, before.length)).toEqual(before);
     expect(after.slice(before.length)).toMatchObject([
+      { type: "pr_opened" },
       { type: "approval_resolved", approved: true },
       { type: "status", status: "running" },
       { type: "status", status: "done" },
