@@ -4,9 +4,10 @@ import remarkGfm from "remark-gfm";
 
 /** An element with these classes; react-markdown's `node` prop is not a DOM attribute. */
 function styled(tag: string, className: string, extra: Record<string, string> = {}) {
-  return ({ node, ...props }: { node?: unknown }) => {
+  return ({ node, className: given, ...props }: { node?: unknown; className?: string }) => {
     void node;
-    return createElement(tag, { className, ...extra, ...props });
+    // react-markdown's own class (a task list, a code language) is added, not swapped in.
+    return createElement(tag, { ...extra, ...props, className: given ? `${className} ${given}` : className });
   };
 }
 

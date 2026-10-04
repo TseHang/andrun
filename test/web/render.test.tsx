@@ -58,6 +58,9 @@ describe("Session UI: the conversation (slice B)", () => {
     expect(link).toContain('target="_blank"');
     expect(link).toContain('rel="noreferrer"');
     for (const marker of ["##", "**", "```", "| - |"]) expect(html, marker).not.toContain(marker);
+    // A class react-markdown adds (the code language, a task list) does not replace the styling.
+    expect(/<code[^>]*class="([^"]*)"[^>]*>const x = 1;/.exec(html)?.[1]).toMatch(/font-mono.*language-js/);
+    expect(/<ul[^>]*class="([^"]*)"/.exec(timeline(reply("- [x] done\n- [ ] todo")))?.[1]).toMatch(/list-disc.*contains-task-list/);
 
     // A question from the agent is part of the conversation too.
     const asked = timeline(

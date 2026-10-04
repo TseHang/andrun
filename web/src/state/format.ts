@@ -1,5 +1,6 @@
 // Small pure formatters for the UI (no DOM).
 import type { PlanStep } from "../../../src/core/events";
+import { STOP_REASON } from "../../../src/core/types";
 import type { ChangeView, SessionView, StepRow, Usage } from "./reducer";
 
 export function formatBytes(n: number): string {
@@ -83,6 +84,7 @@ export function rowSummary(row: StepRow): string {
   if (!row.done) return "";
   const parts: string[] = [];
   if (row.declined) parts.push("declined");
+  else if (row.error === STOP_REASON) parts.push("stopped");
   else if (row.error !== undefined) parts.push("failed");
   else if (row.name === "run_command" && row.exitCode !== undefined) parts.push(row.exitCode === null ? "timed out" : `exit ${row.exitCode}`);
   else if (row.name === "read_file" && row.meta?.bytes !== undefined) parts.push(formatBytes(row.meta.bytes));
@@ -95,6 +97,7 @@ export function rowSummary(row: StepRow): string {
 }
 
 export function rowTone(row: StepRow): "failed" | "ok" | "muted" {
+  if (row.error === STOP_REASON) return "muted";
   if (row.error !== undefined || (row.exitCode !== undefined && row.exitCode !== 0)) return "failed";
   return row.exitCode === 0 ? "ok" : "muted";
 }
@@ -116,7 +119,10 @@ export function activityLabel(view: SessionView): string | null {
   const open = view.items.flatMap((i) => (i.kind === "steps" ? i.rows : [])).filter((r) => !r.done).at(-1);
   if (open) {
     if (open.name === "sandbox_setup") return "Starting sandbox";
-    if (open.name === "run_command") return `Running ${open.arg.length > 60 ? `${open.arg.slice(0, 60)}…` : open.arg}`;
+    if (open.name === "run_command") {
+      const command = firstLine(open.arg);
+      return `Running ${command.length > 60 ? `${command.slice(0, 60)}…` : command}`;
+    }
     if (open.name === "write_file" || open.name === "apply_patch") return `Editing ${open.arg}`;
     if (open.name === "read_file") return `Reading ${open.arg}`;
     return "Working";

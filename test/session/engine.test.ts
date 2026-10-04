@@ -1544,6 +1544,9 @@ describe("Session UI: stop (UI-a, UI-b) and saved file content (UI-c)", () => {
     const results = messages.filter((m) => m.role === "tool");
     expect(results).toHaveLength(2);
     expect(results[1]!.content).toContain("stopped by the user");
+    // The cut-off command is reported as stopped, to the user and to the model, not as a timeout.
+    expect(results[0]!.content).toContain("stopped by the user");
+    expect(JSON.stringify(events)).not.toContain("timed out");
     expectValidTranscript(messages);
     expect(types(events).slice(-2)).toEqual(["stopped", "status"]);
     expect(ofType(events, "stopped")).toHaveLength(1);
@@ -1663,21 +1666,34 @@ describe("Session UI: stop (UI-a, UI-b) and saved file content (UI-c)", () => {
         call("finish", { summary: "Made a page." }),
       ]),
     );
-    expect(engine.fileContent("site/index.html")).toBeNull(); // no session yet
+    expect(await engine.fileContent("site/index.html")).toBeNull(); // no session yet
     engine.create({ id: ID, mode: "code", task: "make a page" });
     await engine.idle();
     await send(engine, { type: "approve", approvalId: engine.snapshot()!.pending!.approvalId }); // deleting a file needs approval
     expect(engine.snapshot()!.pending!.tool).toBe("finish");
 
-    expect(engine.fileContent("site/index.html")).toBe(PAGE);
+    expect(await engine.fileContent("site/index.html")).toBe(PAGE);
     for (const path of ["junk.txt", "big.txt", "src/sum.js", "index.html", "../site/index.html", "/site/index.html", ""]) {
-      expect(engine.fileContent(path), path).toBeNull();
+      expect(await engine.fileContent(path), path).toBeNull();
     }
     // Saved content does not need the sandbox.
     await w.container.destroy();
-    expect(w.engine(new ScriptedModelClient([])).fileContent("site/index.html")).toBe(PAGE);
+    expect(await w.engine(new ScriptedModelClient([])).fileContent("site/index.html")).toBe(PAGE);
 
     await engine.remove();
-    expect(engine.fileContent("site/index.html")).toBeNull();
+    expect(await engine.fileContent("site/index.html")).toBeNull();
+  });
+
+  it("fileContent waits for the save that follows a file event", async () => {
+    const w = world();
+    const PAGE = "<h1>v1</h1>\n";
+    const model = new StoppableModel([call("write_file", { path: "index.html", content: PAGE })]);
+    const engine = w.engine(model);
+    engine.create({ id: ID, mode: "code", task: TASK });
+    // The client asks for the content as soon as the event arrives, before the run pauses.
+    await until(() => w.frames.some((f) => f.type === "file_changed" && f.path === "index.html"));
+    expect(await engine.fileContent("index.html")).toBe(PAGE);
+    await until(() => model.waiting);
+    await send(engine, { type: "stop" });
   });
 });

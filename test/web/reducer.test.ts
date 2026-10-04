@@ -687,6 +687,20 @@ describe("Session UI: a stopped run (UI-a)", () => {
     expect(v.items.filter((i) => i.kind === "notice")).toHaveLength(1);
     expect(activityLabel(v)).toBeNull();
 
+    // A command the stop cut off reads "stopped", not "timed out" or "failed".
+    const cut = run(
+      [
+        ev({ type: "tool_output", callId: "c1", stream: "result", chunk: "stopped by the user", exitCode: null }),
+        ev({ type: "error", source: "tool", message: "stopped by the user" }),
+        ev({ type: "stopped" }),
+        ev({ type: "status", status: "awaiting_input" }),
+      ],
+      running,
+    );
+    expect(rowSummary(rows(cut)[0]!)).toMatch(/^stopped · /);
+    expect(rowTone(rows(cut)[0]!)).toBe("muted");
+    expect(cut.lastCommand).toBeNull();
+
     // The persisted log (no deltas) replays to the same timeline.
     const replay = script();
     const replayed = run([

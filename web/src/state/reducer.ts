@@ -394,7 +394,8 @@ function apply(view: SessionView, ev: AgentEvent): SessionView {
         (r) => (r.done ? r : settle({ ...r, done: true })),
       );
       const notice: TimelineItem = { key: `st:${ev.seq}`, kind: "notice", title: "Stopped", message: "Changes so far are kept. Send a message to continue." };
-      return { ...view, items: [...items, notice] };
+      // The command the stop cut off did not time out.
+      return { ...view, items: [...items, notice], lastCommand: view.lastCommand?.exitCode === null ? null : view.lastCommand };
     }
     case "status": {
       const closes = ev.status === "done" || ev.status === "failed" || ev.status === "budget_exceeded";

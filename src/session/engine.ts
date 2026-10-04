@@ -148,8 +148,12 @@ export class SessionEngine {
     return gh.pr ? { number: gh.pr.number, url: gh.pr.url, branch: gh.pr.branch } : null;
   }
 
-  /** The saved content of a changed file; null unless the `changes` table holds text for exactly that path. */
-  fileContent(path: string): string | null {
+  /**
+   * The saved content of a changed file; null unless the `changes` table holds text for exactly that path.
+   * Waits for saves in progress: a `file_changed` event reaches the client before its content is stored.
+   */
+  async fileContent(path: string): Promise<string | null> {
+    await this.reconcileChain;
     if (this.deleted || !this.store.exists()) return null;
     return this.store.changes().find((c) => c.path === path)?.content ?? null;
   }

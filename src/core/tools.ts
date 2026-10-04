@@ -3,7 +3,7 @@
 import { TOOL_OUTPUT_CAP, capToolOutput } from "./context";
 import { pathsInPatch } from "./diff";
 import type { PlanStep, QuestionOption } from "./events";
-import { SandboxLostError, type Finding, type SandboxAdapter, type ToolName, type ToolSpec } from "./types";
+import { STOP_REASON, SandboxLostError, type Finding, type SandboxAdapter, type ToolName, type ToolSpec } from "./types";
 
 export const MAX_FILE_BYTES = 1_000_000;
 
@@ -325,6 +325,8 @@ async function run(name: ToolName, args: Record<string, unknown>, ctx: ToolConte
     case "run_command": {
       const command = reqString(args, "command");
       const r = await sandbox.exec(command, { onOutput: ctx.onOutput, timeoutMs: ctx.timeoutMs, signal: ctx.signal });
+      // The sandbox reports every abort as a timeout; a stop by the user is said as such, to the user and to the model.
+      if (r.timedOut && ctx.signal?.aborted && ctx.signal.reason === STOP_REASON) return { ok: false, error: STOP_REASON, exitCode: null };
       if (r.timedOut) return { ok: false, error: `command timed out after ${Math.round(ctx.timeoutMs / 1000)}s`, exitCode: null };
       return {
         ok: true,

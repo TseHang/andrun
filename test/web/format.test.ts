@@ -111,6 +111,9 @@ describe("Session UI: usage line, activity label, previewable paths", () => {
     expect(long.length).toBeGreaterThan(60);
     expect(activityLabel(after(started, open("run_command", { command: long })))).toBe(`Running ${long.slice(0, 60)}…`);
 
+    // A multi-line command is shown by its first line.
+    expect(activityLabel(after(started, open("run_command", { command: 'node -e "\nconsole.log(1)\n"' })))).toBe('Running node -e " …');
+
     // Only while running.
     const running = after(started, open("run_command", { command: "npm test" }));
     for (const status of ["awaiting_input", "awaiting_approval", "done", "failed", "budget_exceeded", "idle"] as const) {
