@@ -35,18 +35,18 @@ test("approve opens a pull request and it appears under My PRs", async ({ page }
   expect(state.pulls[0]!.body).toContain("Fixed the loop bound in sum()");
   expect(state.authors[state.refs[branch]!]).toBe("andrun[bot]");
 
-  // The pull request is on the Pull requests page (spec test B), under every tab it belongs to.
-  const nav = s.sidebar.getByRole("link", { name: /Pull requests/ });
+  // The pull request is on the Review PRs page (spec test B), under every tab it belongs to.
+  const nav = s.sidebar.getByRole("link", { name: /Review PRs/ });
   await expect(nav).toContainText("1");
   await nav.click();
   await expect(page).toHaveURL(/\/prs$/);
-  await expect(page.getByRole("heading", { name: "Pull requests" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Review PRs" })).toBeVisible();
   const row = s.prRow(12);
   await expect(row).toContainText("Fix the loop bound in sum()");
   await expect(row).toContainText("#12");
   await expect(row).toContainText(branch);
   await expect(row).toContainText("Opened by &run");
-  await expect(row.getByRole("link", { name: "Start review" })).toHaveAttribute("href", "/prs/12");
+  await expect(row.getByRole("link", { name: "Review with &run" })).toHaveAttribute("href", "/prs/12");
   for (const tab of ["My PRs", "Needs review", "All"]) {
     await page.getByRole("tab", { name: tab }).click();
     await expect(page.getByRole("tab", { name: tab })).toHaveAttribute("aria-selected", "true");
@@ -103,6 +103,6 @@ test("delete keeps the pull request", async ({ page, request }) => {
   const row = s.prRow(12);
   await expect(row).toContainText("Opened by &run");
   await expect(row.getByRole("link", { name: "View session" })).toHaveCount(0);
-  await expect(row.getByRole("link", { name: "Start review" })).toBeVisible();
+  await expect(row.getByRole("link", { name: "Review with &run" })).toBeVisible();
   expect((await gh.state()).pulls).toMatchObject([{ number: 12, state: "open" }]);
 });

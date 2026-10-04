@@ -41,6 +41,8 @@ export interface FakePull {
   files?: FakeFile[];
   /** Overrides `changed_files`, for a pull request with more files than one page returns. */
   changedFiles?: number;
+  /** File contents at the head commit, path → text; they win over the head commit's tree. */
+  contents?: Record<string, string>;
   updatedAt: string;
 }
 
@@ -318,6 +320,25 @@ export function createFakeGitHub(seed: { files?: Record<string, string>; modes?:
       refs.set(m[1]!, String(body.sha));
       for (const p of pulls) if (p.headRef === m[1] && p.state === "open") Object.assign(p, { headSha: String(body.sha), updatedAt: tick() });
       return json({ ref: `refs/heads/${m[1]}`, object: { sha: body.sha } });
+    }
+
+    // ---------- Contents ----------
+    if ((m = /^\/contents\/(.+)$/.exec(rest)) && method === "GET") {
+      const filePath = m[1]!.split("/").map(decodeURIComponent).join("/");
+      const ref = url.searchParams.get("ref") ?? refs.get(defaultBranch)!;
+      const sha = refs.get(ref) ?? ref;
+      const override = pulls.find((p) => p.headSha === sha && p.contents?.[filePath] !== undefined)?.contents?.[filePath];
+      const files = filesAt(sha);
+      const content = override ?? files[filePath];
+      if (content === undefined) {
+        const inside = Object.keys(files).filter((f) => f.startsWith(`${filePath}/`));
+        return inside.length > 0 ? json(inside.map((f) => ({ type: "file", path: f, name: f.split("/").pop() }))) : err(404, "Not Found");
+      }
+      const name = filePath.split("/").pop();
+      // Like GitHub: a file over 1 MB comes without its content.
+      if (content.length > 1_000_000) return json({ type: "file", path: filePath, name, size: content.length, encoding: "none", content: "" });
+      const base64 = Buffer.from(content, "utf8").toString("base64").replace(/(.{60})/g, "$1\n");
+      return json({ type: "file", path: filePath, name, size: content.length, encoding: "base64", content: base64 });
     }
 
     // ---------- Pull requests ----------
