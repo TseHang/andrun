@@ -74,8 +74,10 @@ describe("Session UI: the conversation (slice B)", () => {
     const html = timeline(reply("<script>alert(1)</script> <img src=x onerror=alert(1)> done\n\n<div onclick=\"alert(1)\">box</div>"));
     expect(html).not.toMatch(/<script/i);
     expect(html).not.toMatch(/<img/i);
-    expect(html).not.toMatch(/onclick=/i);
+    expect(html).not.toMatch(/<div[^>]*onclick/i);
     expect(html).toContain("done");
+    // Shown as text, tags and all.
+    expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
   });
 
   it("a javascript: link has no href", () => {

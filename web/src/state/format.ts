@@ -1,6 +1,6 @@
 // Small pure formatters for the UI (no DOM).
 import type { PlanStep } from "../../../src/core/events";
-import type { ChangeView, StepRow } from "./reducer";
+import type { ChangeView, SessionView, StepRow, Usage } from "./reducer";
 
 export function formatBytes(n: number): string {
   if (n < 1000) return `${n} B`;
@@ -96,4 +96,28 @@ export function rowTone(row: StepRow): "failed" | "ok" | "muted" {
 export function prTarget(branch: string | undefined, id: string, baseBranch: string | null): string {
   const from = branch ?? `agent/${id.slice(0, 8)}-1`;
   return baseBranch ? `${from} → ${baseBranch}` : from;
+}
+
+/** The short line under a reply, e.g. "5.4k in · 6.0k out · 34.3s". */
+export function usageLine(u: Usage): string {
+  return `${formatTokens(u.tokensIn)} in · ${formatTokens(u.tokensOut)} out · ${(u.latencyMs / 1000).toFixed(1)}s`;
+}
+
+/** What the agent is doing right now, null unless it is running. */
+export function activityLabel(view: SessionView): string | null {
+  if (view.status !== "running") return null;
+  const open = view.items.flatMap((i) => (i.kind === "steps" ? i.rows : [])).filter((r) => !r.done).at(-1);
+  if (open) {
+    if (open.name === "sandbox_setup") return "Starting sandbox";
+    if (open.name === "run_command") return `Running ${open.arg.length > 60 ? `${open.arg.slice(0, 60)}…` : open.arg}`;
+    if (open.name === "write_file" || open.name === "apply_patch") return `Editing ${open.arg}`;
+    if (open.name === "read_file") return `Reading ${open.arg}`;
+    return "Working";
+  }
+  return view.items.some((i) => i.kind === "assistant" && i.streaming) ? "Writing a reply" : "Thinking";
+}
+
+/** Whether the file can be shown in the preview: HTML pages. */
+export function isPreviewable(path: string): boolean {
+  return /\.html?$/i.test(path);
 }

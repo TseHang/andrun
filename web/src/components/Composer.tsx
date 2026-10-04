@@ -32,7 +32,7 @@ export function Composer({ view, running, waiting, code, send, update }: { view:
         className="h-9 min-w-0 grow rounded-[10px] bg-black/5 px-3 text-[14px] transition-[background-color,box-shadow] focus:bg-white focus:shadow-[0_0_0_1px_rgba(0,0,0,0.2)]"
       />
       {view.pr?.number !== undefined && !running && <span className="shrink-0 text-xs text-text-tertiary">Adds a commit to pull request #{view.pr.number}</span>}
-      {running && <span className="shrink-0 text-xs text-text-tertiary">Added at the next step</span>}
+      {running && <span className="shrink-0 text-xs text-text-tertiary">The agent reads your message after its current step</span>}
       {view.refused && (
         <span role="alert" className="shrink-0 text-xs text-failed">
           {view.refused}
@@ -45,6 +45,11 @@ export function Composer({ view, running, waiting, code, send, update }: { view:
           className="h-9 shrink-0 cursor-pointer rounded-[10px] bg-black/6 px-4 text-[13px] font-semibold text-text"
         >
           Open pull request
+        </button>
+      )}
+      {running && (
+        <button type="button" onClick={() => void send({ type: "stop" })} className="h-9 shrink-0 cursor-pointer rounded-[10px] bg-black/6 px-4 text-[13px] font-semibold text-text">
+          Stop
         </button>
       )}
       <button type="submit" disabled={!text.trim()} className="h-9 shrink-0 cursor-pointer rounded-[10px] bg-black/6 px-4 text-[13px] font-semibold text-text disabled:cursor-default disabled:bg-black/4 disabled:text-text-tertiary">

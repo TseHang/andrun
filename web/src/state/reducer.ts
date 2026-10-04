@@ -387,11 +387,20 @@ function apply(view: SessionView, ev: AgentEvent): SessionView {
       return { ...view, posted: { url: ev.url, verdict: ev.verdict }, items: [...view.items, { key: `rp:${ev.seq}`, kind: "review_posted", url: ev.url, verdict: ev.verdict }] };
     case "plan_updated":
       return { ...view, plan: ev.plan.length > 0 ? ev.plan : null };
+    case "stopped": {
+      // Deltas are not persisted, so a half-written reply goes: a replay then shows the same timeline.
+      const items = mapRows(
+        view.items.filter((i) => !(i.kind === "assistant" && i.streaming)),
+        (r) => (r.done ? r : settle({ ...r, done: true })),
+      );
+      const notice: TimelineItem = { key: `st:${ev.seq}`, kind: "notice", title: "Stopped", message: "Changes so far are kept. Send a message to continue." };
+      return { ...view, items: [...items, notice] };
+    }
     case "status": {
       const closes = ev.status === "done" || ev.status === "failed" || ev.status === "budget_exceeded";
       const items = closes ? mapRows(view.items, (r) => (r.done ? r : settle({ ...r, done: true }))) : view.items;
       const last = items.at(-1);
-      const silent = ev.status === "awaiting_input" && view.question === null && last?.kind !== "assistant";
+      const silent = ev.status === "awaiting_input" && view.question === null && last?.kind !== "assistant" && !last?.key.startsWith("st:");
       const notice: TimelineItem = { key: `n:${ev.seq}`, kind: "notice", title: "The agent stopped without a reply.", message: "Send a message to continue." };
       return { ...view, items: silent ? [...items, notice] : items, status: ev.status, composerEnabled: true };
     }
