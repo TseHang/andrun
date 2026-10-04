@@ -9,7 +9,7 @@ import { ScriptedModelClient, call } from "../support/scripted-model";
 
 const ROOT = join(import.meta.dirname, "../..");
 const FIX_THE_TEST = ["cli-flag", "empty-array", "multi-file", "slugify", "sum-off-by-one"];
-const ALL_CASES = [...FIX_THE_TEST, "add-tests", "feature-clamp", "refactor-format", "review-clean", "review-slugify", "static-page"].sort();
+const ALL_CASES = [...FIX_THE_TEST, "add-tests", "discuss-first", "feature-clamp", "refactor-format", "review-clean", "review-slugify", "static-page"].sort();
 const FIXTURES = join(ROOT, "eval/fixtures");
 const CASES = join(ROOT, "eval/cases");
 
@@ -314,7 +314,7 @@ describe("HI-i: cases beyond 'fix the test'", () => {
   it("scores feature, refactor, add-tests, static-page and clean-review cases", async () => {
     const cases = await loadCases(CASES);
     expect(cases.map((c) => c.id).sort()).toEqual(ALL_CASES);
-    expect(cases).toHaveLength(11);
+    expect(cases).toHaveLength(12);
     expect(cases.find((c) => c.id === "add-tests")).toMatchObject({ mode: "code", expect_changes: ["test/**"], forbid_changes: ["src/**", "package.json"] });
     expect(cases.find((c) => c.id === "review-clean")).toMatchObject({ mode: "review", expect_no_findings: true });
     expect(cases.find((c) => c.id === "static-page")!.max_steps).toBeUndefined();
@@ -363,6 +363,58 @@ describe("HI-i: cases beyond 'fix the test'", () => {
     ]);
     expect(review.results.map((r) => r.pass)).toEqual([true, false]);
     expect(review.results[0]).toMatchObject({ outcome: "finished", changed_files: [] });
+  });
+
+  it("all cases load", async () => {
+    const cases = await loadCases(CASES);
+    expect(cases).toHaveLength(12);
+    const discuss = cases.find((c) => c.id === "discuss-first")!;
+    expect(discuss).toMatchObject({ mode: "code", expect_reply: true, task: "I want to add a small game to this repo. What would you suggest?" });
+    expect(discuss.check).toBeUndefined();
+    expect(existsSync(join(FIXTURES, discuss.fixture))).toBe(true);
+  });
+
+  it("runs that end waiting for the user are scored", async () => {
+    const patch = call("apply_patch", { patch: FIX_PATCH });
+    const QUESTION = { question: "Which fix?", options: [{ label: "Loop bound" }, { label: "Use reduce" }] };
+    const { results, models } = await evalRuns("sum-off-by-one", [
+      // (a) Ends with a reply and no finish: the check decides.
+      () => new ScriptedModelClient([patch, { text: "Fixed the loop bound." }]),
+      () => new ScriptedModelClient([{ text: "I would fix the loop bound. Shall I?" }]),
+      // (b) Nobody is there to answer a question, so it is answered with a fixed text and the run goes on.
+      () => new ScriptedModelClient([call("ask_user", QUESTION), patch, finish()]),
+    ]);
+    expect(results.map((r) => r.pass)).toEqual([true, false, true]);
+    expect(results.map((r) => r.outcome)).toEqual(["awaiting_input", "awaiting_input", "finished"]);
+    const answer = models[2]!.requests[1]!.messages.at(-1)!;
+    expect(answer).toEqual({ role: "tool", tool_call_id: expect.any(String) as string, content: JSON.stringify({ answer: "No one is available to answer. Use your best judgment and continue." }) });
+    expect(models[2]!.requests).toHaveLength(3);
+  });
+
+  it("expect_reply passes only a reply with no changes", async () => {
+    const QUESTION = { question: "Which game?", options: [{ label: "Mental math" }, { label: "Guess the number" }] };
+    const { results, models } = await evalRuns("discuss-first", [
+      // (c) A reply, or a question, and nothing changed.
+      () => new ScriptedModelClient([call("list_files", {}), { text: "Two ideas: mental math, or guess the number. Which one?" }]),
+      () => new ScriptedModelClient([call("ask_user", QUESTION), { text: "never asked" }]),
+      // (d) It built something before asking, or finished without a word.
+      () => new ScriptedModelClient([write("game.js", "export const game = 1;\n"), { text: "I made a game. Like it?" }]),
+      () => new ScriptedModelClient([finish()]),
+    ]);
+    expect(results.map((r) => r.pass)).toEqual([true, true, false, false]);
+    expect(results.map((r) => r.outcome)).toEqual(["awaiting_input", "awaiting_input", "awaiting_input", "finished"]);
+    expect(models[1]!.requests).toHaveLength(1); // the question is the expected ending, so it is not answered
+    expect(results[2]).toMatchObject({ changed_files: ["game.js"] });
+
+    const dir = mkdtempSync(join(tmpdir(), "andrun-cases-"));
+    dirs.push(dir);
+    const base = "id: bad\nfixture: slugify\ntask: do it\nforbid_changes: []\n";
+    writeFileSync(join(dir, "bad.yaml"), `${base}mode: review\nexpect_no_findings: true\nexpect_reply: true\n`);
+    await expect(loadCases(dir)).rejects.toThrow(/expect_reply/);
+    writeFileSync(join(dir, "bad.yaml"), `${base}mode: code\nexpect_reply: yes please\n`);
+    await expect(loadCases(dir)).rejects.toThrow(/expect_reply/);
+    writeFileSync(join(dir, "bad.yaml"), `${base}mode: code\nexpect_reply: true\n`);
+    expect(await loadCases(dir)).toHaveLength(1);
   });
 
   it("the new fields are validated", async () => {

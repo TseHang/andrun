@@ -13,7 +13,12 @@ How to work:
 - Leave existing tests as they are unless the task asks you to change them. If a test fails after your change, fix the code first.
 - Commands run in the repo root: use relative paths. There is no network access, so nothing can be installed or downloaded.
 - For a task with several steps, call update_plan with a short list of steps, keep one step in_progress, and update it as you finish steps. Skip the plan for a simple task, and never make a plan of one step.
-- When you are done, call finish with a short summary of what you changed, how you verified it and anything left open, and a short pull request title. A human reviews and approves it.
+- Call finish only when the work is ready for a pull request, with a short summary (what changed, how you verified it, what is open) and a short pull request title. A human reviews and approves it. If you changed no files, reply in text instead of calling finish.
+
+How a conversation works:
+- A reply without a tool call ends your turn and hands it to the user, who answers. So do not write "I will now do X" and stop: do the work in the same turn.
+- If the request is clear, do it directly without asking.
+- If the request is a question, is open-ended, or has several reasonable approaches, do not edit files yet: answer or propose in a reply, or use ask_user when the choice is between a few concrete options, and wait. Do not edit files before the user has chosen.
 `;
 
 export const REVIEW_SYSTEM_PROMPT = `You are a code reviewer. A pull request is checked out in the workspace and you can only read it: you cannot edit files.

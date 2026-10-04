@@ -49,7 +49,7 @@ export function SessionHeader({ title, status, header, review, onDelete, moreRef
       <h1 className="m-0 min-w-0 truncate text-[15px] font-semibold tracking-[-0.01em]">{title}</h1>
       <span data-testid="session-status" className={`flex shrink-0 items-center gap-1.5 font-medium ${STATUS_COLOR[status]}`}>
         {status === "running" && <Spinner />}
-        {(status === "awaiting_approval" || status === "done" || status === "failed" || status === "budget_exceeded") && <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${DOT[status]}`} />}
+        {(status === "awaiting_approval" || status === "awaiting_input" || status === "done" || status === "failed" || status === "budget_exceeded") && <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${DOT[status]}`} />}
         {review && status === "awaiting_approval" ? "Ready to post" : STATUS_TEXT[status]}
       </span>
       <span className="grow" />

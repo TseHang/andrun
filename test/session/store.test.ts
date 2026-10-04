@@ -29,7 +29,6 @@ const state = (over: Partial<AgentState> = {}): AgentState => ({
   turnTokens: 0,
   nextSeq: 1,
   failures: null,
-  nudged: false,
   pending: null,
   ...over,
 });
@@ -68,7 +67,6 @@ describe("SessionStore (ADR D8)", () => {
       tokensUsed: 1234,
       nextSeq: 20,
       failures: { tool: "read_file", count: 2 },
-      nudged: true,
       messages: [
         ...state().messages,
         { role: "assistant", content: null, tool_calls: [call] },

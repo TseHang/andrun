@@ -26,7 +26,7 @@ const messageOf = (err: unknown): string => (err instanceof Error ? err.message 
 
 /** The tool name a pending approval shows to the user (same mapping as `pause()` in the core). */
 function toolOf(pending: PendingApproval): string {
-  return pending.kind === "tool" ? pending.call.function.name : pending.kind === "strikes" ? pending.tool : "finish";
+  return pending.kind === "tool" ? pending.call.function.name : pending.kind === "strikes" ? pending.tool : pending.kind === "question" ? "ask_user" : "finish";
 }
 
 /** Approving a finish needs no sandbox: the run just ends. */
@@ -134,7 +134,8 @@ export class SessionEngine {
       mode: meta.mode,
       title: meta.title,
       status: state.status,
-      pending: state.pending ? pendingView(state.pending) : null,
+      // A question reaches the UI as its `question` event, not as a gate.
+      pending: state.pending && state.pending.kind !== "question" ? pendingView(state.pending) : null,
       sandboxRunning: this.deps.sandbox.isRunning(),
       sha: meta.sha,
       baseBranch: this.store.githubState().baseBranch ?? null,
@@ -187,11 +188,13 @@ export class SessionEngine {
         this.queued.push(frame.text);
         return;
       }
+      if (state.pending?.kind === "question") return this.answerQuestion(state, frame.text);
       if (state.status !== "awaiting_approval") return this.newTurn(state, frame.text);
       if (!state.pending) return reply({ type: "rejected", reason: "no such pending approval" });
       return this.decide(state, { approved: false, comment: frame.text }, reply, state.pending.approvalId, ip);
     }
 
+    if (state.pending?.kind === "question") return reply({ type: "rejected", reason: "Answer the agent's question to continue." });
     const decision: ApprovalDecision = frame.type === "approve" ? { approved: true } : { approved: false, comment: frame.comment };
     this.decide(state, decision, reply, frame.approvalId, ip);
   }
@@ -337,7 +340,7 @@ export class SessionEngine {
       return false;
     }
 
-    const summary = pending.kind === "strikes" ? "" : (pending.summary ?? "");
+    const summary = pending.kind === "strikes" || pending.kind === "question" ? "" : (pending.summary ?? "");
     const task = state.messages.find((m) => m.role === "user")?.content ?? "";
     const title = (pending.kind === "tool" ? finishTitle(pending) : null) ?? meta.title;
     const body = [
@@ -378,6 +381,15 @@ export class SessionEngine {
     return true;
   }
 
+  /** A message that answers the open question: the core emits the user message and passes the answer on as the tool's result. */
+  private answerQuestion(state: AgentState, text: string): void {
+    state.failures = null;
+    state.turnCost = 0;
+    state.turnTokens = 0;
+    this.store.saveState(state, this.now());
+    this.startSegment({ approved: true, comment: text }, true);
+  }
+
   /** A message to a session that is not running: the transcript continues, nothing else is reset. */
   private newTurn(state: AgentState, text: string): void {
     // A run can fail with tool calls still open (the sandbox could not be rebuilt at a gate); a provider
@@ -392,7 +404,6 @@ export class SessionEngine {
     state.messages.push({ role: "user", content: text });
     state.pending = null;
     state.failures = null;
-    state.nudged = false;
     state.turnCost = 0;
     state.turnTokens = 0;
     this.store.saveState(state, this.now());
@@ -711,7 +722,7 @@ export class SessionEngine {
   }
 }
 
-function pendingView(pending: PendingApproval): PendingView {
+function pendingView(pending: Exclude<PendingApproval, { kind: "question" }>): PendingView {
   return {
     approvalId: pending.approvalId,
     reason: pending.reason,

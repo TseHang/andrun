@@ -210,6 +210,45 @@ describe("tools", () => {
     });
   });
 
+  describe("ask_user (CF-c)", () => {
+    const ASK_TOOLS: ToolName[] = [...CODE_TOOLS, "ask_user"];
+    const ask = (args: unknown) => run("ask_user", args, ASK_TOOLS);
+    const two = [{ label: "Mental math", description: "Uses sum()" }, { label: "Guess the number" }];
+
+    it("ask_user validates its question and options", async () => {
+      const good = await ask({ question: "Which game?", options: two });
+      expect(good).toMatchObject({ ok: true, question: { question: "Which game?", options: two } });
+      const four = ["A", "B", "C", "D"].map((label) => ({ label }));
+      expect((await ask({ question: "Which?", options: four })).ok).toBe(true);
+
+      const cases: [unknown, RegExp][] = [
+        [{ options: two }, /question/],
+        [{ question: "", options: two }, /question/],
+        [{ question: "  ", options: two }, /question/],
+        [{ question: "Which?" }, /options/],
+        [{ question: "Which?", options: "A or B" }, /options/],
+        [{ question: "Which?", options: [{ label: "Only one" }] }, /2/],
+        [{ question: "Which?", options: [...four, { label: "E" }] }, /4/],
+        [{ question: "Which?", options: [{ label: "Same" }, { label: "Same" }] }, /label/],
+        [{ question: "Which?", options: [{ label: "A" }, { label: "" }] }, /label/],
+        [{ question: "Which?", options: [{ label: "A" }, "B"] }, /label/],
+        [{ question: "Which?", options: [{ label: "A" }, { label: "B", description: 3 }] }, /description/],
+      ];
+      for (const [args, names] of cases) {
+        const r = await ask(args);
+        expect(r.ok, JSON.stringify(args)).toBe(false);
+        expect(!r.ok && r.error, JSON.stringify(args)).toContain("invalid arguments");
+        expect(!r.ok && r.error, JSON.stringify(args)).toMatch(names);
+        expect(r).not.toHaveProperty("question");
+      }
+
+      const spec = toolSpecs(["ask_user"])[0]!;
+      expect(spec.description).toMatch(/2.{0,10}4/);
+      expect(summarizeCall("ask_user", { question: "Which game?", options: two })).toBe("Ask Which game?");
+      expect(await run("ask_user", { question: "Which game?", options: two })).toEqual({ ok: false, error: "unknown tool: ask_user" });
+    });
+  });
+
   describe("read_file ranges (HI-f)", () => {
     const LINES = Array.from({ length: 2000 }, (_, i) => `line ${i + 1} ${"x".repeat(20)}`);
     const BIG = `${LINES.join("\n")}\n`; // about 60 KB

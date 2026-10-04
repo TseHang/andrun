@@ -5,6 +5,7 @@ export type Status =
   | "idle"
   | "running"
   | "awaiting_approval"
+  | "awaiting_input"
   | "done"
   | "failed"
   | "budget_exceeded";
@@ -22,6 +23,11 @@ export interface DiffSummary {
 export interface PlanStep {
   step: string;
   status: "pending" | "in_progress" | "completed";
+}
+
+export interface QuestionOption {
+  label: string;
+  description?: string;
 }
 
 export type EventBody =
@@ -59,6 +65,8 @@ export type EventBody =
       /** True when a policy approved it without a human (eval, auto-approve bonus). */
       auto?: boolean;
     }
+  /** The agent asks the user to choose; the answer comes back as a user message. */
+  | { type: "question"; id: string; question: string; options: QuestionOption[] }
   | { type: "pr_opened"; url: string; number?: number; branch?: string; updated?: boolean }
   | {
       type: "review_finding";

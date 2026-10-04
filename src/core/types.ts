@@ -1,7 +1,7 @@
 // Ports and state for the agent loop (ADR D1–D4). No platform imports in src/core.
 
 import type { AgentConfig } from "./config";
-import type { AgentEvent, DiffSummary, Severity, Status } from "./events";
+import type { AgentEvent, DiffSummary, QuestionOption, Severity, Status } from "./events";
 
 // ---------- Model (OpenAI-compatible chat format) ----------
 
@@ -122,6 +122,7 @@ export type ToolName =
   | "apply_patch"
   | "run_command"
   | "update_plan"
+  | "ask_user"
   | "report_finding"
   | "finish";
 
@@ -135,6 +136,8 @@ export interface ModeProfile {
   policy: ApprovalPolicy;
   sandboxSetup: "tarball@sha" | "pr-head@sha" | "empty" | "none";
   onFinish: "open_pr" | "draft_review" | "answer";
+  /** A reply without a tool call: `wait` ends the turn for the user; `finish` goes to the finish gate. */
+  onTextReply: "wait" | "finish";
 }
 
 // ---------- Loop state ----------
@@ -152,8 +155,10 @@ export type PendingApproval =
     }
   /** Same tool failed 3 times in a row (spec §6). */
   | { kind: "strikes"; approvalId: string; reason: string; tool: string }
-  /** Model replied with text twice without calling a tool; treated as finishing. */
-  | { kind: "implicit_finish"; approvalId: string; reason: string; summary: string; diffSummary?: DiffSummary };
+  /** A review's model replied with text and no tool call; treated as finishing. */
+  | { kind: "implicit_finish"; approvalId: string; reason: string; summary: string; diffSummary?: DiffSummary }
+  /** An `ask_user` call is waiting for the user's answer; `remaining` are the calls after it in the same reply. */
+  | { kind: "question"; approvalId: string; reason?: undefined; question: string; options: QuestionOption[]; call: ToolCall; remaining: ToolCall[] };
 
 export interface AgentState {
   sessionId: string;
@@ -169,13 +174,13 @@ export interface AgentState {
   turnTokens: number;
   nextSeq: number;
   failures: { tool: string; count: number } | null;
-  nudged: boolean;
   pending: PendingApproval | null;
 }
 
 export type RunOutcome =
   | { kind: "finished"; summary: string }
   | { kind: "awaiting_approval"; pending: PendingApproval }
+  | { kind: "awaiting_input" }
   | { kind: "failed"; error: string }
   | { kind: "budget_exceeded" };
 

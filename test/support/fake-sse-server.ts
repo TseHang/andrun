@@ -12,6 +12,10 @@
 //            stops at an approval gate); after that the normal script plays from the start
 //   [plan]   PLAN_SCRIPT plays instead: three plan steps, two completed, then finish
 //   [costly] every answer reports 150,000 input tokens, so the session's cost passes the ¥10 notice
+//   [chat]   turn 0 is a text-only reply (the run waits for the user); then the normal script plays
+//   [choose] turn 0 calls ask_user with two options; then the normal script plays
+//   [stop]   the normal script up to the first test run after the patch, then a text-only reply
+//            instead of finish; finish and the rest play after the user's next message
 // A Review session (system prompt of the review profile) gets REVIEW_SCRIPT instead.
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -19,7 +23,7 @@ import { pathToFileURL } from "node:url";
 
 interface Turn {
   text?: string;
-  call: { name: string; args: Record<string, unknown> };
+  call?: { name: string; args: Record<string, unknown> };
 }
 
 const FIX_PATCH = [
@@ -85,6 +89,17 @@ const PLAN_SCRIPT: Turn[] = [
   plan("completed", "completed", "in_progress"),
   { call: { name: "finish", args: { summary: "Fixed the loop bound in sum(); the tests were not run.", title: "Fix the loop bound in sum()" } } },
 ];
+const CHAT_TURN: Turn = { text: "I can fix the loop bound or rewrite sum() with reduce. Which do you prefer?" };
+const CHOOSE_TURN: Turn = {
+  call: {
+    name: "ask_user",
+    args: {
+      question: "Which fix do you want?",
+      options: [{ label: "Fix the loop bound", description: "Change the loop condition in sum()" }, { label: "Rewrite with reduce" }],
+    },
+  },
+};
+const STOP_TURN: Turn = { text: "Fixed the loop bound. Do you want anything else?" };
 const LAST: Turn = { call: { name: "finish", args: { summary: "Nothing more to do." } } };
 
 interface ChatBody {
@@ -113,9 +128,17 @@ async function chat(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const played = messages.filter((m) => m.role === "assistant").length;
   const ask = task.includes("[ask]");
   const review = (messages.find((m) => m.role === "system")?.content ?? "").includes("code reviewer");
-  const script = review ? REVIEW_SCRIPT : task.includes("[plan]") ? PLAN_SCRIPT : ask ? [...ASK_TURNS, ...SCRIPT] : SCRIPT;
+  const script = review ? REVIEW_SCRIPT : task.includes("[plan]") ? PLAN_SCRIPT : ask
+          ? [...ASK_TURNS, ...SCRIPT]
+          : task.includes("[chat]")
+            ? [CHAT_TURN, ...SCRIPT]
+            : task.includes("[choose]")
+              ? [CHOOSE_TURN, ...SCRIPT]
+              : task.includes("[stop]")
+                ? [...SCRIPT.slice(0, 4), STOP_TURN, ...SCRIPT.slice(4)]
+                : SCRIPT;
   const turn = script[played] ?? LAST;
-  console.log(`[fake-model] turn ${played}: ${turn.call.name}`);
+  console.log(`[fake-model] turn ${played}: ${turn.call?.name ?? "text"}`);
 
   if (task.includes("[fail]")) {
     res.writeHead(500, { "content-type": "application/json" }).end('{"error":"fake failure"}');
@@ -135,12 +158,14 @@ async function chat(req: IncomingMessage, res: ServerResponse): Promise<void> {
       await sleep(40);
     }
   }
-  const id = `call_${played}_${Math.random().toString(36).slice(2, 8)}`;
-  const args = JSON.stringify(turn.call.args);
-  const mid = Math.ceil(args.length / 2);
-  chunk({ tool_calls: [{ index: 0, id, type: "function", function: { name: turn.call.name, arguments: "" } }] });
-  chunk({ tool_calls: [{ index: 0, function: { arguments: args.slice(0, mid) } }] }); // split like real providers do
-  chunk({ tool_calls: [{ index: 0, function: { arguments: args.slice(mid) } }] });
+  if (turn.call) {
+    const id = `call_${played}_${Math.random().toString(36).slice(2, 8)}`;
+    const args = JSON.stringify(turn.call.args);
+    const mid = Math.ceil(args.length / 2);
+    chunk({ tool_calls: [{ index: 0, id, type: "function", function: { name: turn.call.name, arguments: "" } }] });
+    chunk({ tool_calls: [{ index: 0, function: { arguments: args.slice(0, mid) } }] }); // split like real providers do
+    chunk({ tool_calls: [{ index: 0, function: { arguments: args.slice(mid) } }] });
+  }
   const promptTokens = task.includes("[costly]") ? 150_000 : Math.ceil(JSON.stringify(messages).length / 4);
   res.write(`data: ${JSON.stringify({ id: "fake", model, choices: [], usage: { prompt_tokens: promptTokens, completion_tokens: 30 } })}\n\n`);
   res.end("data: [DONE]\n\n");

@@ -7,6 +7,10 @@
 //                no file may change; check is optional.
 // Either mode may not use the other's fields; code cases may add:
 //   expect_changes: a list of globs; for every glob at least one changed file must match it.
+//   expect_reply: true, for a task the agent should discuss, not do: the run passes only if it ends waiting for
+//                 the user (a reply or a question, which is not answered) with no file changed; check is not needed.
+// Without expect_reply, a question from the agent is answered with a fixed text, and a run that ends with a reply passes
+// on the same conditions as one that finishes.
 
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
@@ -32,6 +36,7 @@ export interface EvalCase {
   expect_finding?: { path: string; lines: number[] };
   expect_changes?: string[];
   expect_no_findings?: boolean;
+  expect_reply?: boolean;
   forbid_changes: string[];
   max_steps?: number;
 }
@@ -54,6 +59,7 @@ export interface EvalResult {
 }
 
 const MAX_AUTO_RESUMES = 5;
+const NO_ONE_TEXT = "No one is available to answer. Use your best judgment and continue.";
 /** For cases without `max_steps`, when run from the command line. The slowest passing run so far took 10 steps. */
 const EVAL_MAX_STEPS = 40;
 
@@ -70,8 +76,12 @@ function validateCase(file: string, raw: unknown): EvalCase {
     if (typeof c[key] !== "string" || !c[key]) throw invalid(file, `"${key}" must be a non-empty string`);
   }
   if (c["mode"] !== "code" && c["mode"] !== "review") throw invalid(file, `"mode" must be "code" or "review"`);
+  if (c["expect_reply"] !== undefined) {
+    if (c["mode"] !== "code") throw invalid(file, `"expect_reply" is only for code cases`);
+    if (c["expect_reply"] !== true) throw invalid(file, `"expect_reply" must be true`);
+  }
   const check = c["check"] as Record<string, unknown> | null | undefined;
-  if (check === undefined || check === null ? c["mode"] === "code" : typeof check["cmd"] !== "string" || typeof check["expect_exit"] !== "number") {
+  if (check === undefined || check === null ? c["mode"] === "code" && c["expect_reply"] !== true : typeof check["cmd"] !== "string" || typeof check["expect_exit"] !== "number") {
     throw invalid(file, `"check" needs a string "cmd" and a number "expect_exit"`);
   }
   const expect = c["expect_finding"] as Record<string, unknown> | null | undefined;
@@ -232,9 +242,14 @@ async function runOne(
     state0.messages.push({ role: "user", content: await buildRepoContext(sandbox, { agentsMd: profile.sandboxSetup !== "pr-head@sha" }) });
     let { state, outcome } = await runAgent(state0, profile, deps);
     // A human approves everything in eval (slice decision S-a): strikes and implicit finishes too.
-    for (let resumes = 0; outcome.kind === "awaiting_approval" && resumes < MAX_AUTO_RESUMES; resumes++) {
-      tally.auto_approved++;
-      ({ state, outcome } = await resume(state, { approved: true }, profile, deps));
+    // A question is answered with a fixed text, unless the case expects the agent to stop and ask.
+    for (let resumes = 0; resumes < MAX_AUTO_RESUMES; resumes++) {
+      if (outcome.kind === "awaiting_approval") {
+        tally.auto_approved++;
+        ({ state, outcome } = await resume(state, { approved: true }, profile, deps));
+      } else if (outcome.kind === "awaiting_input" && state.pending?.kind === "question" && !c.expect_reply) {
+        ({ state, outcome } = await resume(state, { approved: true, comment: NO_ONE_TEXT }, profile, deps));
+      } else break;
     }
 
     await sandbox.exec("git add -A");
@@ -255,9 +270,14 @@ async function runOne(
     const wantChanges = !c.expect_changes || c.expect_changes.every((g) => changed.some((f) => picomatch(g)(f)));
     const untouched = c.mode !== "review" || (changed.length === 0 && diff.exitCode === 0);
 
+    const pass = c.expect_reply
+      ? outcome.kind === "awaiting_input" && changed.length === 0 && diff.exitCode === 0
+      : (outcome.kind === "finished" || (outcome.kind === "awaiting_input" && c.mode === "code")) &&
+        checkOk && found && noFindings && wantChanges && untouched && !editedTests;
+
     return result({
       outcome: outcome.kind,
-      pass: outcome.kind === "finished" && checkOk && found && noFindings && wantChanges && untouched && !editedTests,
+      pass,
       steps: state.step,
       edited_tests: editedTests,
       changed_files: changed,

@@ -1280,3 +1280,175 @@ describe("Harness improvement: the turn limit (HI-h)", () => {
     expect(w.store().loadState()!.turnCost).toBeCloseTo(54);
   });
 });
+
+describe("Conversational flow: the session waits for the user (CF-a, CF-d, CF-e)", () => {
+  const QUESTION = { question: "Which game?", options: [{ label: "Mental math", description: "Uses sum()" }, { label: "Guess the number" }] };
+  const big = { in: 500, out: 0 };
+
+  it("a message after a text reply starts the next turn", async () => {
+    const w = world();
+    const model = new ScriptedModelClient([{ text: "Three ideas: A, B, C. Which one?", usage: big }, call("finish", { summary: "Built B." })]);
+    const engine = w.engine(model);
+    engine.create({ id: ID, mode: "code", task: TASK });
+    await engine.idle();
+
+    expect(model.requests).toHaveLength(1);
+    expect(engine.snapshot()).toMatchObject({ status: "awaiting_input", pending: null });
+    expect(w.upserts.at(-1)).toMatchObject({ id: ID, status: "awaiting_input" });
+    expect(w.store().loadState()).toMatchObject({ status: "awaiting_input", pending: null, turnTokens: 500 });
+    expect(w.container.running).toBe(true); // the sandbox is kept for the reply
+    // A fresh engine (the Durable Object was evicted) is still waiting.
+    expect(w.engine(model).snapshot()!.status).toBe("awaiting_input");
+
+    expect(await send(engine, { type: "message", text: "B" })).toEqual([]);
+    expect(model.requests[1]!.messages.slice(-2)).toEqual([
+      { role: "assistant", content: "Three ideas: A, B, C. Which one?" },
+      { role: "user", content: "B" },
+    ]);
+    expect(statuses(w.events())).toEqual(["running", "awaiting_input", "running", "awaiting_approval"]);
+    expect(ofType(w.events(), "message").filter((e) => e.role === "user").map((e) => e.text)).toEqual([TASK, "B"]);
+    expect(w.store().loadState()).toMatchObject({ step: 2, turnTokens: 120 }); // the reply started a fresh turn
+    expectIncreasingSeq(w.events());
+  });
+
+  it("a message answers an open question and the turn continues", async () => {
+    const w = world();
+    const model = new ScriptedModelClient([
+      { calls: [{ name: "ask_user", args: QUESTION }, { name: "list_files", args: {} }], usage: big },
+      call("finish", { summary: "Built Mental math." }),
+    ]);
+    const engine = w.engine(model);
+    engine.create({ id: ID, mode: "code", task: TASK });
+    await engine.idle();
+
+    expect(model.requests).toHaveLength(1);
+    expect(engine.snapshot()).toMatchObject({ status: "awaiting_input", pending: null });
+    expect(ofType(w.events(), "question")).toMatchObject([QUESTION]);
+    expect(w.store().loadState()!.pending).toMatchObject({ kind: "question", ...QUESTION });
+    expect(ofType(w.events(), "tool_call").map((e) => e.name)).toEqual(["sandbox_setup", "ask_user"]);
+
+    // The Durable Object is evicted while the question is open: a new engine answers it.
+    const next = w.engine(model);
+    expect(await send(next, { type: "message", text: "Mental math" })).toEqual([]);
+
+    expect(ofType(w.events(), "message").filter((e) => e.role === "user").map((e) => e.text)).toEqual([TASK, "Mental math"]);
+    expect(ofType(w.events(), "approval_resolved")).toEqual([]);
+    const sent = model.requests[1]!.messages;
+    const results = sent.filter((m) => m.role === "tool");
+    expect(results).toHaveLength(2);
+    expect(results[0]!.content).toBe(JSON.stringify({ answer: "Mental math" }));
+    expect(sent.filter((m) => m.role === "user" && m.content === "Mental math")).toEqual([]); // the answer is the tool's result, not a second message
+    expectValidTranscript(sent);
+    expect(ofType(w.events(), "tool_call").map((e) => e.name)).toEqual(["sandbox_setup", "ask_user", "list_files", "finish"]);
+    expect(statuses(w.events())).toEqual(["running", "awaiting_input", "running", "awaiting_approval"]);
+    expect(next.snapshot()).toMatchObject({ status: "awaiting_approval", pending: { summary: "Built Mental math." } });
+    expect(w.store().loadState()).toMatchObject({ turnTokens: 120 }); // an answer starts a fresh turn (CF-e)
+    expectIncreasingSeq(w.events());
+  });
+
+  it("a message queued during a run that ends waiting starts the next turn", async () => {
+    const w = world();
+    const ref: { engine?: SessionEngine } = {};
+    const replies: ServerFrame[] = [];
+    const model = new ScriptedModelClient([
+      () => {
+        // Too late to be injected: the model is already answering with its question.
+        ref.engine!.handleFrame(JSON.stringify({ type: "message", text: COMMENT }), (r) => replies.push(r));
+        return { text: "Which one do you want?" };
+      },
+      call("finish", { summary: "Added the empty array test." }),
+    ]);
+    const engine = (ref.engine = w.engine(model));
+    engine.create({ id: ID, mode: "code", task: TASK });
+    await engine.idle();
+
+    expect(replies).toEqual([]);
+    expect(model.requests).toHaveLength(2);
+    expect(model.requests[1]!.messages.slice(-2)).toEqual([
+      { role: "assistant", content: "Which one do you want?" },
+      { role: "user", content: COMMENT },
+    ]);
+    expect(ofType(w.events(), "message").filter((e) => e.text === COMMENT)).toHaveLength(1);
+    expect(statuses(w.events())).toEqual(["running", "awaiting_input", "running", "awaiting_approval"]);
+  });
+
+  it("approve and reject are refused while a question is open", async () => {
+    const w = world();
+    const model = new ScriptedModelClient([call("ask_user", QUESTION), { text: "Building it." }]);
+    const engine = w.engine(model);
+    engine.create({ id: ID, mode: "code", task: TASK });
+    await engine.idle();
+    const id = ofType(w.events(), "question")[0]!.id;
+    const before = w.events().length;
+
+    for (const frame of [
+      { type: "approve", approvalId: id },
+      { type: "reject", approvalId: id, comment: "Mental math" },
+      { type: "approve", approvalId: "something-else" },
+    ]) {
+      const replies = await send(engine, frame);
+      expect(replies, frame.type).toHaveLength(1);
+      expect(replies[0]).toMatchObject({ type: "rejected" });
+      expect(replies[0]!.type === "rejected" && replies[0]!.reason).toMatch(/question/i);
+    }
+    expect(w.events()).toHaveLength(before);
+    expect(model.requests).toHaveLength(1);
+    expect(engine.snapshot()!.status).toBe("awaiting_input");
+    expect(w.store().loadState()!.pending).toMatchObject({ kind: "question" });
+
+    // It is still answerable.
+    expect(await send(engine, { type: "message", text: "Mental math" })).toEqual([]);
+    expect(engine.snapshot()).toMatchObject({ status: "awaiting_input", pending: null });
+    expect(model.requests).toHaveLength(2);
+  });
+
+  it("an implicit finish saved by an older version still resolves", async () => {
+    // As stored before this slice: a Code session nudged once, then paused at the implicit-finish gate.
+    const old = () =>
+      ({
+        sessionId: ID,
+        mode: "code",
+        status: "awaiting_approval",
+        messages: [
+          { role: "system", content: "You are a coding agent." },
+          { role: "user", content: TASK },
+          { role: "assistant", content: "I think it is fixed." },
+          { role: "user", content: "Please call a tool or finish. If the task is done, call finish with a summary." },
+          { role: "assistant", content: "Yes, it is done." },
+        ],
+        step: 2,
+        tokensUsed: 240,
+        turnCost: 0,
+        turnTokens: 240,
+        nextSeq: 9,
+        failures: null,
+        nudged: true,
+        pending: { kind: "implicit_finish", approvalId: "a-old", reason: "the agent stopped without calling finish", summary: "Yes, it is done." },
+      }) as unknown as AgentState;
+    const seed = (w: ReturnType<typeof world>) =>
+      w.store().create({ id: ID, mode: "code", title: TASK, repo: REPO.name, sha: REPO.sha, created_at: 1, updated_at: 1 }, old());
+
+    // Approve: the run ends as done.
+    {
+      const w = world();
+      seed(w);
+      const engine = w.engine(new ScriptedModelClient([]));
+      expect(engine.snapshot()).toMatchObject({ status: "awaiting_approval", pending: { approvalId: "a-old", summary: "Yes, it is done." } });
+      expect(await send(engine, { type: "approve", approvalId: "a-old" })).toEqual([]);
+      expect(engine.snapshot()).toMatchObject({ status: "done", pending: null });
+    }
+
+    // A message is a reject with a comment, and the agent goes on under the new rules.
+    {
+      const w = world();
+      seed(w);
+      const model = new ScriptedModelClient([{ text: "What else do you need?" }]);
+      const engine = w.engine(model);
+      expect(await send(engine, { type: "message", text: COMMENT })).toEqual([]);
+      expect(ofType(w.events(), "approval_resolved")).toMatchObject([{ approvalId: "a-old", approved: false, comment: COMMENT }]);
+      expect(model.requests[0]!.messages.at(-1)).toEqual({ role: "user", content: COMMENT });
+      expect(engine.snapshot()).toMatchObject({ status: "awaiting_input", pending: null });
+      expect(w.store().loadState()).not.toHaveProperty("nudged");
+    }
+  });
+});

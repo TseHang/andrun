@@ -45,6 +45,12 @@ function Item({ item, session }: { item: TimelineItem; session: SessionInfo }) {
         </div>
       );
     }
+    case "question":
+      return (
+        <div className="my-3">
+          <p className="text-[15px] leading-relaxed break-words whitespace-pre-wrap">{item.question}</p>
+        </div>
+      );
     case "steps":
       return <StepGroup rows={item.rows} />;
     case "notice":
