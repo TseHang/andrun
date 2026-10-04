@@ -273,7 +273,7 @@ describe("S1: a created session runs to the approval gate and is persisted", () 
 
     expect(model.requests.map((r) => [r.model, r.reasoning, r.tools.length > 0])).toEqual([
       ["deepseek-ai/deepseek-v4-flash", "none", false],
-      ["zai-org/glm-5.3-flash", "low", true],
+      ["deepseek-ai/deepseek-v4-flash", "high", true],
       ["deepseek-ai/deepseek-v4-flash", "none", false],
       ["deepseek-ai/deepseek-v4.1-flash", "high", true],
       ["deepseek-ai/deepseek-v4.1-flash", "high", true],
@@ -281,7 +281,7 @@ describe("S1: a created session runs to the approval gate and is persisted", () 
     expect(model.requests[0]!.messages.at(-1)).toEqual({ role: "user", content: TASK }); // the task, not the repo context
     expect(model.requests[2]!.messages.at(-1)).toEqual({ role: "user", content: "Refactor the whole module." });
     expect(w.events().filter((e) => e.type === "model_routed")).toEqual([
-      expect.objectContaining({ task: "daily", model: "zai-org/glm-5.3-flash", reasoning: "low" }),
+      expect.objectContaining({ task: "daily", model: "deepseek-ai/deepseek-v4-flash", reasoning: "high" }),
       expect.objectContaining({ task: "complex", model: "deepseek-ai/deepseek-v4.1-flash", reasoning: "high" }),
     ]);
 
@@ -300,7 +300,7 @@ describe("S1: a created session runs to the approval gate and is persisted", () 
     const engine = w.engine(model);
     engine.create({ id: ID, mode: "code", task: TASK, model: "auto" });
     await engine.idle();
-    expect(model.requests.at(-1)).toMatchObject({ model: "zai-org/glm-5.3-flash", reasoning: "low" });
+    expect(model.requests.at(-1)).toMatchObject({ model: "deepseek-ai/deepseek-v4-flash", reasoning: "high" });
     expect(engine.snapshot()).toMatchObject({ status: "awaiting_input" });
   });
 

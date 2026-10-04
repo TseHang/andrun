@@ -58,7 +58,7 @@ Each local session leaves a `workerd-andrun-…` container in Docker, and `wrang
 docker ps -aq --filter name=workerd-andrun- | xargs docker rm -f
 ```
 
-Tasks for the fake model can carry a marker: `[slow]` (8 s per answer), `[fail]` (every request fails), `[ask]` (first runs `rm -rf tmp`, which needs approval). A Review session gets a fixed script of four findings. With the Auto model, a task with `[complex]` is sorted as complex (routed to `deepseek-v4.1-flash`, high); anything else is daily (`glm-5.3-flash`, low).
+Tasks for the fake model can carry a marker: `[slow]` (8 s per answer), `[fail]` (every request fails), `[ask]` (first runs `rm -rf tmp`, which needs approval). A Review session gets a fixed script of four findings. With the Auto model, a task with `[complex]` is sorted as complex (routed to `deepseek-v4.1-flash`, high); anything else is daily (`deepseek-v4-flash`, high).
 
 The fake GitHub starts with an empty pull request list. Approving a Code session opens one; `curl -X POST localhost:8789/__reset` empties it again, and `GET localhost:8789/__state` shows its refs, pull requests and reviews. `.dev.vars.example` holds a throwaway App key that only the fake accepts.
 

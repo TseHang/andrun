@@ -80,7 +80,7 @@ export interface ModelRoute {
 export const autoConfig: { classifier: ModelRoute; routes: Record<TaskKind, ModelRoute> } = {
   classifier: { model: DEFAULT_MODEL, reasoning: "none" },
   routes: {
-    daily: { model: "zai-org/glm-5.3-flash", reasoning: "low" },
+    daily: { model: DEFAULT_MODEL, reasoning: "high" },
     complex: { model: "deepseek-ai/deepseek-v4.1-flash", reasoning: "high" },
   },
 };

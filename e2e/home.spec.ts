@@ -60,7 +60,7 @@ test("auto picks the model for each message and says which", async ({ page }) =>
   expect(req.postDataJSON()).toEqual({ mode: "code", task: "[chat] what does sum do?", model: "auto" });
 
   const routed = ui(page).timeline.locator('[data-item="routed"]');
-  await expect(routed.first()).toHaveText(/Auto · daily coding → glm-5\.3-flash · low/, { timeout: 60_000 });
+  await expect(routed.first()).toHaveText(/Auto · daily coding → deepseek-v4-flash · high/, { timeout: 60_000 });
   const input = ui(page).composer.getByRole("textbox", { name: "Message to the agent" });
   await expect(input).toHaveAttribute("placeholder", "Reply to the agent", { timeout: 60_000 });
 

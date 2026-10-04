@@ -27,8 +27,8 @@ describe("auto mode: sorting a turn", () => {
     expect(model.requests.at(-1)!.messages[1]!.content).toHaveLength(4000);
   });
 
-  it("routes daily to glm-5.3-flash low and complex to deepseek-v4.1-flash high", () => {
-    expect(routeFor("daily")).toEqual({ model: "zai-org/glm-5.3-flash", reasoning: "low" });
+  it("routes daily to deepseek-v4-flash high and complex to deepseek-v4.1-flash high", () => {
+    expect(routeFor("daily")).toEqual({ model: "deepseek-ai/deepseek-v4-flash", reasoning: "high" });
     expect(routeFor("complex")).toEqual({ model: "deepseek-ai/deepseek-v4.1-flash", reasoning: "high" });
   });
 });
