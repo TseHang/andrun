@@ -61,7 +61,7 @@ export function PostBar({ view, gate, send, update }: { view: SessionView; gate:
   const input = useRef<HTMLInputElement>(null);
   const text = comment.trim();
   const sending = view.sending;
-  const kept = view.findings.filter((f) => !f.dismissed);
+  const kept = view.findings.filter((f) => !f.dismissed && !f.posted);
   const inline = kept.filter((f) => f.inline).length;
   const current = VERDICTS.find((v) => v.value === verdict)!;
   const summary = gate.summary?.trim() ?? "";
@@ -174,21 +174,5 @@ export function PostBar({ view, gate, send, update }: { view: SessionView; gate:
         </div>
       )}
     </form>
-  );
-}
-
-/** After the review was posted the session is closed: the composer is off and a new review starts from the pull request. */
-export function PostedBar({ pr }: { pr: number | null }) {
-  return (
-    <div className="pointer-events-auto flex items-center gap-3 rounded-2xl border border-black/10 bg-white/80 px-4 py-2.5 shadow-lg backdrop-blur-xl">
-      <span className="text-[13px] text-text-secondary">This review was posted.</span>
-      <form aria-label="Message the agent" className="contents" onSubmit={(e) => e.preventDefault()}>
-        <input aria-label="Message to the agent" disabled className="sr-only" />
-      </form>
-      <span className="grow" />
-      <a href={pr === null ? "/prs" : `/prs/${pr}`} className="rounded-full bg-accent px-3.5 py-1.5 text-[13px] font-medium text-white">
-        Review again
-      </a>
-    </div>
   );
 }

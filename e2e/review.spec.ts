@@ -281,12 +281,36 @@ test("review a pull request: dismiss, edit, request changes, post", async ({ pag
   expect(Object.keys(state.refs)).toEqual(["main"]); // the review changed nothing in the repo
   expect(state.writes.filter((w) => !w.includes("/reviews"))).toEqual([]);
 
-  // A posted review is closed: the composer is off and a new review starts from the pull request.
-  await expect(page.getByLabel("Message to the agent")).toBeDisabled();
-  await expect(page.getByRole("link", { name: "Review again" })).toHaveAttribute("href", "/prs/14");
+  // Posting does not close the review: what was posted is fixed, and the agent takes more messages.
+  await expect(s.reviewCard.getByRole("link", { name: "Review again" })).toHaveAttribute("href", "/prs/14");
+  await expect(finding("Collapse runs of whitespace")).toContainText("Posted");
+  await expect(finding("Collapse runs of whitespace").getByRole("button", { name: "Edit" })).toBeDisabled();
+  await expect(finding("Consider a default export")).not.toContainText("Posted");
   await page.reload();
   await expect(s.reviewCard).toContainText("Review posted · Request changes");
   await expect(s.findings).toContainText("3 kept, 1 dismissed");
+  await expect(finding("Collapse runs of whitespace")).toContainText("Posted");
+
+  const message = s.composer.getByLabel("Message to the agent");
+  await expect(message).toBeEnabled();
+  await message.fill("Look at the README once more.");
+  await s.composer.getByRole("button", { name: "Send" }).click();
+  await expect(s.timeline).toContainText("Look at the README once more.");
+  await expect(s.status).toHaveText("Ready to post", { timeout: 120_000 });
+
+  // The second review carries only what is new: here nothing, so a Comment needs the reviewer's words.
+  await expect(s.postBar).toContainText("0 inline comments, 0 notes in the summary");
+  await expect(s.postBar.getByRole("button", { name: "Post comments" })).toBeDisabled();
+  await expect(s.postBar).toContainText("Write a comment or keep a finding to post this review.");
+  await s.postBar.getByLabel("Review comment").fill("Fixed in the follow-up, thanks.");
+  await s.postBar.getByRole("button", { name: "Post comments" }).click();
+  await expect(s.reviewCard).toHaveCount(2);
+  await expect(s.reviewCard.last()).toContainText("Review posted · Comment");
+  await expect(s.status).toHaveText("Done");
+  const again = (await gh.state()).reviews;
+  expect(again).toHaveLength(2);
+  expect(again[1]).toMatchObject({ event: "COMMENT", comments: [] });
+  expect(again[1]!.body).toMatch(/^Fixed in the follow-up, thanks\./);
 
   await page.goto("/prs");
   await expect(s.prRow(14)).toContainText("Reviewed");

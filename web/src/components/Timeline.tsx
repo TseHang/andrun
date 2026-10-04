@@ -12,6 +12,7 @@ export interface SessionInfo {
   id: string;
   code: boolean;
   baseBranch: string | null;
+  pr: number | null;
 }
 
 const GITHUB_LINK = (url: string) => (
@@ -93,6 +94,13 @@ function Item({ item, session }: { item: TimelineItem; session: SessionInfo }) {
         <div data-testid="review-card" className="my-3 rounded-xl bg-sidebar p-3.5">
           <div className="text-[13px] font-semibold">Review posted · {VERDICT[item.verdict]}</div>
           <div className="mt-1 text-xs">{GITHUB_LINK(item.url)}</div>
+          {/* This session reads the commit it started on; a newer one needs a new review. */}
+          <div className="mt-1 text-xs text-text-secondary">
+            Keep asking &run here. New commits on the pull request?{" "}
+            <a href={session.pr === null ? "/prs" : `/prs/${session.pr}`} className="text-accent-text">
+              Review again
+            </a>
+          </div>
         </div>
       );
     case "approved":

@@ -202,9 +202,6 @@ export class SessionEngine {
     if (frame.type === "post_review") return this.postReview(state, frame, reply, ip);
 
     if (frame.type === "message") {
-      if (this.onFinish(state) === "draft_review" && this.store.githubState().posted) {
-        return reply({ type: "rejected", reason: "This review was posted. Start a new review from Pull requests." });
-      }
       if (this.inflight) {
         this.queued.push(frame.text);
         return;
@@ -293,18 +290,20 @@ export class SessionEngine {
     if (this.inflight || !pending || pending.approvalId !== frame.approvalId || !approvesFinish(pending, { approved: true })) {
       return reply({ type: "rejected", reason: "no such pending approval" });
     }
+    // Already on GitHub (the session was interrupted before the gate closed): only close the gate.
+    const already = this.store.githubState().posted?.approvalId === frame.approvalId;
     // GitHub refuses a Comment or Request changes review that says nothing.
-    if (frame.verdict !== "APPROVE" && !frame.comment && !this.store.githubState().posted && !this.store.findings().some((f) => !f.dismissed)) {
+    if (!already && frame.verdict !== "APPROVE" && !frame.comment && !this.unposted().some((f) => !f.dismissed)) {
       return reply({ type: "rejected", reason: EMPTY_REVIEW });
     }
     this.startSegment({ approved: true }, false, async () => {
-      // Already on GitHub (the session was interrupted before the gate closed): only close the gate.
-      if (this.store.githubState().posted) return true;
+      if (already) return true;
       if (!(await this.allowed(ip, reply))) return false;
       const meta = this.store.meta();
       const review = this.store.githubState().review;
       if (!meta || !review) return false;
-      const { body, comments } = buildReview(this.store.findings(), frame.comment);
+      const findings = this.unposted();
+      const { body, comments } = buildReview(findings, frame.comment);
       let posted: { url: string };
       try {
         posted = await this.deps.github.postReview({ pr: review.number, commitId: meta.sha, verdict: frame.verdict, body, comments });
@@ -317,19 +316,28 @@ export class SessionEngine {
         });
         return false;
       }
-      this.store.saveGithubState({ posted: { url: posted.url, verdict: frame.verdict } });
+      this.store.saveGithubState({
+        posted: { url: posted.url, verdict: frame.verdict, approvalId: frame.approvalId },
+        postedFindings: [...(this.store.githubState().postedFindings ?? []), ...findings.filter((f) => !f.dismissed).map((f) => f.id)],
+      });
       this.ownEmit({ type: "review_posted", url: posted.url, verdict: frame.verdict });
       this.upsertIndex("awaiting_approval");
       return true;
     });
   }
 
-  /** `finding`: edit, dismiss or restore one finding, at the gate of an unposted review. */
+  /** The findings the next review can carry: an earlier review of this session did not post them. */
+  private unposted(): StoredFinding[] {
+    const posted = new Set(this.store.githubState().postedFindings);
+    return this.store.findings().filter((f) => !posted.has(f.id));
+  }
+
+  /** `finding`: edit, dismiss or restore one finding that is not on GitHub yet, at the review's gate. */
   private editFinding(state: AgentState, frame: Extract<ClientFrame, { type: "finding" }>, reply: (frame: ServerFrame) => void): void {
     const reject = (reason: string) => reply({ type: "rejected", reason });
     if (state.mode !== "review") return reject("findings are only for review sessions");
     if (this.inflight || (this.liveStatus ?? state.status) === "running") return reject("You can edit findings when the agent has finished.");
-    if (this.store.githubState().posted) return reject("This review was posted.");
+    if (this.store.githubState().postedFindings?.includes(frame.id)) return reject("This finding was posted.");
     if (state.status !== "awaiting_approval") return reject("You can edit findings when the agent has finished.");
     if (!this.store.finding(frame.id)) return reject("no such finding");
     this.store.updateFinding(frame.id, { ...(frame.text !== undefined && { text: frame.text }), ...(frame.dismissed !== undefined && { dismissed: frame.dismissed }) });

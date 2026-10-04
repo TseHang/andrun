@@ -16,7 +16,7 @@ import { PlanCard } from "../../web/src/components/PlanCard";
 import { Timeline } from "../../web/src/components/Timeline";
 import { addPending, initialView, reduce, type SessionView } from "../../web/src/state/reducer";
 
-const SESSION = { id: "5b0e7a52-4a2f-4f0a-9d1c-0c3f1a2b3c4d", code: true, baseBranch: "main" };
+const SESSION = { id: "5b0e7a52-4a2f-4f0a-9d1c-0c3f1a2b3c4d", code: true, baseBranch: "main", pr: null };
 
 /** A view built from events, the way the page builds it. */
 function viewOf(...bodies: (EventBody & { step?: number })[]): SessionView {

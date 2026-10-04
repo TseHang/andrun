@@ -480,7 +480,7 @@ describe("Phase 4: pull requests and reviews", () => {
       e({ type: "review_finding", id, path: "src/slugify.js", line, severity: "high", text: `finding ${id}`, inline: true, ...extra });
     let v = run([f("a", 4), f("b", 5, { inline: false }), f("c", 6)]);
     expect(v.findings.map((x) => x.id)).toEqual(["a", "b", "c"]);
-    expect(v.findings[0]).toEqual({ id: "a", path: "src/slugify.js", line: 4, severity: "high", text: "finding a", inline: true, dismissed: false, edited: false });
+    expect(v.findings[0]).toEqual({ id: "a", path: "src/slugify.js", line: 4, severity: "high", text: "finding a", inline: true, dismissed: false, edited: false, posted: false });
     expect(v.findings[1]).toMatchObject({ inline: false });
     expect(kinds(v)).toEqual([]); // findings live in the panel, not in the timeline
 
@@ -494,7 +494,7 @@ describe("Phase 4: pull requests and reviews", () => {
     expect(old.findings[0]).toMatchObject({ inline: true, dismissed: false, edited: false });
   });
 
-  it("review_posted card ends the review", () => {
+  it("review_posted adds a card and marks the kept findings as posted", () => {
     const e = script();
     const url = "https://github.com/TseHang/andrun-demo/pull/14#pullrequestreview-101";
     const v = run([
@@ -508,6 +508,11 @@ describe("Phase 4: pull requests and reviews", () => {
     expect(v.posted).toEqual({ url, verdict: "REQUEST_CHANGES" });
     expect(v.gate).toBeNull();
     expect(initialView().posted).toBeNull();
+
+    // Kept findings are on GitHub now; a dismissed one is not, and one found later goes into the next review.
+    const f = (id: string, extra: Record<string, unknown> = {}) => e({ type: "review_finding", id, path: "a.js", line: 1, severity: "low", text: id, ...extra });
+    const w = run([f("kept"), f("gone", { dismissed: true }), e({ type: "review_posted", url, verdict: "COMMENT" }), f("later"), f("gone", { dismissed: false })]);
+    expect(w.findings.map((x) => [x.id, x.posted])).toEqual([["kept", true], ["gone", false], ["later", false]]);
   });
 
   it("a GitHub error ends sending and keeps the gate", () => {

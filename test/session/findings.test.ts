@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { REVIEW_FOOTER } from "../../src/github";
-import { ScriptedModelClient } from "../support/scripted-model";
+import { ScriptedModelClient, call } from "../support/scripted-model";
 import { fixtureTarball } from "../support/tarball";
 import { BRIEF, ID, PR_FILES, REVIEW_SCRIPT, SLUGIFY_FIXTURE, codeAtGate, containers, findings, ofType, reviewAtGate, send, world } from "./github-world";
 
@@ -123,24 +123,36 @@ describe("findings (S13, P4-c, P4-d)", () => {
   it("a review that was posted is not posted twice", async () => {
     // Security review: the review reached GitHub, but the session was interrupted before the gate closed.
     const r = await reviewAtGate();
-    r.store().saveGithubState({ posted: { url: "https://github.com/TseHang/andrun-demo/pull/14#pullrequestreview-1", verdict: "COMMENT" } });
+    r.store().saveGithubState({ posted: { url: "https://github.com/TseHang/andrun-demo/pull/14#pullrequestreview-1", verdict: "COMMENT", approvalId: r.approvalId } });
     expect(await send(r.engine, { type: "post_review", approvalId: r.approvalId, verdict: "COMMENT" })).toEqual([]);
     expect(r.fake.reviews).toEqual([]); // GitHub is not asked again
     expect(ofType(r.events(), "review_posted")).toEqual([]);
     expect(r.engine.snapshot()!.status).toBe("done");
   });
 
-  it("a posted review takes no more messages", async () => {
-    const r = await reviewAtGate();
+  it("a posted review stays open: the next review carries only what is new", async () => {
+    const r = await reviewAtGate({
+      extra: [call("report_finding", { path: "src/slugify.js", line: 3, severity: "medium", text: "Digits are dropped." }), call("finish", { summary: "One more finding." })],
+    });
     await send(r.engine, { type: "post_review", approvalId: r.approvalId, verdict: "COMMENT" });
     expect(r.engine.snapshot()!.status).toBe("done");
     const [a] = findings(r.events());
-    const before = r.events().length;
 
-    expect(await send(r.engine, { type: "message", text: "look again" })).toEqual([{ type: "rejected", reason: "This review was posted. Start a new review from Pull requests." }]);
-    expect(await send(r.engine, { type: "finding", id: a!.id, dismissed: true })).toMatchObject([{ type: "rejected" }]);
-    expect(r.events()).toHaveLength(before);
+    // What is on GitHub cannot be edited any more.
+    expect(await send(r.engine, { type: "finding", id: a!.id, dismissed: true })).toEqual([{ type: "rejected", reason: "This finding was posted." }]);
+
+    // A message sends the agent back in; its finish asks again.
+    expect(await send(r.engine, { type: "message", text: "look at digits too" })).toEqual([]);
+    const second = r.engine.snapshot()!;
+    expect(second.status).toBe("awaiting_approval");
+    expect(second.pending!.approvalId).not.toBe(r.approvalId);
+    expect(await send(r.engine, { type: "finding", id: a!.id, dismissed: true })).toEqual([{ type: "rejected", reason: "This finding was posted." }]);
+
+    expect(await send(r.engine, { type: "post_review", approvalId: second.pending!.approvalId, verdict: "REQUEST_CHANGES", comment: "One more." })).toEqual([]);
+    expect(r.fake.reviews).toHaveLength(2);
+    expect(r.fake.reviews[1]).toMatchObject({ event: "REQUEST_CHANGES", body: `One more.\n\n${REVIEW_FOOTER}` });
+    expect(r.fake.reviews[1]!.comments.map((c) => c.body)).toEqual(["**Medium:** Digits are dropped."]);
+    expect(ofType(r.events(), "review_posted")).toHaveLength(2);
     expect(r.engine.snapshot()!.status).toBe("done");
-    expect(r.fake.reviews).toHaveLength(1);
   });
 });

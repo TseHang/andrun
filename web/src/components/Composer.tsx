@@ -36,7 +36,7 @@ export function Composer({ view, running, waiting, code, send, update }: { view:
           aria-label="Message to the agent"
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={running ? "Redirect the agent" : waiting ? "Reply to the agent" : "Send a message to continue"}
+          placeholder={running ? "Redirect the agent" : waiting ? "Reply to the agent" : view.posted ? "Ask &run for another look" : "Send a message to continue"}
           className="h-9 min-w-0 grow rounded-[10px] bg-black/5 px-3 text-[14px] transition-[background-color,box-shadow] focus:bg-white focus:shadow-[0_0_0_1px_rgba(0,0,0,0.2)]"
         />
         {waiting && code && view.changes.length > 0 && (
