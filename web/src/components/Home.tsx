@@ -5,7 +5,7 @@ import { useApp } from "../context";
 import { relativeTime, TASK_FORMAT_NOTE } from "../state/format";
 import { Spinner } from "./Spinner";
 import { ModelMenu } from "./ModelMenu";
-import { DOT, STATUS_TEXT } from "./StatusLabel";
+import { CLOSED_DOT, DOT, STATUS_TEXT, closedText } from "./StatusLabel";
 
 export function Home({ sessions }: { sessions: SessionSummary[] }) {
   const { config, navigate, refreshList } = useApp();
@@ -93,16 +93,19 @@ export function Home({ sessions }: { sessions: SessionSummary[] }) {
       {sessions.length > 0 && (
         <section aria-label="Recent sessions" className="flex w-[720px] flex-col">
           <div className="px-1 pb-2 text-xs font-semibold text-text-secondary">Recent</div>
-          {sessions.map((s) => (
+          {sessions.map((s) => {
+            const closed = closedText(s.status, s.prState);
+            return (
             <a key={s.id} href={`/s/${s.id}`} className="flex h-11 items-center gap-3 border-t border-black/8 px-1">
-              {s.status === "running" ? <Spinner size={8} /> : <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${DOT[s.status]}`} />}
+              {s.status === "running" ? <Spinner size={8} /> : <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${closed ? CLOSED_DOT : DOT[s.status]}`} />}
               <span className="min-w-0 grow truncate text-sm">{s.title}</span>
               {s.mode === "review" && <span data-tag="review" className="rounded-full bg-fill px-1.5 text-[11px] text-text-secondary">Review</span>}
               {s.mode === "task" && <span data-tag="task" className="rounded-full bg-fill px-1.5 text-[11px] text-text-secondary">Task</span>}
-              <span className={`text-xs ${s.status === "awaiting_approval" || s.status === "awaiting_input" ? "text-accent-text" : s.status === "failed" || s.status === "budget_exceeded" ? "text-failed" : "text-text-secondary"}`}>{STATUS_TEXT[s.status]}</span>
+              <span className={`text-xs ${closed ? "text-text-secondary" : s.status === "awaiting_approval" || s.status === "awaiting_input" ? "text-accent-text" : s.status === "failed" || s.status === "budget_exceeded" ? "text-failed" : "text-text-secondary"}`}>{closed ?? STATUS_TEXT[s.status]}</span>
               <span className="w-8 text-right text-xs text-text-tertiary">{relativeTime(s.updated_at, Date.now())}</span>
             </a>
-          ))}
+            );
+          })}
         </section>
       )}
     </main>

@@ -31,6 +31,8 @@ export interface FakePull {
   title: string;
   body: string;
   state: "open" | "closed";
+  /** Closed by a merge. */
+  merged?: boolean;
   user: string;
   headRef: string;
   headSha: string;
@@ -202,6 +204,7 @@ export function createFakeGitHub(seed: { files?: Record<string, string>; modes?:
       title: p.title,
       body: p.body,
       state: p.state,
+      merged: p.merged ?? false,
       html_url: `https://github.com/${FAKE_REPO}/pull/${p.number}`,
       user: { login: p.user },
       head: { ref: p.headRef, sha: p.headSha, repo: { full_name: p.headRepo ?? FAKE_REPO } },

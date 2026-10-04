@@ -489,3 +489,54 @@ it("a file that was not saved has no download", async () => {
   expect(html).toContain("Too large to save (over 1 MB)");
   expect(html).not.toMatch(/>Download<\/button>/);
 });
+
+describe("A merged or closed pull request closes the session (A26)", () => {
+  it("lists show Merged or Closed with a grey dot in place of the status", async () => {
+    const { Home } = await import("../../web/src/components/Home");
+    const { Sidebar } = await import("../../web/src/components/Sidebar");
+    const base = { mode: "code" as const, status: "done" as const, created_at: 1, updated_at: 1 };
+    const sessions = [
+      { id: "m", ...base, title: "Merged fix", pr: 3, prState: "merged" as const },
+      { id: "c", ...base, title: "Closed review", mode: "review" as const, status: "awaiting_approval" as const, pr: 4, prState: "closed" as const },
+      { id: "o", ...base, title: "Open fix", pr: 5 },
+    ];
+    for (const node of [<Home sessions={sessions} />, <Sidebar sessions={sessions} stale={false} path="/" live={null} pullCount={0} />]) {
+      const html = inApp(node);
+      expect(count(html, />Merged</g)).toBe(1);
+      expect(count(html, />Closed</g)).toBe(1);
+      expect(count(html, />Done</g)).toBe(1);
+      expect(html).not.toContain("Awaiting approval");
+      expect(count(html, /bg-text-tertiary/g)).toBe(2);
+      expect(count(html, /bg-done/g)).toBe(1);
+    }
+    // A run that is still going shows as running.
+    const running = inApp(<Sidebar sessions={[{ id: "m", ...base, title: "t", status: "running", pr: 3, prState: "merged" }]} stale={false} path="/" live={null} pullCount={0} />);
+    expect(running).toContain("Running");
+    expect(running).not.toContain("Merged");
+  });
+
+  it("the header shows Merged, and the bar says why there is no composer", async () => {
+    const { SessionHeader } = await import("../../web/src/components/SessionHeader");
+    const { ClosedBar } = await import("../../web/src/components/Composer");
+    const header = (prState?: "merged" | "closed") =>
+      inApp(<SessionHeader title="t" status="done" prState={prState} header={initialView().header} review={false} onDelete={() => {}} moreRef={{ current: null }} />);
+    expect(header("merged")).toMatch(/data-testid="session-status"[^>]*>.*Merged/);
+    expect(header("merged")).not.toContain("Done");
+    expect(header()).toContain("Done");
+
+    const bar = renderToStaticMarkup(<ClosedBar pr={{ number: 3, state: "merged" }} />);
+    expect(bar).toContain("Pull request #3 was merged");
+    expect(bar).toContain('href="/"');
+    expect(bar).not.toContain("<input");
+    expect(renderToStaticMarkup(<ClosedBar pr={{ number: 3, state: "closed" }} />)).toContain("Pull request #3 was closed");
+  });
+
+  it("a posted review stops offering more once the pull request is merged", () => {
+    const view = viewOf({ type: "status", status: "running" }, { type: "review_posted", url: "https://github.com/x/y/pull/3#r1", verdict: "COMMENT" }, { type: "status", status: "done" });
+    expect(renderToStaticMarkup(<Timeline view={view} session={{ ...SESSION, pr: 3 }} />)).toContain("Review again");
+    const closed = renderToStaticMarkup(<Timeline view={view} session={{ ...SESSION, pr: 3, closed: true }} />);
+    expect(closed).toContain("Review posted");
+    expect(closed).not.toContain("Review again");
+    expect(closed).not.toContain("Keep asking");
+  });
+});

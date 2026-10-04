@@ -19,6 +19,8 @@ import { SessionStore, type GitHubState, type StoredFinding } from "./store";
 
 const WATCHDOG_MS = 60_000;
 const COALESCE_WINDOW_MS = 250;
+/** How old the pull request's state may be when a frame arrives (A26): a socket that sends many frames costs one GitHub request per window. */
+const FRAME_PR_STATE_MAX_AGE_MS = 5_000;
 
 /** The pull request context sent to the model in a review; larger than this and only file names go (P4-l). */
 const MAX_PR_CONTEXT_CHARS = 60_000;
@@ -73,6 +75,8 @@ export class SessionEngine {
   /** The status last emitted in this object's lifetime; the core's reaches SQLite only at its next checkpoint. */
   private liveStatus: AgentState["status"] | null = null;
   private reconcileChain: Promise<void> = Promise.resolve();
+  /** When GitHub was last asked about the pull request. Lost on eviction: it is asked once more. */
+  private prCheckedAt: number | null = null;
   private readonly upserts = new Set<Promise<void>>();
   private indexChain: Promise<void> = Promise.resolve();
   /** The last diff emitted per path, so a command-only change is announced once (P4-i). Lost on eviction: a duplicate is harmless. */
@@ -147,8 +151,44 @@ export class SessionEngine {
   }
 
   private prOf(repo: string, gh: GitHubState): SessionSnapshot["pr"] {
-    if (gh.review) return { number: gh.review.number, url: `https://github.com/${repo}/pull/${gh.review.number}`, branch: null };
-    return gh.pr ? { number: gh.pr.number, url: gh.pr.url, branch: gh.pr.branch } : null;
+    const state = gh.prState ?? "open";
+    if (gh.review) return { number: gh.review.number, url: `https://github.com/${repo}/pull/${gh.review.number}`, branch: null, state };
+    return gh.pr ? { number: gh.pr.number, url: gh.pr.url, branch: gh.pr.branch, state } : null;
+  }
+
+  /**
+   * Asks GitHub whether the session's pull request is still open (A26), unless it was asked less than
+   * `maxAgeMs` ago. A merge is final and is not asked about again. A failure keeps what was known.
+   */
+  async refreshPr(maxAgeMs = 0): Promise<void> {
+    if (this.deleted || !this.store.exists()) return;
+    const gh = this.store.githubState();
+    const number = gh.review?.number ?? gh.pr?.number;
+    if (number === undefined || gh.prState === "merged") return;
+    if (this.prCheckedAt !== null && this.now() - this.prCheckedAt < maxAgeMs) return;
+    this.prCheckedAt = this.now();
+    let prState;
+    try {
+      prState = await this.deps.github.pullState(number);
+    } catch (err) {
+      console.error("reading the pull request's state failed:", err);
+      return;
+    }
+    // An older answer can arrive after a newer one: what is stored now decides, and a merge is never undone.
+    const known = this.deleted ? "merged" : this.store.githubState().prState;
+    if (known === "merged" || prState === (known ?? "open")) return;
+    this.store.saveGithubState({ prState });
+    const status = this.liveStatus ?? this.store.loadState()?.status;
+    if (status) this.upsertIndex(status);
+    await this.indexChain;
+  }
+
+  /** Why the session takes nothing more: its pull request was merged or closed (A26). Null while it is open. */
+  private closedReason(): string | null {
+    const gh = this.store.githubState();
+    const number = gh.review?.number ?? gh.pr?.number;
+    if (number === undefined || gh.prState === undefined || gh.prState === "open") return null;
+    return `Pull request #${number} was ${gh.prState}. Start a new session to continue.`;
   }
 
   /**
@@ -166,6 +206,14 @@ export class SessionEngine {
     return this.store.eventsAfter(lastSeq);
   }
 
+  /** `handleFrame`, after asking GitHub about the pull request: a frame to a merged one is refused (A26). */
+  async receive(raw: string | ArrayBuffer, reply: (frame: ServerFrame) => void, ctx?: { ip?: string }): Promise<void> {
+    const parsed = parseClientFrame(raw);
+    // Stop never waits for GitHub.
+    if (parsed.ok && parsed.frame.type !== "stop") await this.refreshPr(FRAME_PR_STATE_MAX_AGE_MS);
+    this.handleFrame(raw, reply, ctx);
+  }
+
   handleFrame(raw: string | ArrayBuffer, reply: (frame: ServerFrame) => void, ctx?: { ip?: string }): void {
     const parsed = parseClientFrame(raw);
     if (!parsed.ok) return reply({ type: "rejected", reason: parsed.reason });
@@ -173,6 +221,10 @@ export class SessionEngine {
     if (!state) return reply({ type: "rejected", reason: "no such session" });
     const { frame } = parsed;
     const ip = ctx?.ip ?? "unknown";
+
+    // A run that is still going can be stopped; nothing else reaches a session whose pull request is merged or closed.
+    const closed = frame.type === "stop" ? null : this.closedReason();
+    if (closed) return reply({ type: "rejected", reason: closed });
 
     // While the core runs it owns the event sequence, so an edit is refused at once, not queued (P4-d).
     if (frame.type === "finding" && this.inflight && (this.liveStatus ?? state.status) === "running") {
@@ -510,7 +562,8 @@ export class SessionEngine {
     if (!meta) return;
     const gh = this.store.githubState();
     const pr = gh.review?.number ?? gh.pr?.number;
-    const row = { id: meta.id, mode: meta.mode, title: meta.title, status, created_at: meta.created_at, updated_at: this.now(), ...(pr !== undefined && { pr }) };
+    const prState = gh.prState === "merged" || gh.prState === "closed" ? gh.prState : undefined;
+    const row = { id: meta.id, mode: meta.mode, title: meta.title, status, created_at: meta.created_at, updated_at: this.now(), ...(pr !== undefined && { pr }), ...(prState && { prState }) };
     const tracked: Promise<void> = this.indexChain
       .then(() => (this.deleted ? undefined : this.deps.index.upsert(row)))
       .catch((err) => console.error("session index upsert failed:", err))

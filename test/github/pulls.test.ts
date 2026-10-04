@@ -128,4 +128,15 @@ describe("pull requests (spec D2: list, read)", () => {
     const { fake, github } = setup({ defaultBranch: "trunk" });
     expect(await github.defaultBranchHead()).toEqual({ branch: "trunk", sha: fake.refs.get("trunk") });
   });
+
+  it("tells an open, a closed and a merged pull request apart with one request", async () => {
+    const { fake, github } = seeded();
+    fake.addPull({ number: 20, title: "Merged", headRef: "feat/merged", state: "closed", merged: true });
+    const before = fake.requests.length;
+    expect(await github.pullState(14)).toBe("open");
+    expect(await github.pullState(11)).toBe("closed");
+    expect(await github.pullState(20)).toBe("merged");
+    expect(fake.requests.slice(before).map((r) => r.path).filter((path) => path.startsWith("/repos/"))).toEqual(["/repos/TseHang/andrun-demo/pulls/14", "/repos/TseHang/andrun-demo/pulls/11", "/repos/TseHang/andrun-demo/pulls/20"]);
+    await expect(github.pullState(99)).rejects.toMatchObject({ status: 404 });
+  });
 });

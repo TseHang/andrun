@@ -4,21 +4,24 @@ import { useApp } from "../context";
 import { formatCost, formatTokens } from "../state/format";
 import type { SessionView } from "../state/reducer";
 import { Spinner } from "./Spinner";
-import { DOT, STATUS_COLOR, STATUS_TEXT } from "./StatusLabel";
+import { CLOSED_DOT, DOT, STATUS_COLOR, STATUS_TEXT, closedText, type ClosedPr } from "./StatusLabel";
 
 interface Props {
   title: string;
   status: Status;
+  /** Set when the session's pull request was merged or closed (A26). */
+  prState?: ClosedPr;
   header: SessionView["header"];
   review: boolean;
   onDelete: () => void;
   moreRef: React.RefObject<HTMLButtonElement | null>;
 }
 
-export function SessionHeader({ title, status, header, review, onDelete, moreRef }: Props) {
+export function SessionHeader({ title, status, prState, header, review, onDelete, moreRef }: Props) {
   const { config } = useApp();
   const [open, setOpen] = useState(false);
   const menu = useRef<HTMLDivElement>(null);
+  const closed = closedText(status, prState);
   const over = header.cost > config.costNotice;
   const notice = `This session has cost more than ¥${config.costNotice}. Smaller tasks cost less: consider splitting the work.`;
   const pct = header.contextWindow > 0 ? Math.min(100, (header.contextTokens / header.contextWindow) * 100) : 0;
@@ -47,10 +50,10 @@ export function SessionHeader({ title, status, header, review, onDelete, moreRef
   return (
     <header className="flex h-[52px] shrink-0 items-center gap-3.5 border-b border-black/8 pl-7 pr-3">
       <h1 className="m-0 min-w-0 truncate text-[15px] font-semibold tracking-[-0.01em]">{title}</h1>
-      <span data-testid="session-status" className={`flex shrink-0 items-center gap-1.5 font-medium ${STATUS_COLOR[status]}`}>
+      <span data-testid="session-status" className={`flex shrink-0 items-center gap-1.5 font-medium ${closed ? "text-text-secondary" : STATUS_COLOR[status]}`}>
         {status === "running" && <Spinner />}
-        {(status === "awaiting_approval" || status === "awaiting_input" || status === "done" || status === "failed" || status === "budget_exceeded") && <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${DOT[status]}`} />}
-        {review && status === "awaiting_approval" ? "Ready to post" : STATUS_TEXT[status]}
+        {closed ? <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${CLOSED_DOT}`} /> : (status === "awaiting_approval" || status === "awaiting_input" || status === "done" || status === "failed" || status === "budget_exceeded") && <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${DOT[status]}`} />}
+        {closed ?? (review && status === "awaiting_approval" ? "Ready to post" : STATUS_TEXT[status])}
       </span>
       <span className="grow" />
       {review && <span className="shrink-0 text-text-secondary">Read-only review</span>}

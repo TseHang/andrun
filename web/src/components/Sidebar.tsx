@@ -1,7 +1,7 @@
 import type { SessionSummary } from "../../../src/session/protocol";
 import type { Status } from "../../../src/core/events";
 import { useApp } from "../context";
-import { LIST_COLOR, StatusLabel } from "./StatusLabel";
+import { LIST_COLOR, StatusLabel, closedText } from "./StatusLabel";
 import { Wordmark } from "./Wordmark";
 
 interface Props {
@@ -51,6 +51,7 @@ export function Sidebar({ sessions, stale, path, live, pullCount }: Props) {
         {sessions.length === 0 && <div className="px-2.5 py-1.5 text-text-tertiary">No sessions yet</div>}
         {sessions.map((s) => {
           const status = live && live.id === s.id ? live.status : s.status;
+          const closed = closedText(status, s.prState) !== null;
           return (
             <a
               key={s.id}
@@ -60,7 +61,7 @@ export function Sidebar({ sessions, stale, path, live, pullCount }: Props) {
             >
               <span className="truncate font-medium">{s.title}</span>
               <span className="flex items-center gap-1.5">
-                <StatusLabel status={status} className={`text-[11px] ${LIST_COLOR(status)}`} />
+                <StatusLabel status={status} prState={s.prState} className={`text-[11px] ${closed ? "text-text-secondary" : LIST_COLOR(status)}`} />
                 {s.mode === "review" && <span data-tag="review" className="rounded-full bg-fill px-1.5 text-[11px] text-text-secondary">Review</span>}
               {s.mode === "task" && <span data-tag="task" className="rounded-full bg-fill px-1.5 text-[11px] text-text-secondary">Task</span>}
               </span>

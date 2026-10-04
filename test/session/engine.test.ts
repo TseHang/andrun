@@ -104,6 +104,7 @@ function world(opts: { tarball?: Uint8Array; config?: AgentConfig } = {}) {
         publish: async (input) => ({ number: 1, url: "https://github.com/TseHang/andrun-demo/pull/1", branch: `${input.branchPrefix}-1`, round: 1, updated: false }),
         postReview: async () => ({ url: "https://github.com/TseHang/andrun-demo/pull/1#pullrequestreview-1" }),
         defaultBranchHead: async () => ({ branch: "main", sha: REPO.sha }),
+        pullState: async () => "open",
       },
       guard: { githubWrite: async () => null },
       broadcast: (frame) => frames.push(frame),
@@ -1171,6 +1172,7 @@ describe("Harness improvement: repo context (HI-e)", () => {
         },
         postReview: async () => ({ url: "" }),
         defaultBranchHead: async () => ({ branch: "main", sha: REPO.sha }),
+        pullState: async () => "open",
       },
     });
     engine.create({ id: ID, mode: "code", task: TASK });
@@ -1725,6 +1727,7 @@ describe("Session UI: stop (UI-a, UI-b) and saved file content (UI-c)", () => {
         },
         postReview: async () => ({ url: "" }),
         defaultBranchHead: async () => ({ branch: "main", sha: REPO.sha }),
+        pullState: async () => "open",
       },
     });
     engine.handleFrame(JSON.stringify({ type: "approve", approvalId: w.approvalId }), () => {});

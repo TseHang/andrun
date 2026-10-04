@@ -38,11 +38,15 @@ export interface PullDetail {
   files: PullFile[];
 }
 
+/** Where a pull request stands. A closed one can be reopened; a merged one cannot. */
+export type PullState = "open" | "closed" | "merged";
+
 interface RawPull {
   number: number;
   title: string;
   body: string | null;
   state: string;
+  merged?: boolean;
   html_url: string;
   updated_at: string;
   user: { login: string };
@@ -93,6 +97,11 @@ export async function getPull(request: Request, repo: string, token: string, n: 
     changedFiles: p.changed_files,
     files: files.map((f) => ({ path: f.filename, status: f.status, additions: f.additions, deletions: f.deletions, patch: f.patch ?? null })),
   };
+}
+
+export async function pullState(request: Request, repo: string, token: string, n: number): Promise<PullState> {
+  const p = (await request("GET", `/repos/${repo}/pulls/${n}`, token)) as RawPull;
+  return p.merged ? "merged" : p.state === "open" ? "open" : "closed";
 }
 
 /** A file's content at the pull request's head, null when it is not a readable file or the pull request is a fork. */

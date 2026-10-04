@@ -3,6 +3,7 @@
 
 import type { AgentEvent, Severity } from "../core/events";
 import type { AgentState, ChatMessage, PendingApproval } from "../core/types";
+import type { PullState } from "../github";
 import type { SessionMeta, SqlStore, StoredChange } from "./ports";
 
 /** Keeps one event row far below the 2 MB Durable Object row limit. */
@@ -50,6 +51,8 @@ export interface GitHubState {
   posted?: { url: string; verdict: string; approvalId?: string };
   /** Findings already on GitHub: a later review of the same session leaves them out. */
   postedFindings?: string[];
+  /** What GitHub last said about the session's pull request; absent until it is asked (A26). */
+  prState?: PullState;
 }
 
 interface FindingRow {

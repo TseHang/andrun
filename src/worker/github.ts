@@ -9,9 +9,10 @@ const clients = new Map<string, GitHub>();
 
 /**
  * `scope` names the budget: the public routes and the sessions each have their own, so requests to
- * the list cannot use up what approving a pull request or posting a review needs.
+ * the list cannot use up what approving a pull request or posting a review needs. Asking whether a
+ * session's pull request is still open (A26) has a third: opening session pages cannot use up either.
  */
-export function githubFor(env: Env, scope: "routes" | "sessions"): GitHub {
+export function githubFor(env: Env, scope: "routes" | "sessions" | "state"): GitHub {
   const existing = clients.get(scope);
   if (existing) return existing;
   const client = createGitHub({
