@@ -493,13 +493,16 @@ it("task sessions are tagged and Home's note follows the mode", async () => {
     { id: "task", mode: "task" as const, title: "A page", status: "awaiting_input" as const, created_at: 1, updated_at: 1 },
     { id: "code", mode: "code" as const, title: "A fix", status: "awaiting_input" as const, created_at: 1, updated_at: 1 },
   ];
-  for (const node of [<Home sessions={sessions} />, <Sidebar sessions={sessions} stale={false} path="/" live={null} pullCount={0} />]) {
-    const html = inApp(node);
-    expect(count(html, /data-tag="task"/g)).toBe(1);
-    expect(html).not.toContain('data-tag="code"');
-  }
-  const home = inApp(<Home sessions={sessions} />);
-  expect(home).toContain(CONFIG.repo);
+  const side = inApp(<Sidebar sessions={sessions} stale={false} path="/" live={null} pullCount={0} />);
+  expect(count(side, /data-tag="task"/g)).toBe(1);
+  expect(side).not.toContain('data-tag="code"');
+  // Home is the question and the composer only: recent sessions live in the sidebar.
+  const home = inApp(<Home />);
+  expect(home).not.toContain("Recent");
+  expect(home).not.toContain("A page");
+  // The repo links to GitHub; the branch comes from /repo once GitHub answers.
+  expect(home).toMatch(new RegExp(`<a href="https://github.com/${CONFIG.repo}"[^>]*>${CONFIG.repo}</a>`));
+  expect(home).not.toContain("latest commit on the default branch");
   expect(home).toContain("Runs in a sandbox with no network access");
   const taskButton = /<button[^>]*>\s*Task\s*<\/button>/.exec(home)?.[0];
   expect(taskButton).toBeTruthy();
@@ -540,7 +543,6 @@ it("a file that was not saved has no download", async () => {
 
 describe("A merged or closed pull request closes the session (A26)", () => {
   it("lists show Merged or Closed with a grey dot in place of the status", async () => {
-    const { Home } = await import("../../web/src/components/Home");
     const { Sidebar } = await import("../../web/src/components/Sidebar");
     const base = { mode: "code" as const, status: "done" as const, created_at: 1, updated_at: 1 };
     const sessions = [
@@ -548,7 +550,7 @@ describe("A merged or closed pull request closes the session (A26)", () => {
       { id: "c", ...base, title: "Closed review", mode: "review" as const, status: "awaiting_approval" as const, pr: 4, prState: "closed" as const },
       { id: "o", ...base, title: "Open fix", pr: 5 },
     ];
-    for (const node of [<Home sessions={sessions} />, <Sidebar sessions={sessions} stale={false} path="/" live={null} pullCount={0} />]) {
+    for (const node of [<Sidebar sessions={sessions} stale={false} path="/" live={null} pullCount={0} />]) {
       const html = inApp(node);
       expect(count(html, />Merged</g)).toBe(1);
       expect(count(html, />Closed</g)).toBe(1);

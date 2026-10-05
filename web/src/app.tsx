@@ -150,7 +150,7 @@ export function App() {
           ) : reviewNumber ? (
             <ReviewStartPage number={Number(reviewNumber)} />
           ) : (
-            <Home sessions={sessions} />
+            <Home />
           )}
         </div>
       </div>

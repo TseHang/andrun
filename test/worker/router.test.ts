@@ -270,6 +270,15 @@ describe("router (Phase 3: P3-c, P3-d)", () => {
     await expectError(await handle(req("POST", "/config"), f.env), 404);
   });
 
+  it("repo says the default branch, rate limited, apart from /config", async () => {
+    const f = fakeEnv();
+    const res = await handle(req("GET", "/repo"), f.env);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ branch: "main" });
+    await expectError(await handle(req("POST", "/repo"), f.env), 404);
+    await expectError(await handle(req("GET", "/repo"), { ...f.env, githubReadLimiter: limiter(0).binding }), 429);
+  });
+
   it("validates the model on create", async () => {
     const f = fakeEnv({ createLimiter: limiter(100).binding });
     expect((await post(f.env, { mode: "code", task: "t", model: "deepseek-ai/deepseek-v4.1-flash", reasoning: "high" })).status).toBe(201);

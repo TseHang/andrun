@@ -23,6 +23,13 @@ export async function getConfig(): Promise<Config> {
   return (await res.json()) as Config;
 }
 
+/** The configured repo's default branch; null when GitHub cannot say. */
+export async function getRepoBranch(): Promise<string | null> {
+  const res = await fetch("/repo").catch(() => null);
+  if (!res?.ok) return null;
+  return ((await res.json()) as { branch: string }).branch;
+}
+
 /** Newest first by creation time (the server does not promise an order). */
 export async function listSessions(): Promise<SessionSummary[]> {
   const res = await fetch("/sessions");
