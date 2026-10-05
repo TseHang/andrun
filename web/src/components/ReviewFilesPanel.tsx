@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { PullDetail } from "../api";
 import type { FindingView } from "../state/reducer";
 import { FileIcon } from "./Icons";
@@ -9,7 +9,7 @@ import { SectionTitle } from "./SectionTitle";
  * Files changed, on the right of the page, laid out like a Code session's Changes. Without a `pull` it shows `notice`
  * (loading, or why there is no diff). The page header's panel button shows and hides it.
  */
-export function ReviewFilesPanel({ pull, findings, jump, notice, motion = "" }: { pull: PullDetail | null; findings: FindingView[]; jump?: Jump | null; notice?: string; motion?: string }) {
+export function ReviewFilesPanel({ pull, findings, note, jump, notice, motion = "" }: { pull: PullDetail | null; findings: FindingView[]; note?: (f: FindingView) => ReactNode; jump?: Jump | null; notice?: string; motion?: string }) {
   const files = pull?.files ?? [];
   const additions = files.reduce((n, f) => n + f.additions, 0);
   const deletions = files.reduce((n, f) => n + f.deletions, 0);
@@ -32,7 +32,7 @@ export function ReviewFilesPanel({ pull, findings, jump, notice, motion = "" }: 
       />
       {notice && <div className="text-xs text-text-secondary">{notice}</div>}
       {pull?.files.map((f) => (
-        <FileDiff key={`${f.path}:${all.round}`} file={f} findings={findings} previewPr={pull.fork ? undefined : pull.number} jump={jump} defaultOpen={all.open} />
+        <FileDiff key={`${f.path}:${all.round}`} file={f} findings={findings} note={note} previewPr={pull.fork ? undefined : pull.number} jump={jump} defaultOpen={all.open} />
       ))}
     </aside>
   );

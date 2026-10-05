@@ -4,7 +4,7 @@ import { UUID, deleteSession, getSnapshot } from "../api";
 import { useApp } from "../context";
 import { useSession } from "../socket";
 import { ApprovalBar } from "./ApprovalBar";
-import { changeTotals, isDeliverable } from "../state/format";
+import { changeTotals, choiceLabel, isDeliverable } from "../state/format";
 import { usePanelHidden } from "../state/hidden";
 import { ChangesPanel } from "./ChangesPanel";
 import { ClosedBar, Composer } from "./Composer";
@@ -16,6 +16,7 @@ import { PostBar } from "./ReviewBars";
 import { ReviewBody, usePull } from "./ReviewSession";
 import { SessionHeader } from "./SessionHeader";
 import { Spinner } from "./Spinner";
+import { shownStatus } from "./StatusLabel";
 import { Timeline } from "./Timeline";
 
 function Notice({ title }: { title: string }) {
@@ -60,7 +61,7 @@ function Loader({ id }: { id: string }) {
 }
 
 function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload: () => void }) {
-  const { navigate, refreshList, refreshPulls, reportStatus } = useApp();
+  const { config, navigate, refreshList, refreshPulls, reportStatus } = useApp();
   const { view, send, update, reconnecting, deleted } = useSession(id);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -84,6 +85,8 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
   };
   const more = useRef<HTMLButtonElement>(null);
   const status = view.status ?? snap.status;
+  const routed = view.items.filter((i) => i.kind === "routed").at(-1);
+  const shown = shownStatus(status, snap.mode, view.question !== null);
   const review = snap.mode === "review";
   // Merged or closed on GitHub: nothing more is sent from here (A26). A run that is still going keeps its Stop button.
   const closedPr = snap.pr && snap.pr.state !== "open" ? { number: snap.pr.number, state: snap.pr.state } : null;
@@ -94,7 +97,7 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
   // Re-read the snapshot (sandboxRunning) and the list after each status change.
   const first = useRef(true);
   useEffect(() => {
-    reportStatus(id, status);
+    reportStatus(id, shown);
     if (first.current) return void (first.current = false);
     reload();
     refreshList();
@@ -187,7 +190,7 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
         </Enter>
       ) : (
         <Enter key="composer" live={live} motion="enter-bar">
-          <Composer view={view} running={status === "running"} waiting={status === "awaiting_input"} finishing={finishing} send={send} update={update} />
+          <Composer view={view} running={status === "running"} waiting={status === "awaiting_input"} finishing={finishing} model={choiceLabel(snap.model, config.defaultModel, config.autoModel, routed)} send={send} update={update} />
         </Enter>
       )}
     </div>
@@ -205,7 +208,7 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
       )}
       <SessionHeader
         title={snap.title}
-        status={status}
+        status={shown}
         prState={closedPr?.state}
         header={view.header}
         review={review}

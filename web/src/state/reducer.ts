@@ -25,6 +25,7 @@ export interface StepRow {
 
 export interface Usage {
   model: string;
+  reasoning?: string;
   tokensIn: number;
   tokensOut: number;
   latencyMs: number;
@@ -319,7 +320,7 @@ function apply(view: SessionView, ev: AgentEvent): SessionView {
     case "model_routed":
       return { ...view, items: [...view.items, { key: `mr:${ev.seq}`, kind: "routed", task: ev.task, model: ev.model, reasoning: ev.reasoning }] };
     case "usage": {
-      const usage: Usage = { model: ev.model, tokensIn: ev.tokens_in, tokensOut: ev.tokens_out, latencyMs: ev.latency_ms };
+      const usage: Usage = { model: ev.model, ...(ev.reasoning !== undefined && { reasoning: ev.reasoning }), tokensIn: ev.tokens_in, tokensOut: ev.tokens_out, latencyMs: ev.latency_ms };
       const items = view.items.map((i) => (i.kind === "assistant" && ev.stepId && i.stepId === ev.stepId ? { ...i, usage } : i));
       return {
         ...view,

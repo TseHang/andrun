@@ -48,7 +48,7 @@ function fakeEnv(over: Partial<RouterEnv> = {}) {
       return {
         create: async (input) => {
           created.push(input);
-          sessions.set(id, { id, mode: input.mode, title: input.task.slice(0, 80), status: "running", pending: null, sandboxRunning: false, sha: input.sha ?? REPO.sha, baseBranch: null, pr: null });
+          sessions.set(id, { id, mode: input.mode, title: input.task.slice(0, 80), status: "running", pending: null, sandboxRunning: false, sha: input.sha ?? REPO.sha, baseBranch: null, pr: null, model: null });
         },
         snapshot: async () => sessions.get(id) ?? null,
         remove: async () => sessions.delete(id),

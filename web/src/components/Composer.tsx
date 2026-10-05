@@ -20,7 +20,7 @@ export function ClosedBar({ pr }: { pr: { number: number; state: "merged" | "clo
 }
 
 /** `finishing`: the agent waits for the finish approval in the side panel; a message here asks for changes instead. */
-export function Composer({ view, running, waiting, finishing = false, send, update }: { view: SessionView; running: boolean; waiting: boolean; finishing?: boolean; send: (f: ClientFrame) => boolean; update: (fn: (v: SessionView) => SessionView) => void }) {
+export function Composer({ view, running, waiting, finishing = false, model, send, update }: { view: SessionView; running: boolean; waiting: boolean; finishing?: boolean; model?: string; send: (f: ClientFrame) => boolean; update: (fn: (v: SessionView) => SessionView) => void }) {
   const [text, setText] = useState("");
   // Stop was pressed: it takes effect at the agent's next check, and a second frame would only be refused.
   const [stopping, setStopping] = useState(false);
@@ -68,12 +68,17 @@ export function Composer({ view, running, waiting, finishing = false, send, upda
         </button>
       </div>
       {/* Under the input, so a hint never takes the input's width. */}
-      {(hint || view.refused) && (
+      {(hint || view.refused || model) && (
         <div className="mt-1.5 flex flex-wrap gap-x-3 px-1 text-xs">
           {hint && <span className="text-text-tertiary">{hint}</span>}
           {view.refused && (
             <span role="alert" className="text-failed">
               {view.refused}
+            </span>
+          )}
+          {model && (
+            <span data-testid="composer-model" title="The model and reasoning effort this session runs on" className="ml-auto text-text-tertiary">
+              {model}
             </span>
           )}
         </div>

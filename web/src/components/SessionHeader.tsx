@@ -60,7 +60,11 @@ export function SessionHeader({ title, status, prState, header, review, onDelete
       </span>
       <span className="grow" />
       {review && <span className="shrink-0 text-text-secondary">Read-only review</span>}
-      <span className="shrink-0 text-text-secondary">Step {header.step}</span>
+      {header.step > 0 && (
+        <span title="Model calls the agent has made in this session" className="shrink-0 text-text-secondary">
+          {header.step} {header.step === 1 ? "step" : "steps"}
+        </span>
+      )}
       {header.contextWindow > 0 && (
         <span className="flex shrink-0 items-center gap-1.5 text-text-secondary">
           <span className="flex h-1 w-12 overflow-hidden rounded-full bg-[#e5e5ea]">

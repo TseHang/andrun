@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Severity } from "../../../src/core/events";
 import { getPullFile, type PullFile } from "../api";
 import { parseDiff } from "../state/diff";
@@ -41,15 +41,16 @@ export function FindingHeader({ severity, muted = false }: { severity: Severity;
 }
 
 /**
- * One file of a pull request, as a card that folds: GitHub's hunks, and a note under each new-side line a kept finding sits on.
+ * One file of a pull request, as a card that folds: GitHub's hunks, and a note under each new-side line a finding sits on.
+ * `note` draws a finding there (the review's post, with its actions); without it a dismissed finding has no note.
  * `previewPr` (the pull request's number) turns on Preview for an HTML file; a `jump` to this file opens the card and scrolls to the line.
  */
-export function FileDiff({ file, findings = [], previewPr, jump, defaultOpen = true }: { file: PullFile; findings?: FindingView[]; previewPr?: number; jump?: Jump | null; defaultOpen?: boolean }) {
+export function FileDiff({ file, findings = [], note, previewPr, jump, defaultOpen = true }: { file: PullFile; findings?: FindingView[]; note?: (f: FindingView) => ReactNode; previewPr?: number; jump?: Jump | null; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
   const [preview, setPreview] = useState(false);
   const scroll = useRef(false);
   const parsed = file.patch === null ? null : parseDiff(file.patch);
-  const notes = findings.filter((f) => f.path === file.path && f.inline && !f.dismissed);
+  const notes = findings.filter((f) => f.path === file.path && f.inline && (note !== undefined || !f.dismissed));
   const canPreview = previewPr !== undefined && isPreviewable(file.path) && file.patch !== null && file.status !== "removed";
 
   useEffect(() => {
@@ -99,9 +100,15 @@ export function FileDiff({ file, findings = [], previewPr, jump, defaultOpen = t
                       <span>{l.text}</span>
                     </div>
                     {here.map((f) => (
-                      <div key={f.id} className="mx-3.5 my-2 ml-16 flex flex-col gap-1.5 rounded-lg bg-white px-3 py-2 font-sans text-[13px] leading-snug whitespace-normal text-text shadow-[0_0_0_1px_rgba(0,0,0,0.08)]">
-                        <FindingHeader severity={f.severity} />
-                        <span className="break-words">{f.text}</span>
+                      <div key={f.id} data-note={f.id} className={`mx-3.5 my-2 ml-16 flex flex-col gap-1.5 rounded-lg px-3 py-2 font-sans text-[13px] leading-snug whitespace-normal text-text shadow-[0_0_0_1px_rgba(0,0,0,0.08)] ${f.dismissed ? "bg-sidebar" : "bg-white"}`}>
+                        {note ? (
+                          note(f)
+                        ) : (
+                          <>
+                            <FindingHeader severity={f.severity} />
+                            <span className="break-words">{f.text}</span>
+                          </>
+                        )}
                       </div>
                     ))}
                   </div>

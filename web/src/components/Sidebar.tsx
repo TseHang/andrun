@@ -1,6 +1,6 @@
 import type { SessionSummary } from "../../../src/session/protocol";
 import type { Status } from "../../../src/core/events";
-import { LIST_COLOR, StatusLabel, closedText } from "./StatusLabel";
+import { LIST_COLOR, StatusLabel, closedText, shownStatus } from "./StatusLabel";
 import { PlusIcon, PullRequestIcon } from "./Icons";
 import { Wordmark } from "./Wordmark";
 
@@ -73,7 +73,7 @@ export function Sidebar({ sessions, stale, path, live, pullCount, collapsed = fa
           <div className="px-2.5 pb-1 text-[11px] font-semibold text-text-secondary">Recent</div>
           {sessions.length === 0 && <div className="px-2.5 py-1.5 text-text-tertiary">No sessions yet</div>}
           {sessions.map((s) => {
-            const status = live && live.id === s.id ? live.status : s.status;
+            const status = live && live.id === s.id ? live.status : shownStatus(s.status, s.mode);
             const closed = closedText(status, s.prState) !== null;
             return (
               <a

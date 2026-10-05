@@ -94,6 +94,8 @@ export type EventBody =
   | {
       type: "usage";
       model: string;
+      /** The `reasoning_effort` sent; absent when the provider's default was used. */
+      reasoning?: string;
       tokens_in: number;
       tokens_out: number;
       latency_ms: number;

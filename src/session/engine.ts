@@ -30,6 +30,13 @@ type PrEdits = { title?: string | undefined; summary?: string | undefined };
 
 const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
+/** The stored choice is "model" or "model@effort" (see `create`). */
+const modelOf = (stored: string | null | undefined): SessionSnapshot["model"] => {
+  if (!stored) return null;
+  const [id = stored, reasoning] = stored.split("@");
+  return { id, reasoning: reasoning || null };
+};
+
 /** The tool name a pending approval shows to the user (same mapping as `pause()` in the core). */
 function toolOf(pending: PendingApproval): string {
   return pending.kind === "tool" ? pending.call.function.name : pending.kind === "strikes" ? pending.tool : pending.kind === "question" ? "ask_user" : "finish";
@@ -151,6 +158,7 @@ export class SessionEngine {
       sha: meta.sha,
       baseBranch: this.store.githubState().baseBranch ?? null,
       pr: this.prOf(meta.repo, this.store.githubState()),
+      model: modelOf(meta.model),
     };
   }
 

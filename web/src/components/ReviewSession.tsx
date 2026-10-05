@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { Status } from "../../../src/core/events";
 import type { ClientFrame } from "../../../src/session/protocol";
 import { getPull, type PullDetail } from "../api";
 import type { SessionView } from "../state/reducer";
-import { Findings } from "./Findings";
+import { FindingPost, Findings } from "./Findings";
 import type { Jump } from "./PatchView";
 import { PullOverview } from "./PullOverview";
 import { ReviewFilesPanel } from "./ReviewFilesPanel";
@@ -34,7 +34,6 @@ export function usePull(pr: number | null): Diff {
  */
 export function ReviewBody({ view, status, session, diff, send, bar, files }: { view: SessionView; status: Status; session: SessionInfo; diff: Diff; send: (f: ClientFrame) => boolean; bar: ReactNode; files: { hidden: boolean; reopened: boolean; show: () => void } }) {
   const [jump, setJump] = useState<Jump | null>(null);
-  const kept = useMemo(() => view.findings.filter((f) => !f.dismissed), [view.findings]);
   const pull = diff.kind === "ready" ? diff.pull : null;
 
   return (
@@ -62,7 +61,8 @@ export function ReviewBody({ view, status, session, diff, send, bar, files }: { 
         <ReviewFilesPanel
           motion={files.reopened ? "side-in" : ""}
           pull={pull}
-          findings={kept}
+          findings={view.findings}
+          note={(f) => <FindingPost f={f} status={status} send={send} />}
           jump={jump}
           notice={diff.kind === "loading" ? "Loading the diff" : diff.kind === "error" ? diff.message : undefined}
         />

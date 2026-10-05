@@ -45,6 +45,12 @@ export function modelLabel(model: string): string {
   return model.slice(model.lastIndexOf("/") + 1);
 }
 
+/** What a session runs on, under its composer: the chosen model and effort, or auto with the model it last picked. */
+export function choiceLabel(model: { id: string; reasoning: string | null } | null, defaultModel: string, autoModel: string, routed?: { model: string; reasoning: string }): string {
+  if (model?.id === autoModel) return routed ? `Auto · ${modelLabel(routed.model)} · ${routed.reasoning}` : "Auto";
+  return `${modelLabel(model?.id ?? defaultModel)}${model?.reasoning ? ` · ${model.reasoning}` : ""}`;
+}
+
 export function relativeTime(ts: number, now: number): string {
   const s = Math.max(0, now - ts) / 1000;
   if (s < 60) return "now";
@@ -110,7 +116,7 @@ export function prTarget(branch: string | undefined, id: string, baseBranch: str
 
 /** The short line under a reply, e.g. "5.4k in · 6.0k out · 34.3s". */
 export function usageLine(u: Usage): string {
-  return `${formatTokens(u.tokensIn)} in · ${formatTokens(u.tokensOut)} out · ${(u.latencyMs / 1000).toFixed(1)}s`;
+  return `${modelLabel(u.model)}${u.reasoning ? ` · ${u.reasoning}` : ""} · ${formatTokens(u.tokensIn)} in · ${formatTokens(u.tokensOut)} out · ${(u.latencyMs / 1000).toFixed(1)}s`;
 }
 
 /** What the agent is doing right now, null unless it is running. */

@@ -111,7 +111,7 @@ test("the header shows the step and the cost, and marks a cost above the notice"
   await waitForStatus(request, cheap, "awaiting_approval");
   await page.goto(`/s/${cheap}`);
   await expect(s.status).toHaveText("Awaiting approval");
-  await expect(header).toContainText(/Step 5(?! of)/);
+  await expect(header).toContainText(/5 steps/);
   await expect(header).not.toContainText("of 30");
   await expect(cost).toHaveText(/^¥0\.\d\d$/);
   await expect(cost).toHaveAttribute("data-over-notice", "false");
