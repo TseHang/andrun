@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { PlanStep } from "../../../src/core/events";
+import { PlanIcon } from "./Icons";
 import { Spinner } from "./Spinner";
 
 const LABEL = { completed: "completed", in_progress: "in progress", pending: "pending" } as const;
@@ -18,10 +19,13 @@ export function PlanCard({ plan, active }: { plan: PlanStep[]; active: boolean }
   const done = plan.filter((s) => s.status === "completed").length;
   return (
     <section aria-label="Plan" className="mb-5">
-      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className={`flex w-full cursor-pointer items-baseline justify-between text-left ${open ? "mb-2" : ""}`}>
+      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className={`flex w-full cursor-pointer items-center gap-1.5 text-left ${open ? "mb-2" : ""}`}>
+        <span className="text-text-secondary">
+          <PlanIcon />
+        </span>
         {open ? (
           <>
-            <h2 className="text-[13px] font-semibold">Plan</h2>
+            <h2 className="grow text-[13px] font-semibold">Plan</h2>
             <span className="text-xs text-text-secondary">{done} of {plan.length} done</span>
           </>
         ) : (

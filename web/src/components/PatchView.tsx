@@ -6,7 +6,8 @@ import { isPreviewable, severityLabel } from "../state/format";
 import type { FindingView } from "../state/reducer";
 import { Avatar } from "./Avatar";
 import { Chevron } from "./Chevron";
-import { HtmlPreview } from "./HtmlPreview";
+import { PreviewPane } from "./HtmlPreview";
+import { EyeIcon } from "./Icons";
 
 const KIND = {
   add: "bg-diff-add-bg text-diff-add-text",
@@ -74,14 +75,15 @@ export function FileDiff({ file, findings = [], previewPr, jump }: { file: PullF
           <span className="shrink-0 text-diff-del-text">−{file.deletions}</span>
         </button>
         {canPreview && (
-          <button type="button" onClick={() => setPreview(!preview)} className="shrink-0 cursor-pointer rounded-full bg-fill px-2.5 py-0.5 text-xs font-medium">
+          <button type="button" onClick={() => setPreview(!preview)} className="press flex shrink-0 cursor-pointer items-center gap-1 rounded-full bg-fill px-2.5 py-0.5 text-xs font-medium">
+            {!preview && <EyeIcon />}
             {preview ? "Diff" : "Preview"}
           </button>
         )}
       </div>
       {open &&
         (canPreview && preview ? (
-          <HtmlPreview load={() => getPullFile(previewPr, file.path)} path={file.path} version={file.patch!} />
+          <PreviewPane inline load={() => getPullFile(previewPr, file.path)} path={file.path} version={file.patch!} />
         ) : parsed ? (
           <div className="overflow-x-auto py-1.5 font-mono text-[11.5px] leading-[1.6]">
             <div className="min-w-max">

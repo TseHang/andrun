@@ -233,7 +233,7 @@ describe("Session UI: the conversation (slice B)", () => {
     // A review posts its summary from the post bar instead.
     expect(renderToStaticMarkup(<Timeline view={view} session={{ ...SESSION, review: true }} />)).not.toMatch(/data-item="summary"/);
 
-    const side = renderToStaticMarkup(<ChangesPanel {...panel(true)} status="awaiting_approval" view={view} sandboxRunning sha="abcdef" onHide={() => {}} />);
+    const side = renderToStaticMarkup(<ChangesPanel {...panel(true)} status="awaiting_approval" view={view} sandboxRunning sha="abcdef" />);
     expect(side).toMatch(/<form[^>]*aria-label="Approval"/);
     expect(side).toContain("Approve and open PR");
     expect(side).toContain("agent/s-1 → main");
@@ -386,8 +386,8 @@ describe("Review UX: the pull request and the findings", () => {
     expect(js).toContain(".toLowerCase()");
     expect(count(js, /data-diff="add"/g)).toBe(6);
     // Only an HTML file with a patch can be previewed.
-    expect(js).not.toMatch(/<button[^>]*>Preview<\/button>/);
-    expect(card(html, "index.html")).toMatch(/<button[^>]*>Preview<\/button>/);
+    expect(js).not.toMatch(/<button[^>]*>(<svg.*?<\/svg>)?Preview<\/button>/);
+    expect(card(html, "index.html")).toMatch(/<button[^>]*>(<svg.*?<\/svg>)?Preview<\/button>/);
   });
 
   it("a removed or patch-less HTML file has no preview", () => {
@@ -401,14 +401,14 @@ describe("Review UX: the pull request and the findings", () => {
       }),
     );
     expect(count(html, /data-file="/g)).toBe(2);
-    expect(html).not.toMatch(/<button[^>]*>Preview<\/button>/);
+    expect(html).not.toMatch(/<button[^>]*>(<svg.*?<\/svg>)?Preview<\/button>/);
     expect(card(html, "big.html")).toContain("Diff not available");
   });
 
   it("a fork's pull request has no preview", () => {
     const html = panel(pull({ fork: true, files: [HTML_FILE] }));
     expect(card(html, "index.html")).toContain("&lt;h1&gt;b&lt;/h1&gt;"); // the diff is still shown
-    expect(html).not.toMatch(/<button[^>]*>Preview<\/button>/);
+    expect(html).not.toMatch(/<button[^>]*>(<svg.*?<\/svg>)?Preview<\/button>/);
   });
 
   it("a finding is shown as a post from &run with an explained severity", () => {
@@ -492,7 +492,7 @@ it("task: the Files panel lists .html, .md and .csv only and states the limit", 
   for (const path of ["build.js", "package.json", "chart.png", "report.html.js"]) expect(isDeliverable(path)).toBe(false);
   const paths = ["report.html", "notes.md", "data.csv", "build.js", "package.json", "chart.png"];
   const view = viewOf(...paths.map((path): EventBody => ({ type: "file_changed", path, diff: `--- /dev/null\n+++ b/${path}\n@@ -0,0 +1 @@\n+hello\n` })));
-  const task = renderToStaticMarkup(<ChangesPanel {...panel(false)} mode="task" view={view} sandboxRunning sha="" onHide={() => {}} />);
+  const task = renderToStaticMarkup(<ChangesPanel {...panel(false)} mode="task" view={view} sandboxRunning sha="" />);
   expect(task).toContain('aria-label="Files"');
   expect(task).toContain("Task produces .html, .md and .csv files. Images, PDF and other binary files are not supported.");
   expect(task).toContain("Web, read-only (GET)");
@@ -501,7 +501,7 @@ it("task: the Files panel lists .html, .md and .csv only and states the limit", 
   for (const path of paths.slice(3)) expect(task).not.toContain(path);
   expect(count(task, />Download<\/button>/g)).toBe(3);
   expect(count(task, />Preview<\/button>/g)).toBe(1);
-  const code = renderToStaticMarkup(<ChangesPanel {...panel(true)} view={view} sandboxRunning sha="abcdef" onHide={() => {}} />);
+  const code = renderToStaticMarkup(<ChangesPanel {...panel(true)} view={view} sandboxRunning sha="abcdef" />);
   expect(count(code, /data-file="/g)).toBe(6);
   expect(code).toContain("Base commit");
   expect(code).not.toContain("Download");
@@ -511,7 +511,7 @@ it("a file that was not saved has no download", async () => {
   const { ChangesPanel } = await import("../../web/src/components/ChangesPanel");
   const event = { type: "file_changed", path: "big.csv", diff: "", saved: false } as const;
   const view = viewOf(event);
-  const html = renderToStaticMarkup(<ChangesPanel {...panel(false)} mode="task" view={view} sandboxRunning sha="" onHide={() => {}} />);
+  const html = renderToStaticMarkup(<ChangesPanel {...panel(false)} mode="task" view={view} sandboxRunning sha="" />);
   expect(html).toContain('data-file="big.csv"');
   expect(html).toContain("Too large to save (over 1 MB)");
   expect(html).not.toMatch(/>Download<\/button>/);

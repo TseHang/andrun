@@ -3,6 +3,7 @@ import type { Status } from "../../../src/core/events";
 import { useApp } from "../context";
 import { formatCost, formatTokens } from "../state/format";
 import type { SessionView } from "../state/reducer";
+import { PanelIcon } from "./Icons";
 import { Spinner } from "./Spinner";
 import { CLOSED_DOT, DOT, STATUS_COLOR, STATUS_TEXT, closedText, type ClosedPr } from "./StatusLabel";
 
@@ -15,9 +16,11 @@ interface Props {
   review: boolean;
   onDelete: () => void;
   moreRef: React.RefObject<HTMLButtonElement | null>;
+  /** The side panel's toggle, always in the same place: what the panel lists ("changes", "files") and how many. */
+  panel?: { hidden: boolean; noun: string; count: number; onToggle: () => void };
 }
 
-export function SessionHeader({ title, status, prState, header, review, onDelete, moreRef }: Props) {
+export function SessionHeader({ title, status, prState, header, review, onDelete, moreRef, panel }: Props) {
   const { config } = useApp();
   const [open, setOpen] = useState(false);
   const menu = useRef<HTMLDivElement>(null);
@@ -87,6 +90,19 @@ export function SessionHeader({ title, status, prState, header, review, onDelete
             </>
           )}
         </span>
+      )}
+      {panel && (
+        <button
+          type="button"
+          aria-label={panel.hidden ? `Show ${panel.noun} · ${panel.count}` : `Hide ${panel.noun}`}
+          aria-pressed={!panel.hidden}
+          title={panel.hidden ? `Show ${panel.noun}` : `Hide ${panel.noun}`}
+          onClick={panel.onToggle}
+          className={`press flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg px-2 ${panel.hidden ? "text-text-secondary hover:bg-black/6" : "bg-black/6 text-text"}`}
+        >
+          <PanelIcon />
+          {panel.hidden && panel.count > 0 && <span className="text-xs font-medium tabular-nums">{panel.count}</span>}
+        </button>
       )}
       <div className="relative">
         <button

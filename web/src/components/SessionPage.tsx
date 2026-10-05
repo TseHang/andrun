@@ -9,6 +9,7 @@ import { usePanelHidden } from "../state/hidden";
 import { ChangesPanel } from "./ChangesPanel";
 import { ClosedBar, Composer } from "./Composer";
 import { DeleteDialog } from "./DeleteDialog";
+import { FileCards } from "./FileCards";
 import { Enter, isLive } from "./Enter";
 import { QuestionCard } from "./QuestionCard";
 import { PostBar } from "./ReviewBars";
@@ -65,6 +66,12 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
   const [busy, setBusy] = useState(false);
   const [changesHidden, setChangesHidden, changesReopened] = usePanelHidden("andrun.changes.hidden");
   const [error, setError] = useState<string | null>(null);
+  // An HTML file shown in the side panel's place, until Back.
+  const [preview, setPreview] = useState<string | null>(null);
+  const openPreview = (path: string) => {
+    setChangesHidden(false);
+    setPreview(path);
+  };
   const more = useRef<HTMLButtonElement>(null);
   const status = view.status ?? snap.status;
   const review = snap.mode === "review";
@@ -185,7 +192,16 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
           Reconnecting
         </div>
       )}
-      <SessionHeader title={snap.title} status={status} prState={closedPr?.state} header={view.header} review={review} onDelete={() => setConfirming(true)} moreRef={more} />
+      <SessionHeader
+        title={snap.title}
+        status={status}
+        prState={closedPr?.state}
+        header={view.header}
+        review={review}
+        onDelete={() => setConfirming(true)}
+        moreRef={more}
+        panel={review ? undefined : { hidden: changesHidden, noun: snap.mode === "task" ? "files" : "changes", count: snap.mode === "task" ? view.changes.filter((c) => isDeliverable(c.path)).length : changeTotals(view.changes).files, onToggle: () => setChangesHidden(!changesHidden) }}
+      />
       <div className="relative flex min-h-0 grow">
         {review ? (
           <ReviewBody view={view} status={closed && status === "awaiting_approval" ? "done" : status} session={session} pr={snap.pr?.number ?? null} send={send} bar={barEl} />
@@ -193,30 +209,32 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
           <>
             {/* The composer floats over the conversation only, as in a review: the side panel keeps its full height. */}
             <div className="relative flex min-h-0 min-w-0 grow">
-              <Timeline view={view} session={session} />
+              <Timeline view={view} session={session} after={snap.mode === "task" && status !== "running" && <FileCards changes={view.changes} onOpen={openPreview} />} />
               {barEl}
             </div>
             {changesHidden ? (
-              <div className="pointer-events-none absolute top-3 right-5 z-10">
-                {/* The approval waits in the hidden panel: the way back says so. */}
-                <button
-                  type="button"
-                  onClick={() => setChangesHidden(false)}
-                  className={`press pointer-events-auto cursor-pointer rounded-full px-3 py-1 text-xs font-medium ${finishing ? "bg-accent text-white" : "bg-fill"}`}
-                >
-                  {finishing
-                    ? snap.mode === "task"
-                      ? "Approve to finish"
-                      : "Open pull request"
-                    : snap.mode === "task"
-                      ? `Show files · ${view.changes.filter((c) => isDeliverable(c.path)).length}`
-                      : view.changes.length > 0
-                        ? `Show changes · ${changeTotals(view.changes).files}`
-                        : "Show changes"}
-                </button>
-              </div>
+              finishing && (
+                <div className="pointer-events-none absolute top-3 right-5 z-10">
+                  {/* The approval waits in the hidden panel: the way back says so. */}
+                  <button type="button" onClick={() => setChangesHidden(false)} className="press pointer-events-auto cursor-pointer rounded-full bg-accent px-3 py-1 text-xs font-medium text-white">
+                    {snap.mode === "task" ? "Approve to finish" : "Open pull request"}
+                  </button>
+                </div>
+              )
             ) : (
-              <ChangesPanel motion={changesReopened ? "side-in" : ""} session={session} status={status} send={send} update={update} mode={snap.mode} view={view} sandboxRunning={snap.sandboxRunning} sha={snap.sha} onHide={() => setChangesHidden(true)} />
+              <ChangesPanel
+                motion={changesReopened ? "side-in" : ""}
+                session={session}
+                status={status}
+                send={send}
+                update={update}
+                mode={snap.mode}
+                view={view}
+                sandboxRunning={snap.sandboxRunning}
+                sha={snap.sha}
+                preview={preview}
+                onPreview={setPreview}
+              />
             )}
           </>
         )}

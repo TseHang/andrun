@@ -3,6 +3,8 @@ import type { Status } from "../../../src/core/events";
 import type { ClientFrame } from "../../../src/session/protocol";
 import { planNote, prTarget } from "../state/format";
 import { markSending, type SessionView } from "../state/reducer";
+import { PullRequestIcon } from "./Icons";
+import { SectionTitle } from "./SectionTitle";
 import { Spinner } from "./Spinner";
 import type { SessionInfo } from "./Timeline";
 
@@ -36,7 +38,7 @@ export function PullRequestSection({ view, status, session, send, update }: { vi
           approve();
         }}
       >
-        <h2 className="mb-2 text-[13px] font-semibold">{session.code ? "Pull request" : "Finish"}</h2>
+        <SectionTitle icon={<PullRequestIcon />} title={session.code ? "Pull request" : "Finish"} />
         <div className="rounded-xl bg-warning-bg p-3">
           <div className="text-xs font-semibold text-accent-text">Approval required</div>
           <div className={`mt-0.5 ${SMALL}`}>{session.code ? "The agent is done. Approve to open a pull request." : "The agent is done. Approve to finish."}</div>
@@ -71,7 +73,7 @@ export function PullRequestSection({ view, status, session, send, update }: { vi
   if (!pr && !canAsk) return null;
   return (
     <section aria-label="Pull request" className="mb-5">
-      <h2 className="mb-2 text-[13px] font-semibold">Pull request</h2>
+      <SectionTitle icon={<PullRequestIcon />} title="Pull request" />
       <div className="rounded-xl bg-sidebar p-3">
         {pr ? (
           <>
