@@ -1,143 +1,59 @@
-# &run
+<p align="center">
+  <img src="web/public/logo.png" alt="&run" width="200" />
+</p>
 
-A Codex-style coding workspace on Cloudflare. You give it a task and a repo. An agent works in an isolated sandbox: it reads code, runs the tests and edits files, and it stops for your approval before anything is final.
+A coding agent workspace powered by **ai& Inference**. Code, review pull requests, or create something from scratch—all in a conversation.
 
-**Status**:
-- Phase 1 (the agent loop, plus an eval against real models) is done.
-- Phase 2 (Durable Objects, the Cloudflare Sandbox, a debug page over the event stream) is deployed: https://andrun.mengtse-hang.workers.dev
-- Phase 3 (the workspace UI: Home, the session view with diffs and the approval bar, a model menu) is built and tested locally on branch `feat/workspace-ui`; not deployed yet.
-- Phase 4 (GitHub: Approve opens a pull request as the App bot; Pull requests page; Review mode with editable findings, posted as the reviewer) is deployed from branch `feat/github`; spec tests B and E passed on the public URL with the real model and the real GitHub.
+![&run home](docs/images/home.png)
 
-## Quick start
+## Three ways to work
 
-Needs Node 22+ and pnpm.
+| Mode | What it does |
+|---|---|
+| **Code** | Reads your selected GitHub repository, plans changes, edits files and runs commands or tests. |
+| **Review** | Reviews a pull request's changes and suggests findings for you to check and post. |
+| **Task** | Works without a repository to automatically complete long-running tasks, create HTML pages, Markdown documents and CSV files. (Goal: Manus-like feature) |
 
-```sh
-pnpm install
-pnpm test          # unit + integration tests (no network, no cost)
-pnpm typecheck
-pnpm lint
-pnpm e2e           # browser tests: starts the fake model and wrangler dev itself (needs Docker)
-```
+## Features
 
-### Eval against a real model
+- **Keep your work in one session.** Discuss a change, code it, open a PR and bring review feedback back to the agent. Continue from the same conversation while the PR is open.
+- **Review with &run's suggestions.** Inspect findings alongside the diff, edit or dismiss them, and choose your own comment and verdict.
+- **Auto mode with ai& models.** Spend more computation where the task needs it, instead of using the bigger model for every small task. You can also choose the model and reasoning effort yourself.
+- **See the work as it happens.** Follow the plan, commands, changes and estimated model cost. Redirect or stop the agent when needed.
+- **Approve before publishing.** Check the diff and edit the PR title and description before opening or updating it on GitHub.
+- **Preview and download Task results.** Open interactive HTML in the workspace, or download HTML, Markdown and CSV files.
+- **Disposable execution.** Each session runs in an isolated sandbox. Conversations and saved text changes persist; processes and installed dependencies do not survive a rebuild.
 
-Copy `.env.example` to `.env` (git-ignored) and fill in your ai& key, then:
+## Current limits
 
-```sh
-pnpm eval --case sum-off-by-one            # one case, one run
-pnpm eval                                  # all 5 cases, one run each
-pnpm eval --runs 3 --max-cost 10           # the full acceptance run
-```
+- **No user accounts.** This is a shared demo with two GitHub roles: the App bot writes code, and the configured reviewer account posts reviews. Visitors share sessions and these identities.
+- **One target repository.** Code and Review currently use [andrun-demo](https://github.com/TseHang/andrun-demo). Connecting a GitHub account and selecting its authorized repositories is future work.
+- **Basic Auto routing.** &run currently classifies tasks and selects from two fixed routes. Cost optimization has not been validated. Routing that considers ai& serving and prompt-cache costs is a product hypothesis, not an implemented feature.
+- **Restricted network.** Code and Review are offline. Task can fetch URLs using HTTP/HTTPS GET and HEAD, but has no search tool yet.
+- **Real inference, demo access.** The demo calls the real ai& Inference API with a limited model selection. There is no ai& account connection; usage is paid through my API key.
 
-- Defaults: `--runs 1 --max-cost 5` (yen); the model is `deepseek-ai/deepseek-v4-flash`.
-- The run stops once the cost cap is reached.
-- Each run writes a JSONL trajectory per case and a `summary.md` to `eval/runs/<timestamp>/`.
-- A case fails if the agent edits the tests or `package.json`, even when the check passes.
+See [known limits](docs/limits.md) for the technical details.
 
-Baseline on 2026-09-30 (flash, 5 cases × 1): **5/5 pass, 5.6 steps on average, ¥1.22 total.**
+- Project: [TseHang/andrun](https://github.com/TseHang/andrun).
+- Target coding project: [TseHang/andrun-demo](https://github.com/TseHang/andrun-demo).
 
-### Run the Worker locally
+## In action
 
-Needs Docker running (the sandbox is a container). No ai& key and no cost: a fake model server plays a fixed script.
+### Code — inspect changes and open a PR
 
-```sh
-cp .dev.vars.example .dev.vars
-pnpm fake-model                      # terminal 1: fake OpenAI-compatible SSE server on :8788
-pnpm fake-github                     # terminal 2: fake GitHub REST API on :8789 (one in-memory repo)
-pnpm build && pnpm dev               # terminal 3: build the app, then wrangler dev on :8787 (open it)
-pnpm smoke                           # terminal 4: create → gate → replay → reject → approve → delete
-pnpm smoke --flow kill               # kill the sandbox mid-run → failed → message → rebuilt
-```
+![Code mode with the plan, changes and PR approval](docs/images/code-mode.png)
 
-`pnpm dev` serves the last build in `dist/`. While working on the UI, run `pnpm dev:web` as well (Vite on :5173 with hot reload, proxying the API to :8787). The Phase 2 debug page is still at `/debug.html`.
+### Review — findings alongside the diff
 
-Each local session leaves a `workerd-andrun-…` container in Docker, and `wrangler dev` does not always remove them when it stops. To clear them (with `wrangler dev` stopped):
+![Review mode with findings and a posted review](docs/images/review-mode.png)
 
-```sh
-docker ps -aq --filter name=workerd-andrun- | xargs docker rm -f
-```
+### Task — create and preview a page
 
-Tasks for the fake model can carry a marker: `[slow]` (8 s per answer), `[fail]` (every request fails), `[ask]` (first runs `rm -rf tmp`, which needs approval). A Review session gets a fixed script of four findings. With the Auto model, a task with `[complex]` is sorted as complex (routed to `deepseek-v4.1-flash`, high); anything else is daily (`deepseek-v4-flash`, high).
+![Task mode with an expense tracker preview](docs/images/task-mode.png)
 
-The fake GitHub starts with an empty pull request list. Approving a Code session opens one; `curl -X POST localhost:8789/__reset` empties it again, and `GET localhost:8789/__state` shows its refs, pull requests and reviews. `.dev.vars.example` holds a throwaway App key that only the fake accepts.
+## Docs & progress
 
-To use the real model locally, put your ai& key and base URL in `.dev.vars` instead.
-
-### Deploy
-
-```sh
-pnpm exec wrangler secret put AIAND_API_KEY
-pnpm exec wrangler secret put GITHUB_APP_ID
-pnpm exec wrangler secret put GITHUB_APP_INSTALLATION_ID
-pnpm exec wrangler secret put GITHUB_APP_PRIVATE_KEY     # PKCS#8 PEM, see below
-pnpm exec wrangler secret put GITHUB_PAT
-pnpm run deploy
-pnpm smoke https://<your-worker>.workers.dev      # one real session: costs tokens, and its approve opens a real pull request
-```
-
-The repo is set by `DEMO_REPO` in `wrangler.jsonc`. A Code session starts from the head of the repo's default branch; set `DEMO_SHA` to pin a commit instead. `KILL_SWITCH="1"` stops new sessions and every GitHub write; `GITHUB_WRITES="0"` stops only the GitHub writes.
-
-**GitHub setup** (two identities, so the reviewer is never the author):
-1. Create a GitHub App with repository permissions Contents (read and write), Pull requests (read and write) and Metadata (read). Install it on the one repo. The App id is on its settings page; the installation id is the number at the end of the installation's URL.
-2. Generate a private key for the App and convert it to PKCS#8, which is what WebCrypto reads: `openssl pkcs8 -topk8 -nocrypt -in app.private-key.pem -out app.pk8.pem`. That file's content is `GITHUB_APP_PRIVATE_KEY`.
-3. Create a fine-grained personal access token for the same repo with Pull requests (read and write). That is `GITHUB_PAT`: reviews are posted with it, as you.
-
-The App bot opens every pull request (branch `agent/<session>-<n>`). GitHub does not let an account approve or request changes on its own pull request, so pull requests to be reviewed must not be opened by the PAT's account.
-
-## Known limits: what a rebuilt sandbox does and does not bring back
-
-A sandbox container is stopped after 15 idle minutes, on `done` and on `failed`. It is not rebuilt when the session wakes up; it is rebuilt the next time the agent needs it (for example after a Reject or a new message). Approving a finish needs no sandbox, so it never rebuilds one.
-
-A rebuild starts from the repo at the pinned commit and writes the saved changes back. The limits:
-
-- **Only file contents come back.** Background processes, `/tmp`, and anything git ignores (such as `node_modules`) start empty.
-- **Files over 1 MB and binary files are not saved.** After a rebuild they are missing, and the restore note in the timeline names them.
-- **Changes are saved when the agent edits a file** (`write_file`, `apply_patch`) **and when a run pauses or ends.** A file changed only by a command is saved at the next of those points. If the sandbox dies before that, the change is lost and the run ends as `failed`.
-
-The UI must not suggest more than this: a restored workspace is "your file changes on a fresh checkout", not "the same machine". The full list of limits and open items is in [docs/limits.md](docs/limits.md).
-
-## Layout
-
-```
-src/core/     the agent: loop, tools, modes, policy, model client, events (no platform imports)
-src/session/  session state machine, SQLite store, wire protocol (no platform imports)
-src/github/   GitHub client: App auth, pull request publish, pull request reads, review post (no platform imports)
-src/sandbox/  the sandbox adapter over a Cloudflare container
-src/worker/   Worker router and the two Durable Objects (thin shells over src/session)
-web/          the workspace UI (Vite + React + Tailwind); web/src/state is the event reducer, web/public the logo and the debug page
-e2e/          Playwright browser tests against wrangler dev + the fake model + the fake GitHub
-eval/         eval runner, local sandbox, YAML cases, fixture repos
-test/         Vitest suites and test doubles
-spike/        throwaway Sandbox SDK 1.0 spike (not part of the app)
-docs/         architecture decision, flow diagram, per-phase checklists
-```
-
-## Docs
-
-- [Architecture decision](docs/architecture/web-codex-architecture-decision.md): the key decisions D1–D19, the phases, cost and limits
-- [System flow diagram](docs/architecture/web-codex-flow.html)
-- [Sandbox 1.0 spike findings](docs/architecture/spike-sandbox-1.0.md)
-- [Phase 1 checklist](docs/features/core-loop/core-loop-implementation-checklist.md)
-- [Phase 2 checklist](docs/features/session-do/session-do-implementation-checklist.md)
-- [Phase 3 checklist](docs/features/workspace-ui/workspace-ui-implementation-checklist.md)
-- [Phase 4 checklist](docs/features/github/github-implementation-checklist.md)
-- [Known limits](docs/limits.md)
-
-## Why a loop, not a graph
-
-The agent is a `while` loop. It asks the model, runs the tools the model picked, appends the results, and repeats until the model calls `finish` or a budget runs out. There is no graph, no planner node and no router.
-
-The model is already the planner, and it re-plans on every turn with the full transcript. A graph would duplicate that decision in code and fix a control flow that the model should choose. A fixed flow is exactly what breaks when a test fails in an unexpected way.
-
-Code does own the things that must not depend on the model:
-- step and token budgets
-- the approval gate
-- the 3-strikes rule for failing tools
-- which tools exist in each mode
-
-These live around the loop, not inside a graph.
-
-Modes (Code, Review, Task) are profiles, not branches. A profile is a prompt, a set of tools, a policy and a sandbox setup. Review can't edit code because it has no edit tool, not because a prompt asks it nicely.
-
-Pausing for approval is a `return`, and resuming means calling the loop again with the decision appended. The same path handles a page refresh, an evicted Durable Object and a two-day wait.
+- [Docs & progress](docs/README.md) — design decisions and implementation history.
+- [Known limits](docs/limits.md) — current technical boundaries.
+- [To-dos](docs/todos.md) — what's next.
+- [Development & deployment](docs/development.md) — setup and verification.

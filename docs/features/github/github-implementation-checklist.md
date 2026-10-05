@@ -1,5 +1,7 @@
 # &run GitHub: PR on approve + Review mode — Implementation Checklist
 
+> Historical implementation/QA record: behavior and unchecked items describe this slice at the time. For current status and remaining work, see [Docs & progress](../../README.md).
+
 **Status**: ✅ Built — Passing (2026-10-03). Deployed from `feat/github` (version 2ec3ee1c) and S21 passed with the real model and the real GitHub.
 **Date**: 2026-10-03
 **Branch**: `feat/github`

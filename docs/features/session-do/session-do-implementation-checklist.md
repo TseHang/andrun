@@ -1,5 +1,7 @@
 # &run SessionDO + Cloudflare Sandbox — Implementation Checklist
 
+> Historical implementation/QA record: behavior and unchecked items describe this slice at the time. For current status and remaining work, see [Docs & progress](../../README.md).
+
 **Status**: ✅ Built — Passing (2026-10-02): 136 tests, local runtime and the deployed URL (the review fixes after the last deploy are verified locally, not yet redeployed) `https://andrun.mengtse-hang.workers.dev`
 **Date**: 2026-10-01
 **Architecture**: `docs/architecture/web-codex-architecture-decision.md` → Phase 2; `docs/architecture/spike-sandbox-1.0.md` (findings 1–6 are binding)

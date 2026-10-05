@@ -1,5 +1,7 @@
 # feature/harness-improvement — brief
 
+> Historical implementation/QA record: behavior and unchecked items describe this slice at the time. For current status and remaining work, see [Docs & progress](../../README.md).
+
 給實作 session 的任務說明。這是 brief，不是 checklist：每個 slice 開工前先跑 `/spec-with-test` 產出 checklist，等 Henry APPROVED 再實作。
 
 v3（2026-10-04）：對照 Codex 與 Claude Code 的 harness 後改寫，並納入 Henry 當天的決定。與 v1 的差異列在文末。
@@ -123,33 +125,11 @@ v3（2026-10-04）：對照 Codex 與 Claude Code 的 harness 後改寫，並納
 | **C** | 6b：egress spike（先證明 HTTPS 攔截可行），再做 registries allowlist。修訂 ADR A13 | spike 結果 |
 | **D** | 依 C 的結果：放寬成 GET-only 全網域，或做 6a 的 Worker 端工具；搜尋服務到時再選。接上 7b | C |
 
-之後再看：auto mode。（停止鍵已在 session-ui 做完，PR #7。）
+Auto mode 的基本分類路由與停止鍵已完成；provider-side cache routing 等後續項目見 todos。
 
-### TODO（2026-10-04，真實模型測試後）
+### 後續工作
 
-- [ ] **模型寫完後過度檢查**：`deepseek-v4-flash` 做單檔 `index.html` 時，第 6 步就寫好檔案，之後又花 10 步做語法檢查、跑不相關的測試才呼叫 `finish`，費用從 ¥0.53 漲到 ¥2.70。做法：調 Code prompt（寫完、驗證一次就 finish；不跑和任務無關的測試），再跑 `static-page` 與 `sum-off-by-one` 的真實模型 eval 比對步數。跑 eval 前先問 Henry。
-- [ ] **預覽頁加 CSP（待討論，未決定要不要做）**：HTML 預覽會執行 agent 寫的 script，隔離在 `sandbox="allow-scripts"` 的 iframe，讀不到 app，但仍可對外發請求。可在預覽內容前插入 CSP（`default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'`）擋掉對外連線。代價：用 CDN 載入函式庫或外部圖片的頁面會壞。目前的行為是 Henry 同意的；要不要改等討論。
-- [ ] **HTML 預覽會執行不受信任的 script（2026-10-04，Review UX 後）**：預覽現在有兩個入口，Code session 的變更檔與 Review PRs 的 PR 檔案（`GET /pulls/:n/files`，從 GitHub 讀 head commit）。PR 的內容不是 agent 依你的指令寫的，而是 PR 作者寫的。目前的防線：`sandbox="allow-scripts"`、沒有 `allow-same-origin`；fork PR 不顯示 Preview、API 也不回內容，所以來源只限對 repo 有寫入權限的人與 &run。剩下的風險同上一項（script 可對外連線、可在框內畫假畫面、可吃 CPU）。和上一項的 CSP 一起討論、一起決定。
-
-### TODO（2026-10-04，auto mode 之後）
-
-- [ ] **Auto-approve 指令的權限策略（Henry，2026-10-04）**：原本規劃的 auto-approve（ADR「Bonus — Auto-approve policy」）沒有做；code mode 的指令核准已直接放寬成沙箱內一律放行（第 3 項、ADR A17）。目前這樣可以，之後要補回分層判斷：
-  - 明確安全 → allowlist 直接允許
-  - 明確危險 → denylist 直接拒絕
-  - 無法確定 → 小模型 classifier 判斷（可沿用 auto mode 的 `deepseek-v4-flash` / `none`）
-  - GitHub write → 永遠由使用者核准
-- [ ] **Auto mode 的後續**（現況見 ADR A18）：
-  - 快取：一輪內不換模型，但跨輪換模型時 prompt cache 會失效。要讓快取最大化需要 ai& 內部支援路由，現在先不管。
-  - 花費：classifier 那次呼叫沒有算進 header 的花費與每輪上限（每次約 ¥0.001）。
-  - 分類只看該輪的使用者訊息（前 4000 字），不看對話歷史與 repo；分錯時沒有中途升級模型的機制。
-  - 兩條路由是寫死的（`autoConfig`），沒有用 eval 比較過成本與成功率。跑真實模型 eval 前先問 Henry。
-- [ ] **Reasoning 沒有回傳給模型**：`delta.reasoning` 只顯示在 UI，不放進下一次請求的 messages。高 effort 的多步任務是否需要回傳、對品質有沒有影響，沒有驗證過。
-
-### TODO（2026-10-04，Task mode 之後）
-
-- [ ] **搜尋（Henry，2026-10-04：這次來不及，之後做）**：Task mode 能連網（GET-only），但沒有搜尋工具，只能抓模型已經知道的網址，所以「做 xxx 研究」找不到它不知道的來源。要做的是 Worker 端的 `web_search` 工具（第 6a 項），需先選搜尋服務（要 API key，按次計費）。Slice B 的 spike 會記錄直接 GET 搜尋引擎結果頁是否可行，作為這項的參考。
-- [ ] **Code / Review 的連網**（第 6b 項）：只放行 package registries 的 allowlist，讓 repo 裡能 `npm install`。Slice B 只開 Task。
-- [ ] **Task 的其他產出格式**：目前只有 `.html`、`.md`、`.csv`，UI 有標明。圖片、PDF 等二進位檔需要 R2（`limits.md` L2、L4）。
+未完成的產品工作已集中到 [todos.md](../../todos.md)；目前行為、成本與安全邊界見 [limits.md](../../limits.md)。本 brief 保留原始設計背景，不再維護另一份 backlog。
 
 ## 驗收（最低標準）
 

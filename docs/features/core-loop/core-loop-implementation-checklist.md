@@ -1,5 +1,7 @@
 # &run Core Loop + Eval — Implementation Checklist
 
+> Historical implementation/QA record: behavior and unchecked items describe this slice at the time. For current status and remaining work, see [Docs & progress](../../README.md).
+
 **Status**: ✅ Built — Passing (2026-09-30), tested against real ai& (S8 recorded, T2 5/5 on deepseek-v4-flash). Sandbox 1.0 spike: ✅ Go. Open: S14's 3-run form runs before a milestone (T3).
 **Date**: 2026-09-30
 **Architecture**: `docs/architecture/web-codex-architecture-decision.md` → Phase 1 (Day 1, morning)

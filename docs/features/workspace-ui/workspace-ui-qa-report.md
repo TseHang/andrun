@@ -1,4 +1,6 @@
 # QA Report: Phase 3 Code workspace UI
+
+> Historical implementation/QA record: behavior and unchecked items describe this slice at the time. For current status and remaining work, see [Docs & progress](../../README.md).
 Date: 2026-10-03
 Branch: feat/workspace-ui
 Tester: Carry (/qa-web), on local `wrangler dev` + the fake model, Chromium (Playwright)

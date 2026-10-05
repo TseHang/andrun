@@ -1,5 +1,7 @@
 # &run Harness improvement, Slice A: plan, general Code mode, stronger Review — Implementation Checklist
 
+> Historical implementation/QA record: behavior and unchecked items describe this slice at the time. For current status and remaining work, see [Docs & progress](../../README.md).
+
 **Status**: ✅ Built — Passing (2026-10-04; approved by Henry the same day)
 **Date**: 2026-10-04
 **Branch**: `feature/harness-improvement`

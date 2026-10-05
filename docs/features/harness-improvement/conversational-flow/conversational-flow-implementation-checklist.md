@@ -1,5 +1,7 @@
 # Conversational Flow — Implementation Checklist
 
+> Historical implementation/QA record: behavior and unchecked items describe this slice at the time. For current status and remaining work, see [Docs & progress](../../../README.md).
+
 **Status**: 🔨 Built — unit and API tests passing; E2E and runtime check not run (Docker build hung)
 **Date**: 2026-10-04
 **Architecture**: `docs/architecture/web-codex-architecture-decision.md` (D2 loop, D3 approval, D4 modes, D7 events). This slice adds revisions A21–A23.

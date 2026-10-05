@@ -1,4 +1,6 @@
 # QA Report: Phase 4 GitHub integration
+
+> Historical implementation/QA record: behavior and unchecked items describe this slice at the time. For current status and remaining work, see [Docs & progress](../../README.md).
 Date: 2026-10-03
 Branch: feat/github
 Tester: Carry (/qa-web), on local `wrangler dev` + the fake model + the fake GitHub, Chromium (Playwright)

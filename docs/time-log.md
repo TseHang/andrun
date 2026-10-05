@@ -14,3 +14,5 @@
 | Phase 5: Task mode (bonus) | 10/04 22:30-00:30 | 2 | Reasoning effort / Task mode / UI improvement |
 | Improvement: UX | 10/05 09:00-10:30 | 1.5 | UI/UX |
 | **Total** | 09/30-10/05 | 24 | |
+
+| Extra: organize documents and improve readability | 10/05 14:00-16:00 | 2 | docs |

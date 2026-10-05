@@ -1,5 +1,7 @@
 # Review UX — Implementation Checklist
 
+> Historical implementation/QA record: behavior and unchecked items describe this slice at the time. For current status and remaining work, see [Docs & progress](../../../README.md).
+
 **Status**: ✅ Built — Passing (2026-10-04). Approved (Henry, 2026-10-04)
 **Date**: 2026-10-04
 **Architecture**: none (UI slice; one new read-only endpoint). Follows the design review of 2026-10-04 and Henry's answers to it.

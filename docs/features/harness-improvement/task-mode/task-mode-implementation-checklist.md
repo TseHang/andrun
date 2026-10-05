@@ -1,5 +1,7 @@
 # &run Harness improvement, Slice B: Task mode with read-only web access — Implementation Checklist
 
+> Historical implementation/QA record: behavior and unchecked items describe this slice at the time. For current status and remaining work, see [Docs & progress](../../../README.md).
+
 **Status**: ✅ Approved (Henry, 2026-10-04); built locally (2026-10-05). Focused checks pass; full E2E has an intermittent failure (details below).
 **Date**: 2026-10-04
 **Branch**: `feature/task-mode` (created from `main` at `03412d7`)

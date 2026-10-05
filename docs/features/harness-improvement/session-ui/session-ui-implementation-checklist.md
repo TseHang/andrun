@@ -1,5 +1,7 @@
 # Session UI (slices B + C) — Implementation Checklist
 
+> Historical implementation/QA record: behavior and unchecked items describe this slice at the time. For current status and remaining work, see [Docs & progress](../../../README.md).
+
 **Status**: ✅ Built — Passing (298 unit/API/render tests, 33 E2E). Approved (Henry, 2026-10-04: UI-c, scripts in preview, Stop in Review all OK)
 **Date**: 2026-10-04
 **Architecture**: `docs/architecture/web-codex-architecture-decision.md` (D7 event contract, D8 `changes` table, A21–A23 conversational flow). Follows `conversational-flow` (slice A, PR #6).

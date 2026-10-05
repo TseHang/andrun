@@ -32,7 +32,8 @@
 </head>
 <body>
 <main>
-<h1>&amp;run — system flow</h1>
+<h1>&amp;run — original system flow</h1>
+<p>Historical design snapshot: budgets, network access and session endings below predate later amendments. Current behavior: <a href="../README.md">Docs &amp; progress</a> and <a href="web-codex-architecture-decision.md">ADR amendments</a>.</p>
 <p>Browser ↔ Worker ↔ Session Durable Object (one per session) ↔ Sandbox / ai& / GitHub. The agent loop in <code>core/</code> has no Cloudflare imports; the eval runner drives the same loop with LocalSandbox.</p>
 
 <div class="wrap">

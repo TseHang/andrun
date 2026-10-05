@@ -1,5 +1,7 @@
 # &run Code Workspace UI — Implementation Checklist
 
+> Historical implementation/QA record: behavior and unchecked items describe this slice at the time. For current status and remaining work, see [Docs & progress](../../README.md).
+
 **Status**: ✅ Built — Passing (2026-10-03). Deployed from this branch (version f54f4d21) and S20 passed with the real model.
 **Date**: 2026-10-02
 **Architecture**: `docs/architecture/web-codex-architecture-decision.md` → Phase 3
