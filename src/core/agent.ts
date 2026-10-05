@@ -171,9 +171,14 @@ async function loop(ctx: RunContext): Promise<RunOutcome> {
     state.step++;
 
     const contextWindow = contextWindowFor(config, profile.model);
-    const tools = toolSpecs(profile.tools, profile.toolNotes);
+    const finalizeReview = state.mode === "review" && reviewHasStalled(state.messages);
+    const tools = toolSpecs(finalizeReview ? ["finish"] : profile.tools, profile.toolNotes);
     const reservedTokens = Math.ceil(JSON.stringify(tools).length / 4);
     const requestMessages = compactForRequest(state.messages, { contextWindow, reservedTokens });
+    if (finalizeReview) requestMessages.push({
+      role: "system",
+      content: "The last three review steps produced no new information. Stop exploring. Summarize the verified findings already recorded and the checks performed, note any remaining uncertainty, and call finish now. Do not report the same finding again. A human still decides whether to publish the review.",
+    });
     const messageId = `m${state.step}`;
 
     let response;
@@ -227,7 +232,7 @@ async function loop(ctx: RunContext): Promise<RunOutcome> {
       }
       return textReplyFinish(ctx, response.content ?? "");
     } else {
-      const outcome = await processCalls(ctx, response.toolCalls);
+      const outcome = await processCalls(finalizeReview ? { ...ctx, profile: { ...profile, tools: ["finish"] } } : ctx, response.toolCalls);
       if (outcome) return outcome;
     }
 
@@ -238,6 +243,43 @@ async function loop(ctx: RunContext): Promise<RunOutcome> {
 }
 
 // ---------- Tool calls ----------
+
+/** Repeated tool results are not progress. Read ranges with new content and new findings are. */
+function reviewHasStalled(messages: ChatMessage[]): boolean {
+  const seen = new Set<string>();
+  let calls = new Map<string, ToolCall>();
+  let fresh = false;
+  let results = 0;
+  let stale = 0;
+  const endStep = () => {
+    if (results > 0) stale = fresh ? 0 : stale + 1;
+    fresh = false;
+    results = 0;
+  };
+  for (const message of messages) {
+    if (message.role === "user") {
+      seen.clear();
+      calls.clear();
+      fresh = false;
+      results = 0;
+      stale = 0;
+    } else if (message.role === "assistant") {
+      endStep();
+      calls = new Map((message.tool_calls ?? []).map((call) => [call.id, call]));
+    } else if (message.role === "tool") {
+      const call = calls.get(message.tool_call_id);
+      if (!call) continue;
+      const { name, arguments: args } = call.function;
+      const input = name === "read_file" ? parseArgs(args).path : args;
+      const key = JSON.stringify([name, input, message.content]);
+      if (!seen.has(key) && (stale < 3 || typeof parseArgs(message.content).error !== "string")) fresh = true;
+      seen.add(key);
+      results++;
+    }
+  }
+  endStep();
+  return stale >= 3;
+}
 
 /** Runs the calls of one model turn in order. Returns an outcome if the run pauses or ends inside the turn. */
 async function processCalls(ctx: RunContext, calls: ToolCall[]): Promise<RunOutcome | null> {

@@ -59,6 +59,95 @@ const roundTrip = (s: AgentState): AgentState => JSON.parse(JSON.stringify(s));
 
 const indexOf = (events: AgentEvent[], pred: (e: AgentEvent) => boolean) => events.findIndex(pred);
 
+describe("Review convergence", () => {
+  const review = getProfile("review", defaultConfig);
+  const read = () => call("read_file", { path: "index.html" });
+  const finish = () => call("finish", { summary: "Reviewed the page." });
+
+  it("limits the next request to finish after three turns with no new results, keeping approval", async () => {
+    const model = new ScriptedModelClient([read(), read(), read(), read(), (req) => {
+      expect(req.tools.map((t) => t.name)).toEqual(["finish"]);
+      expect(req.messages.at(-1)?.content).toContain("no new information");
+      return finish();
+    }]);
+    const { deps } = harness(model, new MemorySandbox({ "index.html": "<h1>Snake</h1>" }));
+    const { outcome } = await runAgent(start("review"), review, deps);
+    expect(outcome.kind).toBe("awaiting_approval");
+    if (outcome.kind !== "awaiting_approval") throw new Error("wrong outcome");
+    expect(outcome.pending).toMatchObject({ kind: "tool", call: { function: { name: "finish" } } });
+  });
+
+  it("new file content resets the streak", async () => {
+    const model = new ScriptedModelClient([read(), read(), read(), call("read_file", { path: "other.html" }), (req) => {
+      expect(req.tools.map((t) => t.name)).toContain("read_file");
+      return finish();
+    }]);
+    const { deps } = harness(model, new MemorySandbox({ "index.html": "one", "other.html": "two" }));
+    expect((await runAgent(start("review"), review, deps)).outcome.kind).toBe("awaiting_approval");
+  });
+
+  it("refuses further exploration if the model ignores the finish-only request", async () => {
+    const model = new ScriptedModelClient([read(), read(), read(), read(), call("read_file", { path: "other.html" }), (req) => {
+      expect(req.messages.at(-1)).toMatchObject({ role: "system" });
+      expect(req.messages.filter((m) => m.role === "tool").at(-1)?.content).toContain("unknown tool: read_file");
+      return finish();
+    }]);
+    const { deps } = harness(model, new MemorySandbox({ "index.html": "one" }));
+    expect((await runAgent(start("review"), review, deps)).outcome.kind).toBe("awaiting_approval");
+  });
+
+  it("does not restrict Code mode", async () => {
+    const model = new ScriptedModelClient([read(), read(), read(), read(), (req) => {
+      expect(req.tools.map((t) => t.name)).toContain("read_file");
+      return finish();
+    }]);
+    const { deps } = harness(model, new MemorySandbox({ "index.html": "one" }));
+    expect((await runAgent(start(), profile, deps)).outcome.kind).toBe("awaiting_approval");
+  });
+
+  it("counts turns rather than calls, and a new read range is progress", async () => {
+    const model = new ScriptedModelClient([
+      call("read_file", { path: "index.html", offset: 1, limit: 1 }),
+      { calls: Array.from({ length: 4 }, () => ({ name: "read_file", args: { path: "index.html", offset: 1, limit: 1 } })) },
+      call("read_file", { path: "index.html", offset: 2, limit: 1 }),
+      (req) => {
+        expect(req.tools.map((t) => t.name)).toContain("read_file");
+        return finish();
+      },
+    ]);
+    const { deps } = harness(model, new MemorySandbox({ "index.html": "one\ntwo\n" }));
+    expect((await runAgent(start("review"), review, deps)).outcome.kind).toBe("awaiting_approval");
+  });
+
+  it("a new finding is progress even though the tool result is the same", async () => {
+    const finding = (line: number) => call("report_finding", { path: "index.html", line, severity: "medium", text: `Bug at ${line}.` });
+    const model = new ScriptedModelClient([finding(1), read(), read(), read(), finding(2), (req) => {
+      expect(req.tools.map((t) => t.name)).toContain("read_file");
+      return finish();
+    }]);
+    const { deps } = harness(model, new MemorySandbox({ "index.html": "one" }));
+    expect((await runAgent(start("review"), review, deps)).outcome.kind).toBe("awaiting_approval");
+  });
+
+  it("restores the streak from a checkpoint and resets it for new user input", async () => {
+    let saved = start("review");
+    const { deps } = harness(new ScriptedModelClient([read(), read(), read(), read(), finish()]), new MemorySandbox({ "index.html": "one" }), {
+      checkpoint: (state) => { if (state.step === 4) saved = roundTrip(state); },
+    });
+    await runAgent(start("review"), review, deps);
+    const restored = new ScriptedModelClient([(req) => {
+      expect(req.tools.map((t) => t.name)).toEqual(["finish"]);
+      return { text: "Reviewed the page." };
+    }]);
+    expect((await runAgent(saved, review, { ...deps, model: restored })).outcome.kind).toBe("awaiting_approval");
+    const continued = new ScriptedModelClient([(req) => {
+      expect(req.tools.map((t) => t.name)).toContain("read_file");
+      return finish();
+    }]);
+    expect((await runAgent(saved, review, { ...deps, model: continued, drainUserMessages: () => ["Check the initialization."] })).outcome.kind).toBe("awaiting_approval");
+  });
+});
+
 describe("S1: happy path reaches the approval gate", () => {
   it("code run reaches approval gate with ordered events", async () => {
     const sandbox = await fixtureSandbox();
