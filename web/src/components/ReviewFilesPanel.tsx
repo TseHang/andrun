@@ -3,12 +3,12 @@ import type { FindingView } from "../state/reducer";
 import { FileDiff, type Jump } from "./PatchView";
 
 /** Files changed, on the right of the page. Without a `pull` it shows `notice` (loading, or why there is no diff). */
-export function ReviewFilesPanel({ pull, findings, onHide, jump, notice }: { pull: PullDetail | null; findings: FindingView[]; onHide: () => void; jump?: Jump | null; notice?: string }) {
+export function ReviewFilesPanel({ pull, findings, onHide, jump, notice, motion = "" }: { pull: PullDetail | null; findings: FindingView[]; onHide: () => void; jump?: Jump | null; notice?: string; motion?: string }) {
   const files = pull?.files ?? [];
   const additions = files.reduce((n, f) => n + f.additions, 0);
   const deletions = files.reduce((n, f) => n + f.deletions, 0);
   return (
-    <aside aria-label="Files changed" className="flex min-h-0 w-[58%] shrink-0 flex-col gap-3.5 overflow-y-auto border-l border-black/8 px-5 pt-4 pb-6">
+    <aside aria-label="Files changed" className={`flex min-h-0 w-[58%] shrink-0 flex-col gap-3.5 overflow-y-auto border-l border-black/8 px-5 pt-4 pb-6 ${motion}`}>
       <div className="flex items-baseline justify-between">
         <h2 className="m-0 text-[15px] font-semibold tracking-[-0.01em]">Files changed</h2>
         <span className="flex items-baseline gap-3 text-xs text-text-secondary">

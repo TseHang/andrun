@@ -81,6 +81,8 @@ export interface FindingView {
 
 export interface SessionView {
   lastSeq: number;
+  /** When the last event was written (server clock): a recent one arrived live, an old one is a replay. */
+  lastTs: number;
   status: Status | null;
   items: TimelineItem[];
   gate: GateView | null;
@@ -106,6 +108,7 @@ export interface SessionView {
 export function initialView(): SessionView {
   return {
     lastSeq: 0,
+    lastTs: 0,
     status: null,
     items: [],
     gate: null,
@@ -145,7 +148,7 @@ export function dropStreaming(view: SessionView): SessionView {
 export function reduce(view: SessionView, frame: ServerFrame): SessionView {
   if (frame.type === "rejected") return { ...view, sending: false, refused: frame.reason, items: view.items.filter((i) => !(i.kind === "user" && i.pending)) };
   if (frame.seq <= view.lastSeq) return view;
-  return { ...apply(withStep(view, frame), frame), lastSeq: frame.seq };
+  return { ...apply(withStep(view, frame), frame), lastSeq: frame.seq, lastTs: frame.ts };
 }
 
 function withStep(view: SessionView, ev: AgentEvent): SessionView {

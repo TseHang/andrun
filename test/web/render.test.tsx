@@ -185,6 +185,15 @@ describe("Session UI: the conversation (slice B)", () => {
     }
   });
 
+  it("items enter with motion only when they arrive live, never on a replay of the log", () => {
+    const events: EventBody[] = [{ type: "status", status: "running" }, { type: "message", id: "u1", role: "user", text: "go" }];
+    const replayed = timeline(viewOf(...events)); // stored events from 2023
+    expect(replayed).not.toMatch(/class="enter/);
+    const now = Date.now();
+    const live = events.reduce((v, body, i) => reduce(v, { ...body, seq: i + 1, ts: now, sessionId: "s-1" } as AgentEvent), initialView());
+    expect(timeline(live)).toMatch(/class="enter"/);
+  });
+
   it("the composer shows Stop only while running, and no queue hint before a message is typed", () => {
     const composer = (running: boolean) =>
       renderToStaticMarkup(<Composer view={initialView()} running={running} waiting={!running} code send={() => true} update={() => {}} />);

@@ -9,6 +9,7 @@ import { usePanelHidden } from "../state/hidden";
 import { ChangesPanel } from "./ChangesPanel";
 import { ClosedBar, Composer } from "./Composer";
 import { DeleteDialog } from "./DeleteDialog";
+import { Enter, isLive } from "./Enter";
 import { PlanCard } from "./PlanCard";
 import { QuestionCard } from "./QuestionCard";
 import { PostBar } from "./ReviewBars";
@@ -63,7 +64,7 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
   const { view, send, update, reconnecting, deleted } = useSession(id);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [changesHidden, setChangesHidden] = usePanelHidden("andrun.changes.hidden");
+  const [changesHidden, setChangesHidden, changesReopened] = usePanelHidden("andrun.changes.hidden");
   const [error, setError] = useState<string | null>(null);
   const more = useRef<HTMLButtonElement>(null);
   const status = view.status ?? snap.status;
@@ -146,6 +147,7 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
     navigate("/");
   };
 
+  const live = isLive(view);
   const barEl = (
     <div ref={bar} data-slot="floating-bar" className="pointer-events-none absolute bottom-5 left-7 right-5">
       {!review && view.plan && (
@@ -154,17 +156,25 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
         </div>
       )}
       {closed ? (
-        <ClosedBar pr={closed} />
+        <Enter key="closed" live={live} motion="enter-bar">
+          <ClosedBar pr={closed} />
+        </Enter>
       ) : view.gate && status === "awaiting_approval" ? (
-        review && view.gate.tool === "finish" ? (
-          <PostBar view={view} gate={view.gate} send={send} update={update} />
-        ) : (
-          <ApprovalBar view={view} gate={view.gate} session={session} send={send} update={update} />
-        )
+        <Enter key={`gate:${view.gate.approvalId}`} live={live} motion="enter-bar">
+          {review && view.gate.tool === "finish" ? (
+            <PostBar view={view} gate={view.gate} send={send} update={update} />
+          ) : (
+            <ApprovalBar view={view} gate={view.gate} session={session} send={send} update={update} />
+          )}
+        </Enter>
       ) : !review && view.question && status === "awaiting_input" ? (
-        <QuestionCard view={view} question={view.question} send={send} />
+        <Enter key={`question:${view.question.id}`} live={live} motion="enter-bar">
+          <QuestionCard view={view} question={view.question} send={send} />
+        </Enter>
       ) : (
-        <Composer view={view} running={status === "running"} waiting={status === "awaiting_input"} code={snap.mode === "code"} send={send} update={update} />
+        <Enter key="composer" live={live} motion="enter-bar">
+          <Composer view={view} running={status === "running"} waiting={status === "awaiting_input"} code={snap.mode === "code"} send={send} update={update} />
+        </Enter>
       )}
     </div>
   );
@@ -193,7 +203,7 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
                 </button>
               </div>
             ) : (
-              <ChangesPanel id={id} mode={snap.mode} view={view} sandboxRunning={snap.sandboxRunning} sha={snap.sha} onHide={() => setChangesHidden(true)} />
+              <ChangesPanel motion={changesReopened ? "side-in" : ""} id={id} mode={snap.mode} view={view} sandboxRunning={snap.sandboxRunning} sha={snap.sha} onHide={() => setChangesHidden(true)} />
             )}
           </>
         )}

@@ -1,7 +1,8 @@
 import { useState } from "react";
 
 // Whether a side panel is hidden: remembered in localStorage under `key`, shown if that is unavailable.
-export function usePanelHidden(key: string): [boolean, (hidden: boolean) => void] {
+// The third value says the user brought the panel back during this visit, so it may slide in (it never does on load).
+export function usePanelHidden(key: string): [boolean, (hidden: boolean) => void, boolean] {
   const [hidden, setHidden] = useState(() => {
     try {
       return typeof window !== "undefined" && window.localStorage.getItem(key) === "1";
@@ -9,8 +10,10 @@ export function usePanelHidden(key: string): [boolean, (hidden: boolean) => void
       return false;
     }
   });
+  const [reopened, setReopened] = useState(false);
   const set = (next: boolean) => {
     setHidden(next);
+    if (!next && hidden) setReopened(true);
     try {
       if (next) window.localStorage.setItem(key, "1");
       else window.localStorage.removeItem(key);
@@ -18,5 +21,5 @@ export function usePanelHidden(key: string): [boolean, (hidden: boolean) => void
       // Not remembered, but the toggle still works for this visit.
     }
   };
-  return [hidden, set];
+  return [hidden, set, reopened];
 }

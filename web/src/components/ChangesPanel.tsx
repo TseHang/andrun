@@ -74,7 +74,7 @@ function InfoRow({ label, children, testId }: { label: string; children: string;
   );
 }
 
-export function ChangesPanel({ id, view, sandboxRunning, sha, onHide, mode = "code" }: { id: string; view: SessionView; sandboxRunning: boolean; sha: string; onHide: () => void; mode?: "code" | "review" | "task" }) {
+export function ChangesPanel({ id, view, sandboxRunning, sha, onHide, mode = "code", motion = "" }: { id: string; view: SessionView; sandboxRunning: boolean; sha: string; onHide: () => void; mode?: "code" | "review" | "task"; motion?: string }) {
   const task = mode === "task";
   const changes = task ? view.changes.filter((c) => isDeliverable(c.path)) : view.changes;
   const totals = changeTotals(changes);
@@ -83,7 +83,7 @@ export function ChangesPanel({ id, view, sandboxRunning, sha, onHide, mode = "co
   return (
     <aside
       aria-label={task ? "Files" : "Changes"}
-      className={`min-h-0 min-w-0 shrink-0 overflow-y-auto border-l border-black/10 px-5 pt-4 pb-[calc(var(--bar-h,116px)+60px)] ${wide ? "w-[min(520px,45%)]" : "w-[400px]"}`}
+      className={`min-h-0 min-w-0 shrink-0 overflow-y-auto border-l border-black/10 px-5 pt-4 pb-[calc(var(--bar-h,116px)+60px)] ${wide ? "w-[min(520px,45%)]" : "w-[400px]"} ${motion}`}
     >
       {task && <div className="mb-3 text-xs text-text-secondary">{TASK_FORMAT_NOTE}</div>}
       <div className="mb-3 flex items-baseline justify-between">
