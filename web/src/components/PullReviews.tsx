@@ -6,6 +6,7 @@ import { REVIEW_STATE, reviewMessage } from "../state/format";
 import { Markdown } from "./Markdown";
 
 const STATE_COLOR: Record<PullReview["state"], string> = { APPROVED: "text-done-text", CHANGES_REQUESTED: "text-failed", COMMENTED: "text-text-secondary" };
+const REVIEW_MARKDOWN = "text-[13px] leading-relaxed [overflow-wrap:anywhere] [&_h1]:text-sm [&_h2]:text-sm [&_h3]:text-sm [&_h4]:text-sm [&_h5]:text-sm [&_h6]:text-sm [&_table]:text-xs [&_code]:text-xs";
 
 type Load = { kind: "loading" } | { kind: "ready"; reviews: PullReview[] } | { kind: "error"; message: string };
 
@@ -53,27 +54,30 @@ export function PullReviews({ pr, status, send }: { pr: number; status: Status; 
       {load.kind === "ready" && reviews.length === 0 && <div className="mt-1.5 text-xs text-text-secondary">No reviews yet.</div>}
       {reviews.length > 0 && (
         <>
-          <ul className="m-0 mt-2 flex list-none flex-col gap-2 p-0">
+          <ul className="m-0 mt-2 flex max-h-[min(28rem,50vh)] list-none flex-col gap-2 overflow-y-auto p-0.5">
             {reviews.map((r) => (
-              <li key={r.id} data-review={r.id} className="rounded-lg bg-white p-2.5 text-xs shadow-[0_0_0_1px_rgba(0,0,0,0.06)]">
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input type="checkbox" checked={picked.has(r.id)} onChange={() => toggle(r.id)} className="accent-accent" />
-                  <span className="font-semibold">{r.author}</span>
-                  <span className={STATE_COLOR[r.state]}>{REVIEW_STATE[r.state]}</span>
-                  <span className="grow" />
-                  <a href={r.url} target="_blank" rel="noreferrer" className="text-accent-text">
+              <li key={r.id} data-review={r.id} className="min-w-0 shrink-0 rounded-lg bg-white p-2.5 text-xs shadow-[0_0_0_1px_rgba(0,0,0,0.06)]">
+                <div className="flex items-start justify-between gap-2">
+                  <label className="flex min-w-0 cursor-pointer items-start gap-2">
+                    <input type="checkbox" checked={picked.has(r.id)} onChange={() => toggle(r.id)} className="mt-0.5 shrink-0 accent-accent" />
+                    <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <span className="font-semibold [overflow-wrap:anywhere]">{r.author}</span>
+                      <span className={STATE_COLOR[r.state]}>{REVIEW_STATE[r.state]}</span>
+                    </span>
+                  </label>
+                  <a href={r.url} target="_blank" rel="noreferrer" className="shrink-0 text-accent-text">
                     GitHub
                   </a>
-                </label>
+                </div>
                 {r.body.trim() && (
-                  <div className="mt-1.5 text-[13px]">
-                    <Markdown text={r.body} />
+                  <div className="mt-2">
+                    <Markdown text={r.body} className={REVIEW_MARKDOWN} />
                   </div>
                 )}
                 {r.comments.map((c, i) => (
-                  <div key={i} className="mt-1.5 border-l-2 border-black/10 pl-2">
-                    <div className="font-mono text-[11px] text-text-secondary">{`${c.path}${c.line !== null ? `:${c.line}` : ""}`}</div>
-                    <div className="text-[13px] break-words whitespace-pre-wrap">{c.body}</div>
+                  <div key={i} className="mt-3 border-l-2 border-black/10 pl-2">
+                    <div className="mb-1 font-mono text-[11px] text-text-secondary [overflow-wrap:anywhere]">{`${c.path}${c.line !== null ? `:${c.line}` : ""}`}</div>
+                    <Markdown text={c.body} className={REVIEW_MARKDOWN} />
                   </div>
                 ))}
               </li>
