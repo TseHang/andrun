@@ -240,6 +240,15 @@ describe("Session UI: the conversation (slice B)", () => {
     expect(side).toContain("1 of 2 plan steps not completed");
     // The plan sits above the approval, at the top of the panel.
     expect(side.indexOf('aria-label="Plan"')).toBeLessThan(side.indexOf('aria-label="Approval"'));
+    // The pull request's description is the summary, behind an Edit toggle; the title falls back to the session's.
+    expect(side).toMatch(/data-pr-description/);
+    expect(side).toMatch(/<button[^>]*aria-expanded="false"[^>]*><svg.*?<\/svg>Edit<\/button>/);
+    expect(side).toContain("Picks a number");
+    const titled = viewOf({ type: "approval_required", approvalId: "a2", tool: "finish", reason: "r", summary: "s", title: "Add a guessing game" }, { type: "status", status: "awaiting_approval" });
+    expect(renderToStaticMarkup(<ChangesPanel {...panel(true)} status="awaiting_approval" view={titled} sandboxRunning sha="abcdef" />)).toContain("Add a guessing game");
+    // Changes open or close all at once from the section title.
+    const many = viewOf({ type: "file_changed", path: "a.js", diff: "--- a/a.js\n+++ b/a.js\n@@ -1 +1 @@\n-a\n+b" });
+    expect(renderToStaticMarkup(<ChangesPanel {...panel(true)} view={many} sandboxRunning sha="abcdef" />)).toMatch(/<h2[^>]*><button[^>]*aria-expanded="true"[^>]*title="Collapse all"/);
     // A merged or closed pull request's session offers no approval.
     const closed = panel(true);
     const sideClosed = renderToStaticMarkup(<ChangesPanel {...closed} session={{ ...closed.session, closed: true }} status="awaiting_approval" view={view} sandboxRunning sha="abcdef" />);
@@ -275,6 +284,8 @@ const pull = (over: Partial<PullDetail> = {}): PullDetail => ({
   number: 7,
   title: "Add slugify",
   author: "octocat",
+  authorAvatar: null,
+  mine: false,
   headRef: "feat/slugify",
   baseRef: "main",
   headSha: "a41c0b7e5d3f29186c7a4b0e9d2f1c3a5b6d7e8f",
@@ -322,11 +333,14 @@ const post = (html: string, id: string) => new RegExp(`<li[^>]*data-finding="${i
 const AVATAR = /<span[^>]*role="img"[^>]*aria-label="&amp;run"[^>]*>&amp;<\/span>/g;
 
 describe("Review UX: the pull request and the findings", () => {
-  it("the pull request overview shows who merges what and the description as markdown", () => {
+  it("the pull request overview shows the branches and the description as the author's post, in markdown", () => {
     const html = renderToStaticMarkup(<PullOverview pull={pull()} />);
     expect(html).toMatch(/<section[^>]*aria-label="Pull request"/);
-    expect(html).toContain("octocat wants to merge feat/slugify into main");
-    expect(html).toContain("1 file, 6 added");
+    expect(html).toMatch(/data-branches[^>]*>from <span[^>]*>feat\/slugify<\/span> into <span[^>]*>main<\/span>/);
+    expect(html).not.toContain("wants to merge");
+    // The description sits in a framed post headed by its author, so it does not read as the agent's reply.
+    expect(html).toMatch(/<button[^>]*aria-expanded="true"[^>]*>.*?octocat.*?Description/s);
+    expect(renderToStaticMarkup(<PullOverview pull={pull({ mine: true })} />)).toMatch(/aria-label="&amp;run".*?&amp;run bot/s);
     expect(html).toMatch(/<h2[^>]*>Why<\/h2>/);
     expect(html).toMatch(/<strong[^>]*>slugs<\/strong>/);
     // Open by default, with a button that folds it; the review session passes defaultOpen={false} (RV-g).
@@ -334,7 +348,7 @@ describe("Review UX: the pull request and the findings", () => {
     const folded = renderToStaticMarkup(<PullOverview pull={pull()} defaultOpen={false} />);
     expect(folded).toMatch(/<button[^>]*aria-expanded="false"[^>]*>.*?Description/s);
     expect(folded).not.toContain("slugs");
-    expect(folded).toContain("octocat wants to merge feat/slugify into main");
+    expect(folded).toContain("feat/slugify");
   });
 
   it("a pull request without a description says so", () => {
@@ -375,14 +389,16 @@ describe("Review UX: the pull request and the findings", () => {
     }
   });
 
-  const panel = (p: PullDetail, view: SessionView = initialView()) => renderToStaticMarkup(<ReviewFilesPanel pull={p} findings={view.findings} onHide={() => {}} />);
+  const panel = (p: PullDetail, view: SessionView = initialView()) => renderToStaticMarkup(<ReviewFilesPanel pull={p} findings={view.findings} />);
   const card = (html: string, path: string) => new RegExp(`<div[^>]*data-file="${path.replace(/[.]/g, "\\.")}"[^>]*>.*?(?=<div[^>]*data-file=|</aside>)`, "s").exec(html)?.[0] ?? "";
   const HTML_FILE = { path: "index.html", status: "modified", additions: 1, deletions: 1, patch: "@@ -1 +1 @@\n-<h1>a</h1>\n+<h1>b</h1>" };
 
   it("a pull request file card is open by default and has a fold button", () => {
     const html = panel(pull({ changedFiles: 2, files: [...pull().files, HTML_FILE] }));
     expect(html).toMatch(/<aside[^>]*aria-label="Files changed"/);
-    expect(html).toMatch(/<button[^>]*>Hide files<\/button>/);
+    // Laid out like Code's Changes: a section title that folds every card; the header's panel button hides it.
+    expect(html).toMatch(/<h2[^>]*><button[^>]*aria-expanded="true"[^>]*title="Collapse all"[^>]*>Files changed/);
+    expect(html).not.toContain("Hide files");
     expect(count(html, /data-file="/g)).toBe(2);
     const js = card(html, "src/slugify.js");
     expect(js).toMatch(/<button[^>]*aria-expanded="true"[^>]*>/);
@@ -477,13 +493,16 @@ it("task sessions are tagged and Home's note follows the mode", async () => {
     { id: "task", mode: "task" as const, title: "A page", status: "awaiting_input" as const, created_at: 1, updated_at: 1 },
     { id: "code", mode: "code" as const, title: "A fix", status: "awaiting_input" as const, created_at: 1, updated_at: 1 },
   ];
-  for (const node of [<Home sessions={sessions} />, <Sidebar sessions={sessions} stale={false} path="/" live={null} pullCount={0} />]) {
-    const html = inApp(node);
-    expect(count(html, /data-tag="task"/g)).toBe(1);
-    expect(html).not.toContain('data-tag="code"');
-  }
-  const home = inApp(<Home sessions={sessions} />);
-  expect(home).toContain(CONFIG.repo);
+  const side = inApp(<Sidebar sessions={sessions} stale={false} path="/" live={null} pullCount={0} />);
+  expect(count(side, /data-tag="task"/g)).toBe(1);
+  expect(side).not.toContain('data-tag="code"');
+  // Home is the question and the composer only: recent sessions live in the sidebar.
+  const home = inApp(<Home />);
+  expect(home).not.toContain("Recent");
+  expect(home).not.toContain("A page");
+  // The repo links to GitHub; the branch comes from /repo once GitHub answers.
+  expect(home).toMatch(new RegExp(`<a href="https://github.com/${CONFIG.repo}"[^>]*>${CONFIG.repo}</a>`));
+  expect(home).not.toContain("latest commit on the default branch");
   expect(home).toContain("Runs in a sandbox with no network access");
   const taskButton = /<button[^>]*>\s*Task\s*<\/button>/.exec(home)?.[0];
   expect(taskButton).toBeTruthy();
@@ -524,7 +543,6 @@ it("a file that was not saved has no download", async () => {
 
 describe("A merged or closed pull request closes the session (A26)", () => {
   it("lists show Merged or Closed with a grey dot in place of the status", async () => {
-    const { Home } = await import("../../web/src/components/Home");
     const { Sidebar } = await import("../../web/src/components/Sidebar");
     const base = { mode: "code" as const, status: "done" as const, created_at: 1, updated_at: 1 };
     const sessions = [
@@ -532,7 +550,7 @@ describe("A merged or closed pull request closes the session (A26)", () => {
       { id: "c", ...base, title: "Closed review", mode: "review" as const, status: "awaiting_approval" as const, pr: 4, prState: "closed" as const },
       { id: "o", ...base, title: "Open fix", pr: 5 },
     ];
-    for (const node of [<Home sessions={sessions} />, <Sidebar sessions={sessions} stale={false} path="/" live={null} pullCount={0} />]) {
+    for (const node of [<Sidebar sessions={sessions} stale={false} path="/" live={null} pullCount={0} />]) {
       const html = inApp(node);
       expect(count(html, />Merged</g)).toBe(1);
       expect(count(html, />Closed</g)).toBe(1);

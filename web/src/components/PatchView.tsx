@@ -44,8 +44,8 @@ export function FindingHeader({ severity, muted = false }: { severity: Severity;
  * One file of a pull request, as a card that folds: GitHub's hunks, and a note under each new-side line a kept finding sits on.
  * `previewPr` (the pull request's number) turns on Preview for an HTML file; a `jump` to this file opens the card and scrolls to the line.
  */
-export function FileDiff({ file, findings = [], previewPr, jump }: { file: PullFile; findings?: FindingView[]; previewPr?: number; jump?: Jump | null }) {
-  const [open, setOpen] = useState(true);
+export function FileDiff({ file, findings = [], previewPr, jump, defaultOpen = true }: { file: PullFile; findings?: FindingView[]; previewPr?: number; jump?: Jump | null; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
   const [preview, setPreview] = useState(false);
   const scroll = useRef(false);
   const parsed = file.patch === null ? null : parseDiff(file.patch);
@@ -61,18 +61,19 @@ export function FileDiff({ file, findings = [], previewPr, jump }: { file: PullF
   useEffect(() => {
     if (!scroll.current || !open || preview) return;
     scroll.current = false;
-    document.querySelector(`[data-line="${CSS.escape(`${jump!.path}:${jump!.line}`)}"]`)?.scrollIntoView({ block: "center" });
+    const line = document.querySelector<HTMLElement>(`[data-line="${CSS.escape(`${jump!.path}:${jump!.line}`)}"]`);
+    line?.scrollIntoView({ block: "center" });
+    // The scroll is instant; a short wash on the line says which one it landed on (colour only, no movement).
+    line?.animate?.([{ boxShadow: "inset 0 0 0 999px rgb(207 74 18 / 0.18)" }, { boxShadow: "inset 0 0 0 999px rgb(207 74 18 / 0)" }], { duration: 900, easing: "cubic-bezier(0.23, 1, 0.32, 1)" });
   });
 
   return (
-    <div data-file={file.path} className="shrink-0 overflow-hidden rounded-xl shadow-[0_0_0_1px_rgba(0,0,0,0.08)]">
-      <div className="flex h-9 items-center gap-2 bg-sidebar pr-3 font-mono text-xs">
-        <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex h-full min-w-0 grow cursor-pointer items-center gap-2 pl-3.5 text-left">
+    <div data-file={file.path} className="mb-3 overflow-hidden rounded-xl border border-black/10">
+      <div className="flex items-center gap-2 bg-sidebar pr-3 font-mono text-xs">
+        <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex min-w-0 grow cursor-pointer items-center gap-2 py-2 pl-3 text-left">
           <Chevron open={open} />
-          <span className="min-w-0 grow truncate">{file.path}</span>
-          <span className="shrink-0 text-text-secondary">{file.status}</span>
-          <span className="shrink-0 text-diff-add-text">+{file.additions}</span>
-          <span className="shrink-0 text-diff-del-text">−{file.deletions}</span>
+          <span className="min-w-0 grow truncate font-semibold">{file.path}</span>
+          <span className="shrink-0 text-text-secondary">{`${file.status} · +${file.additions} −${file.deletions}`}</span>
         </button>
         {canPreview && (
           <button type="button" onClick={() => setPreview(!preview)} className="press flex shrink-0 cursor-pointer items-center gap-1 rounded-full bg-fill px-2.5 py-0.5 text-xs font-medium">

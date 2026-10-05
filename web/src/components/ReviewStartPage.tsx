@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { getPull, type PullDetail } from "../api";
 import { usePanelHidden } from "../state/hidden";
+import { AuthorAvatar, authorName } from "./Author";
 import { PullOverview } from "./PullOverview";
 import { ReviewCard } from "./ReviewCard";
 import { ReviewFilesPanel } from "./ReviewFilesPanel";
+import { PanelToggle } from "./SessionHeader";
 import { Spinner } from "./Spinner";
 
 type Load = { kind: "loading" } | { kind: "ready"; pull: PullDetail } | { kind: "not_found" } | { kind: "error"; message: string };
@@ -63,16 +65,22 @@ export function ReviewStartPage({ number }: { number: number }) {
 }
 
 function Start({ pull }: { pull: PullDetail }) {
-  const [hidden, setHidden] = usePanelHidden("andrun.review.files.hidden");
+  const [hidden, setHidden, reopened] = usePanelHidden("andrun.review.files.hidden");
   return (
     <main className="flex min-h-0 min-w-0 grow flex-col">
       <header className="flex h-[60px] shrink-0 items-center gap-3.5 border-b border-black/8 pl-7 pr-5">
+        {/* Who opened it, before what it is called. */}
+        <span title={authorName(pull)} className="flex shrink-0">
+          <AuthorAvatar pull={pull} />
+        </span>
         <h1 className="m-0 min-w-0 grow truncate text-[15px] font-semibold tracking-[-0.01em]">
+          <span className="sr-only">{`${authorName(pull)}: `}</span>
           {pull.title} <span className="font-normal text-text-secondary">#{pull.number}</span>
         </h1>
         <a href={pull.url} target="_blank" rel="noreferrer" className="shrink-0 text-accent-text">
           View on GitHub
         </a>
+        <PanelToggle hidden={hidden} noun="files" count={pull.files.length} onToggle={() => setHidden(!hidden)} />
       </header>
       <div className="relative flex min-h-0 grow">
         <div className="min-w-0 grow overflow-y-auto">
@@ -81,15 +89,7 @@ function Start({ pull }: { pull: PullDetail }) {
             <ReviewCard pull={pull} />
           </div>
         </div>
-        {hidden ? (
-          <div className="pointer-events-none absolute top-3 right-5 z-10">
-            <button type="button" onClick={() => setHidden(false)} className="pointer-events-auto cursor-pointer rounded-full bg-fill px-3 py-1 text-xs font-medium">
-              {`Show files · ${pull.files.length}`}
-            </button>
-          </div>
-        ) : (
-          <ReviewFilesPanel pull={pull} findings={[]} onHide={() => setHidden(true)} />
-        )}
+        {!hidden && <ReviewFilesPanel motion={reopened ? "side-in" : ""} pull={pull} findings={[]} />}
       </div>
     </main>
   );

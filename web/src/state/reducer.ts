@@ -50,6 +50,8 @@ export interface GateView {
   tool: string;
   reason: string;
   summary?: string;
+  /** finish's pull request title, as the agent wrote it. */
+  title?: string;
   diffSummary?: DiffSummary;
   command?: string;
   paths?: string[];
@@ -239,6 +241,7 @@ function gateFor(view: SessionView, ev: Extract<AgentEvent, { type: "approval_re
     tool: ev.tool,
     reason: ev.reason,
     ...(ev.summary !== undefined && { summary: ev.summary }),
+    ...(ev.title !== undefined && { title: ev.title }),
     ...(ev.diffSummary !== undefined && { diffSummary: ev.diffSummary }),
     primary: "Let it continue",
     secondary: "Redirect",

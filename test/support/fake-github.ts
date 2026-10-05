@@ -206,7 +206,7 @@ export function createFakeGitHub(seed: { files?: Record<string, string>; modes?:
       state: p.state,
       merged: p.merged ?? false,
       html_url: `https://github.com/${FAKE_REPO}/pull/${p.number}`,
-      user: { login: p.user },
+      user: { login: p.user, avatar_url: `https://avatars.githubusercontent.com/${p.user}` },
       head: { ref: p.headRef, sha: p.headSha, repo: { full_name: p.headRepo ?? FAKE_REPO } },
       base: { ref: p.baseRef, repo: { full_name: FAKE_REPO } },
       updated_at: p.updatedAt,
@@ -365,6 +365,10 @@ export function createFakeGitHub(seed: { files?: Record<string, string>; modes?:
       if (!pull) return err(404, "Not Found");
       const sub = m[2] ?? "";
       if (sub === "" && method === "GET") return json(pullJson(pull, true));
+      if (sub === "" && method === "PATCH") {
+        Object.assign(pull, { ...(body.title !== undefined && { title: String(body.title) }), ...(body.body !== undefined && { body: String(body.body) }), updatedAt: tick() });
+        return json(pullJson(pull, true));
+      }
       if (sub === "/files" && method === "GET") return json(filesOf(pull));
       if (sub === "/reviews" && method === "POST") {
         const event = String(body.event);

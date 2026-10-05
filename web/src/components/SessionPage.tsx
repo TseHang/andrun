@@ -13,7 +13,7 @@ import { FileCards } from "./FileCards";
 import { Enter, isLive } from "./Enter";
 import { QuestionCard } from "./QuestionCard";
 import { PostBar } from "./ReviewBars";
-import { ReviewBody } from "./ReviewSession";
+import { ReviewBody, usePull } from "./ReviewSession";
 import { SessionHeader } from "./SessionHeader";
 import { Spinner } from "./Spinner";
 import { Timeline } from "./Timeline";
@@ -65,6 +65,7 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [changesHidden, setChangesHidden, changesReopened] = usePanelHidden("andrun.changes.hidden");
+  const [filesHidden, setFilesHidden, filesReopened] = usePanelHidden("andrun.review.files.hidden");
   const [error, setError] = useState<string | null>(null);
   // An HTML file shown in the side panel's place, until Back.
   const [preview, setPreview] = useState<string | null>(null);
@@ -87,7 +88,8 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
   // Merged or closed on GitHub: nothing more is sent from here (A26). A run that is still going keeps its Stop button.
   const closedPr = snap.pr && snap.pr.state !== "open" ? { number: snap.pr.number, state: snap.pr.state } : null;
   const closed = closedPr !== null && status !== "running" ? closedPr : null;
-  const session = { id, code: snap.mode === "code", baseBranch: snap.baseBranch, pr: snap.pr?.number ?? null, closed: closed !== null, review };
+  const diff = usePull(review ? (snap.pr?.number ?? null) : null);
+  const session = { id, title: snap.title, code: snap.mode === "code", baseBranch: snap.baseBranch, pr: snap.pr?.number ?? null, closed: closed !== null, review };
 
   // Re-read the snapshot (sandboxRunning) and the list after each status change.
   const first = useRef(true);
@@ -209,11 +211,11 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
         review={review}
         onDelete={() => setConfirming(true)}
         moreRef={more}
-        panel={review ? undefined : { hidden: changesHidden, noun: snap.mode === "task" ? "files" : "changes", count: snap.mode === "task" ? view.changes.filter((c) => isDeliverable(c.path)).length : changeTotals(view.changes).files, onToggle: () => togglePanel() }}
+        panel={review ? { hidden: filesHidden, noun: "files", count: diff.kind === "ready" ? diff.pull.files.length : 0, onToggle: () => setFilesHidden(!filesHidden) } : { hidden: changesHidden, noun: snap.mode === "task" ? "files" : "changes", count: snap.mode === "task" ? view.changes.filter((c) => isDeliverable(c.path)).length : changeTotals(view.changes).files, onToggle: () => togglePanel() }}
       />
       <div className="relative flex min-h-0 grow">
         {review ? (
-          <ReviewBody view={view} status={closed && status === "awaiting_approval" ? "done" : status} session={session} pr={snap.pr?.number ?? null} send={send} bar={barEl} />
+          <ReviewBody view={view} status={closed && status === "awaiting_approval" ? "done" : status} session={session} diff={diff} send={send} bar={barEl} files={{ hidden: filesHidden, reopened: filesReopened, show: () => setFilesHidden(false) }} />
         ) : (
           <>
             {/* The composer floats over the conversation only, as in a review: the side panel keeps its full height. */}

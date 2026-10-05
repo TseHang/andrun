@@ -65,6 +65,25 @@ describe("Code: approve opens the pull request (S4–S7, S9)", () => {
     expect(g.fake.pulls[0]!.title).toBe(TASK);
   });
 
+  it("the human's title and summary from the gate replace the agent's", async () => {
+    const g = await codeAtGate();
+    expect(ofType(g.events(), "approval_required").at(-1)).toMatchObject({ title: "Fix the loop bound in sum()" });
+    await send(g.engine, { type: "approve", approvalId: g.approvalId, title: "Count the last value in sum()", summary: "sum() now adds every value." });
+    const pull = g.fake.pulls[0]!;
+    expect(pull.title).toBe("Count the last value in sum()");
+    expect(pull.body).toContain("sum() now adds every value.");
+    expect(pull.body).not.toContain("Fixed the loop bound in sum()");
+    expect(pull.body).toContain("Opened by &run after a human approved it.");
+  });
+
+  it("an emptied description leaves out the agent's summary", async () => {
+    const g = await codeAtGate();
+    await send(g.engine, { type: "approve", approvalId: g.approvalId, summary: "" });
+    const body = g.fake.pulls[0]!.body;
+    expect(body).not.toContain("Fixed the loop bound in sum()");
+    expect(body.startsWith(`**Task:** ${TASK}`)).toBe(true);
+  });
+
   it("a later approve adds a commit to the same pull request", async () => {
     const g = await codeAtGate(HAPPY(), {}, [
       call("write_file", { path: "test/empty.test.js", content: "// empty\n" }),
@@ -81,6 +100,9 @@ describe("Code: approve opens the pull request (S4–S7, S9)", () => {
     expect(g.fake.commits.get(g.fake.refs.get(BRANCH)!)!.parents).toEqual([head1]);
     expect(g.fake.filesAt(g.fake.refs.get(BRANCH)!)["test/empty.test.js"]).toBe("// empty\n");
     expect(ofType(g.events(), "pr_opened").at(-1)).toMatchObject({ number: 12, branch: BRANCH, updated: true });
+    // The second round's summary replaces the description.
+    expect(g.fake.pulls[0]).toMatchObject({ title: "Add a test" });
+    expect(g.fake.pulls[0]!.body).toContain("Added a test.");
     expect(g.engine.snapshot()!.status).toBe("done");
   });
 

@@ -11,14 +11,13 @@ test("list, open, delete, and not found", async ({ page, context, request }) => 
   await waitForStatus(request, finished, "done");
 
   await page.goto("/");
-  const recent = page.getByRole("region", { name: "Recent sessions" });
+  const recent = s.sidebar;
   const gatedRow = recent.locator(`a[href="/s/${gated}"]`);
   const doneRow = recent.locator(`a[href="/s/${finished}"]`);
   await expect(gatedRow).toContainText("first: make the failing test pass");
   await expect(gatedRow).toContainText("Awaiting approval");
-  await expect(gatedRow).toContainText(/now|\dm/);
   await expect(doneRow).toContainText("Done");
-  const hrefs = await recent.locator("a").evaluateAll((as) => as.map((a) => a.getAttribute("href")));
+  const hrefs = await recent.locator('a[href^="/s/"]').evaluateAll((as) => as.map((a) => a.getAttribute("href")));
   expect(hrefs.indexOf(`/s/${finished}`)).toBeLessThan(hrefs.indexOf(`/s/${gated}`)); // newest first
 
   await s.sidebar.locator(`a[href="/s/${gated}"]`).click();

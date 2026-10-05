@@ -22,8 +22,8 @@ test("the pull request page shows the description, the review card and the files
   await page.goto("/prs/14");
 
   await expect(page.getByRole("heading", { name: /Add slugify helper/ })).toContainText("#14");
-  await expect(s.overview).toContainText("wants to merge agent/1a2b3c4d-1 into main");
-  await expect(s.overview.getByRole("button", { name: "Description" })).toHaveAttribute("aria-expanded", "true");
+  await expect(s.overview).toContainText("from agent/1a2b3c4d-1 into main");
+  await expect(s.overview.getByRole("button", { name: /Description/ })).toHaveAttribute("aria-expanded", "true");
   await expect(s.overview.getByRole("heading", { name: "Why" })).toBeVisible();
   await expect(s.overview.locator("strong")).toHaveText("slugs");
 
@@ -76,17 +76,18 @@ test("the files panel hides and the choice survives a reload", async ({ page, re
   await expect(card.locator('[data-diff="add"]')).toHaveCount(6);
 
   const before = (await box(s.startCard)).width;
-  await s.files.getByRole("button", { name: "Hide files" }).click();
+  await page.getByRole("button", { name: "Hide files" }).click();
   await expect(s.files).toHaveCount(0);
   expect((await box(s.startCard)).width).toBeGreaterThan(before);
   await page.reload();
   await expect(s.startCard).toBeVisible();
   await expect(s.files).toHaveCount(0);
   await page.getByRole("button", { name: "Show files · 2" }).click();
+  await page.screenshot({ path: "test-results/review-start.png" });
   await expect(s.files.locator("[data-file]")).toHaveCount(2);
 
   // A Code session's Changes panel has its own setting.
-  await s.files.getByRole("button", { name: "Hide files" }).click();
+  await page.getByRole("button", { name: "Hide files" }).click();
   const res = await request.post(`${BASE}/sessions`, { data: { mode: "code", task: "[chat] make the failing test pass" }, headers: { "cf-connecting-ip": "198.51.100.77" } });
   await page.goto(`/s/${((await res.json()) as { id: string }).id}`);
   await expect(s.changes).toBeVisible();
@@ -147,7 +148,7 @@ test("review a pull request: dismiss, edit, request changes, post", async ({ pag
   // The start page: the pull request, an editable brief, the diff from GitHub. Nothing runs yet (A6).
   await expect(page).toHaveURL(/\/prs\/14$/);
   await expect(page.getByRole("heading", { name: /Add slugify helper/ })).toContainText("#14");
-  await expect(s.overview).toContainText("wants to merge agent/1a2b3c4d-1 into main");
+  await expect(s.overview).toContainText("from agent/1a2b3c4d-1 into main");
   await expect(s.files).toContainText('.replace(/ /g, "-")');
   await expect(s.files.locator('[data-diff="add"]')).toHaveCount(6);
   await expect(s.files).toContainText("logo.png");
@@ -171,8 +172,8 @@ test("review a pull request: dismiss, edit, request changes, post", async ({ pag
   // The same layout as the start page: no tabs; the pull request, the activity and the findings in the
   // main column; the files on the right.
   await expect(page.getByRole("tab")).toHaveCount(0);
-  await expect(s.overview).toContainText("wants to merge agent/1a2b3c4d-1 into main");
-  const description = s.overview.getByRole("button", { name: "Description" });
+  await expect(s.overview).toContainText("from agent/1a2b3c4d-1 into main");
+  const description = s.overview.getByRole("button", { name: /Description/ });
   await expect(description).toHaveAttribute("aria-expanded", "false"); // read before the start (RV-g)
   await description.click();
   await expect(s.overview.getByRole("heading", { name: "Why" })).toBeVisible();
@@ -198,7 +199,7 @@ test("review a pull request: dismiss, edit, request changes, post", async ({ pag
 
   // A finding's location opens its file, even when the panel is hidden and the card folded.
   await s.files.locator('[data-file="src/slugify.js"]').getByRole("button", { name: /src\/slugify\.js/ }).click();
-  await s.files.getByRole("button", { name: "Hide files" }).click();
+  await page.getByRole("button", { name: "Hide files" }).click();
   await expect(s.files).toHaveCount(0);
   await finding("Two spaces in a row").getByRole("link", { name: "src/slugify.js:4" }).click();
   await expect(line).toBeInViewport();

@@ -11,6 +11,8 @@ const VERDICT = { COMMENT: "Comment", APPROVE: "Approve", REQUEST_CHANGES: "Requ
 
 export interface SessionInfo {
   id: string;
+  /** The session's title: the pull request's title when the agent gives none. */
+  title?: string;
   code: boolean;
   baseBranch: string | null;
   pr: number | null;
@@ -108,7 +110,9 @@ function Item({ item, session, latest, live }: { item: TimelineItem; session: Se
     case "review_posted":
       return (
         <div data-testid="review-card" className="my-3 rounded-xl bg-sidebar p-3.5">
-          <div className="text-[13px] font-semibold">Review posted · {VERDICT[item.verdict]}</div>
+          <div className="flex items-center gap-1.5 text-[13px] font-semibold">
+            <span aria-hidden="true" data-pop className="text-done">✓</span>Review posted · {VERDICT[item.verdict]}
+          </div>
           <div className="mt-1 text-xs">{GITHUB_LINK(item.url)}</div>
           {/* This session reads the commit it started on; a newer one needs a new review. */}
           {latest && !session.closed && (
@@ -153,7 +157,7 @@ export function Timeline({ view, session, before, after }: { view: SessionView; 
       <div className="mx-auto max-w-[720px] px-6 pt-4 pb-[calc(var(--bar-h,116px)+60px)]">
         {before}
         {view.items.map((item, i) => (
-          <Enter key={item.key} live={live} motion={item.kind === "approved" || item.kind === "pr" ? "enter-slow" : "enter"}>
+          <Enter key={item.key} live={live} motion={item.kind === "approved" || item.kind === "pr" || item.kind === "review_posted" ? "enter-slow" : "enter"}>
             <Item item={item} session={session} latest={item === lastPosted} live={live} />
             {session.code && item.kind === "approved" && item.finish && view.items[i + 1]?.kind !== "pr" && <p className="text-center text-xs text-text-secondary">{NOTE}</p>}
           </Enter>

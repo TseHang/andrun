@@ -64,7 +64,7 @@ export function ReviewCard({ pull }: { pull: PullDetail }) {
           {error}
         </div>
       )}
-      <button type="button" disabled={!canStart} onClick={() => void start()} className="flex h-9 cursor-pointer items-center justify-center gap-1.5 rounded-full bg-accent text-sm font-semibold text-white disabled:cursor-default disabled:opacity-40">
+      <button type="button" disabled={!canStart} onClick={() => void start()} className="press flex h-9 cursor-pointer items-center justify-center gap-1.5 rounded-full bg-accent text-sm font-semibold text-white disabled:cursor-default disabled:opacity-40">
         {busy ? (
           <>
             <Spinner />

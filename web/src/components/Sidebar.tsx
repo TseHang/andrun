@@ -1,7 +1,7 @@
 import type { SessionSummary } from "../../../src/session/protocol";
 import type { Status } from "../../../src/core/events";
-import { useApp } from "../context";
 import { LIST_COLOR, StatusLabel, closedText } from "./StatusLabel";
+import { PlusIcon, PullRequestIcon } from "./Icons";
 import { Wordmark } from "./Wordmark";
 
 interface Props {
@@ -17,13 +17,6 @@ interface Props {
   onToggle?: () => void;
 }
 
-const NEW_SESSION_ICON = (
-  <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M11.5 2.5l2 2L7 11l-2.5.5L5 9l6.5-6.5z" />
-    <path d="M13 9.5v3a1 1 0 01-1 1H3.5a1 1 0 01-1-1V4a1 1 0 011-1h3" />
-  </svg>
-);
-
 const SIDEBAR_ICON = (
   <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" aria-hidden="true">
     <rect x="2" y="3" width="12" height="10" rx="2" />
@@ -31,44 +24,48 @@ const SIDEBAR_ICON = (
   </svg>
 );
 
+/** The sidebar's width open and as a rail; the page slides by the difference (app.tsx). */
+export const SIDEBAR_WIDTH = 248;
+export const RAIL_WIDTH = 52;
+
 const ICON_BUTTON = "press flex size-8 cursor-pointer items-center justify-center rounded-lg";
 const SHORTCUT = "⌘\\";
+/** A nav row: an icon and a label, as in Claude's sidebar; the rail keeps the icon alone. */
+const NAV = "press flex h-8 items-center gap-2.5 rounded-lg px-2.5 font-medium";
+/** The icon's slot: a round tile for New, a plain icon otherwise. */
+const NEW_TILE = "flex size-5 items-center justify-center rounded-full bg-black/8";
 
 export function Sidebar({ sessions, stale, path, live, pullCount, collapsed = false, instant = false, onToggle }: Props) {
-  const { config } = useApp();
   const openId = /^\/s\/([^/]+)/.exec(path)?.[1];
   const onPrs = /^\/prs(\/|$)/.test(path);
   return (
     <div
-      className={`relative shrink-0 overflow-hidden border-r border-black/8 bg-sidebar ${instant ? "" : "transition-[width] duration-240 ease-drawer motion-reduce:transition-none"} ${collapsed ? "w-[52px]" : "w-[248px]"}`}
+      className={`relative shrink-0 overflow-hidden border-r border-black/8 bg-sidebar ${instant ? "" : "transition-[width] duration-240 ease-drawer motion-reduce:transition-none"}`}
+      style={{ width: collapsed ? RAIL_WIDTH : SIDEBAR_WIDTH }}
     >
-      <nav aria-label="Workspace" inert={collapsed} className={`flex h-full w-[248px] flex-col gap-[18px] px-2.5 py-3.5 ${instant ? "" : "transition-opacity duration-150"} ${collapsed ? "opacity-0" : ""}`}>
+      <nav aria-label="Workspace" inert={collapsed} style={{ width: SIDEBAR_WIDTH }} className={`flex h-full flex-col gap-[18px] px-2.5 py-3.5 ${instant ? "" : "transition-opacity duration-150"} ${collapsed ? "opacity-0" : ""}`}>
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between pl-2.5 pt-0.5">
             <a href="/" aria-label="&run home" className="rounded-md">
               <Wordmark />
             </a>
-            <span className="flex">
-              <button type="button" aria-label="Hide sidebar" title={`Hide sidebar (${SHORTCUT})`} onClick={onToggle} className={`${ICON_BUTTON} text-text-secondary`}>
-                {SIDEBAR_ICON}
-              </button>
-              <a href="/" aria-label="New session" className={`${ICON_BUTTON} text-accent`}>
-                {NEW_SESSION_ICON}
-              </a>
-            </span>
+            <button type="button" aria-label="Hide sidebar" title={`Hide sidebar (${SHORTCUT})`} onClick={onToggle} className={`${ICON_BUTTON} text-text-secondary`}>
+              {SIDEBAR_ICON}
+            </button>
           </div>
-          <div className="truncate px-2.5 font-mono text-[11px] text-text-secondary">{config.repo}</div>
         </div>
         <div className="flex flex-col gap-px">
-          <a href="/" aria-current={path === "/" ? "page" : undefined} className={`flex h-8 items-center rounded-lg px-2.5 font-medium ${path === "/" ? "bg-black/6" : ""}`}>
-            Code
+          <a href="/" aria-current={path === "/" ? "page" : undefined} className={`${NAV} ${path === "/" ? "bg-black/6" : "hover:bg-black/4"}`}>
+            <span className={NEW_TILE}>
+              <PlusIcon size={12} />
+            </span>
+            New session
           </a>
-          <a
-            href="/prs"
-            aria-current={onPrs ? "page" : undefined}
-            className={`flex h-8 items-center justify-between rounded-lg px-2.5 font-medium ${onPrs ? "bg-black/6" : ""}`}
-          >
-            <span>Review PRs</span>
+          <a href="/prs" aria-current={onPrs ? "page" : undefined} className={`${NAV} ${onPrs ? "bg-black/6" : "hover:bg-black/4"}`}>
+            <span className="flex size-5 items-center justify-center text-text-secondary">
+              <PullRequestIcon size={16} />
+            </span>
+            <span className="grow">Review PRs</span>
             {pullCount !== null && <span className="text-text-secondary">{pullCount}</span>}
           </a>
         </div>
@@ -98,12 +95,18 @@ export function Sidebar({ sessions, stale, path, live, pullCount, collapsed = fa
         {stale && <div className="px-2.5 text-[11px] text-text-secondary">Could not refresh</div>}
       </nav>
       {/* Collapsed: a rail with the two things still needed, the way back and a new session. */}
-      <div inert={!collapsed} className={`absolute inset-y-0 left-0 flex w-[52px] flex-col items-center gap-1 pt-4 pb-3.5 ${instant ? "" : "transition-opacity duration-150"} ${collapsed ? "" : "opacity-0"}`}>
+      <div inert={!collapsed} style={{ width: RAIL_WIDTH }} className={`absolute inset-y-0 left-0 flex flex-col items-center gap-1 pt-4 pb-3.5 ${instant ? "" : "transition-opacity duration-150"} ${collapsed ? "" : "opacity-0"}`}>
         <button type="button" aria-label="Show sidebar" title={`Show sidebar (${SHORTCUT})`} onClick={onToggle} className={`${ICON_BUTTON} text-text-secondary`}>
           {SIDEBAR_ICON}
         </button>
-        <a href="/" aria-label="New session" className={`${ICON_BUTTON} text-accent`}>
-          {NEW_SESSION_ICON}
+        <a href="/" aria-label="New session" title="New session" aria-current={path === "/" ? "page" : undefined} className={`${ICON_BUTTON} mt-2 ${path === "/" ? "bg-black/6" : "hover:bg-black/4"}`}>
+          <span className={NEW_TILE}>
+            <PlusIcon size={12} />
+          </span>
+        </a>
+        <a href="/prs" aria-label={pullCount ? `Review PRs · ${pullCount}` : "Review PRs"} title="Review PRs" aria-current={onPrs ? "page" : undefined} className={`${ICON_BUTTON} relative text-text-secondary ${onPrs ? "bg-black/6" : "hover:bg-black/4"}`}>
+          <PullRequestIcon size={16} />
+          {pullCount ? <span aria-hidden="true" className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-accent" /> : null}
         </a>
       </div>
     </div>

@@ -23,6 +23,26 @@ export async function getConfig(): Promise<Config> {
   return (await res.json()) as Config;
 }
 
+let repoBranch: Promise<string | null> | null = null;
+
+/** The configured repo's default branch; null when GitHub cannot say. Asked once per page load: it costs GitHub requests. */
+export function getRepoBranch(): Promise<string | null> {
+  repoBranch ??= (async () => {
+    try {
+      const res = await fetch("/repo");
+      if (!res.ok) return null;
+      const { branch } = (await res.json()) as { branch?: unknown };
+      return typeof branch === "string" ? branch : null;
+    } catch {
+      return null;
+    }
+  })().then((b) => {
+    if (b === null) repoBranch = null; // asked again next time
+    return b;
+  });
+  return repoBranch;
+}
+
 /** Newest first by creation time (the server does not promise an order). */
 export async function listSessions(): Promise<SessionSummary[]> {
   const res = await fetch("/sessions");
@@ -119,6 +139,8 @@ export interface PullDetail {
   title: string;
   body: string;
   author: string;
+  authorAvatar: string | null;
+  mine: boolean;
   headRef: string;
   baseRef: string;
   headSha: string;

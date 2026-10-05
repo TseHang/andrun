@@ -276,7 +276,7 @@ async function processCalls(ctx: RunContext, calls: ToolCall[]): Promise<RunOutc
         reason: decision.reason,
         call,
         remaining,
-        ...(isFinish && { summary: stringArg(args, "summary"), diffSummary: await currentDiffSummary(ctx) }),
+        ...(isFinish && { summary: stringArg(args, "summary"), ...finishTitle(args), diffSummary: await currentDiffSummary(ctx) }),
       });
     }
 
@@ -441,6 +441,7 @@ function pause(ctx: RunContext, pending: Exclude<PendingApproval, { kind: "quest
     tool: pending.kind === "tool" ? pending.call.function.name : pending.kind === "strikes" ? pending.tool : "finish",
     reason: pending.reason,
     ...(pending.kind !== "strikes" && pending.summary !== undefined && { summary: pending.summary }),
+    ...(pending.kind === "tool" && pending.title && { title: pending.title }),
     ...(pending.kind !== "strikes" && pending.diffSummary && { diffSummary: pending.diffSummary }),
   });
   setStatus(ctx, "awaiting_approval");
@@ -499,6 +500,15 @@ function parseArgs(raw: string): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+/** GitHub's limit is higher; the engine publishes at most this many characters, so the gate shows the same. */
+const MAX_FINISH_TITLE_CHARS = 100;
+
+/** finish's pull request title, trimmed and capped, as the gate shows it and the engine publishes it. */
+function finishTitle(args: Record<string, unknown>): { title?: string } {
+  const title = stringArg(args, "title")?.trim().slice(0, MAX_FINISH_TITLE_CHARS);
+  return title ? { title } : {};
 }
 
 function stringArg(args: Record<string, unknown>, key: string): string | undefined {

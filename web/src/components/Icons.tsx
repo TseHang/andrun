@@ -60,8 +60,8 @@ export const PlanIcon = () => (
   </Icon>
 );
 
-export const PullRequestIcon = () => (
-  <Icon>
+export const PullRequestIcon = ({ size = 14 }: { size?: number }) => (
+  <Icon size={size}>
     <circle cx="4" cy="3.5" r="1.5" />
     <circle cx="4" cy="12.5" r="1.5" />
     <circle cx="12" cy="12.5" r="1.5" />
@@ -87,5 +87,26 @@ export const GlobeIcon = ({ size = 14 }: { size?: number }) => (
   <Icon size={size}>
     <circle cx="8" cy="8" r="6.25" />
     <path d="M1.75 8h12.5M8 1.75c1.7 1.8 2.5 3.9 2.5 6.25S9.7 12.45 8 14.25C6.3 12.45 5.5 10.35 5.5 8S6.3 3.55 8 1.75z" />
+  </Icon>
+);
+
+export const PencilIcon = () => (
+  <Icon size={12}>
+    <path d="M10.5 2.5l3 3-8 8H2.5v-3z" />
+  </Icon>
+);
+
+export const BranchIcon = () => (
+  <Icon size={13}>
+    <circle cx="4.5" cy="3.5" r="1.5" />
+    <circle cx="4.5" cy="12.5" r="1.5" />
+    <circle cx="11.5" cy="5" r="1.5" />
+    <path d="M4.5 5v6M11.5 6.5c0 3-7 2-7 4.5" />
+  </Icon>
+);
+
+export const PlusIcon = ({ size = 14 }: { size?: number }) => (
+  <Icon size={size}>
+    <path d="M8 3v10M3 8h10" />
   </Icon>
 );

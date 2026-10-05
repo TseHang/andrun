@@ -57,7 +57,7 @@ export function createGitHub(config: GitHubConfig): GitHub {
     defaultBranchHead: async () => defaultBranchHead(request, repo, await auth.token()),
     publish: async (input) => publish(request, repo, await auth.token(), await auth.botLogin(), input),
     listPulls: async () => listPulls(request, repo, await auth.token(), await auth.botLogin()),
-    getPull: async (n) => getPull(request, repo, await auth.token(), n),
+    getPull: async (n) => getPull(request, repo, await auth.token(), await auth.botLogin(), n),
     pullState: async (n) => pullState(request, repo, await auth.token(), n),
     getPullFile: async (n, path) => getPullFile(request, repo, await auth.token(), n, path),
     postReview: async (input) => postReview(request, repo, await userToken(), input),

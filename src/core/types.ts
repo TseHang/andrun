@@ -160,6 +160,8 @@ export type PendingApproval =
       /** Tool calls from the same model turn that come after `call`, run after it resolves. */
       remaining: ToolCall[];
       summary?: string;
+      /** finish's pull request title, as the agent wrote it. */
+      title?: string;
       diffSummary?: DiffSummary;
     }
   /** Same tool failed 3 times in a row (spec §6). */

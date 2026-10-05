@@ -18,13 +18,16 @@ Give each finding a file, a line and a severity.`;
 export const TITLE_CHARS = 80;
 export const MAX_FINDING_CHARS = 4000;
 export const MAX_REVIEW_COMMENT_CHARS = 4000;
+export const MAX_PR_TITLE_CHARS = 100;
+export const MAX_PR_SUMMARY_CHARS = 20000;
 /** Why a Comment or Request changes review with no comment and no finding is refused. */
 export const EMPTY_REVIEW = "Write a comment or keep a finding to post this review.";
 export const RESTORED_NOTE = "The sandbox was restarted and the workspace was restored from saved changes.";
 
 /** What a client may send over the session WebSocket. */
 export type ClientFrame =
-  | { type: "approve"; approvalId: string }
+  /** At a Code session's finish, `title` and `summary` replace the agent's pull request title and description. */
+  | { type: "approve"; approvalId: string; title?: string; summary?: string }
   | { type: "reject"; approvalId: string; comment: string }
   | { type: "message"; text: string }
   | { type: "stop" }
