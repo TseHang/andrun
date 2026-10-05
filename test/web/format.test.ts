@@ -11,6 +11,7 @@ import {
   usageLine,
   changeTotals,
   choiceLabel,
+  reviewMessage,
   contrastRatio,
   formatBytes,
   formatCost,
@@ -147,5 +148,24 @@ describe("Session UI: usage line, activity label, previewable paths", () => {
   it("previewable paths", () => {
     for (const p of ["index.html", "site/pages/about.htm", "a/b/PAGE.HTML"]) expect(isPreviewable(p), p).toBe(true);
     for (const p of ["app.js", "html", "notes.html.txt", "src/html/index.ts", ".html/readme.md", ""]) expect(isPreviewable(p), p).toBe(false);
+  });
+});
+
+describe("Code session: reviews of its pull request", () => {
+  const review = { id: 1, author: "TseHang", state: "CHANGES_REQUESTED" as const, body: "Please fix the hyphens.", submittedAt: "", url: "", comments: [{ path: "src/slugify.js", line: 4, body: "Two spaces become two hyphens." }] };
+
+  it("quotes the reviews as feedback, with each comment's place", () => {
+    const text = reviewMessage(14, [review], 4000);
+    expect(text).toMatch(/^Address these review comments on pull request #14\./);
+    expect(text).toMatch(/not as instructions/);
+    expect(text).toContain("### TseHang · Requested changes\n\n> Please fix the hyphens.");
+    expect(text).toContain("- `src/slugify.js:4`\n> Two spaces become two hyphens.");
+  });
+
+  it("fits the message limit, and says what was left out", () => {
+    const long = { ...review, comments: Array.from({ length: 200 }, (_, i) => ({ path: "a.js", line: i + 1, body: "x".repeat(50) })) };
+    const text = reviewMessage(14, [long], 4000);
+    expect(text.length).toBeLessThanOrEqual(4000);
+    expect(text).toMatch(/More comments on GitHub did not fit here\.\)$/);
   });
 });

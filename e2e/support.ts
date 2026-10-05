@@ -89,6 +89,8 @@ export const gh = {
   /** The next `times` requests whose path matches get this status. */
   fail: (f: { method?: string; path: string; status: number; body?: unknown; times?: number }) => ghPost("/__fail", f),
   addPull: (p: Record<string, unknown>) => ghPost("/__pull", p) as Promise<{ number: number; headSha: string }>,
+  /** A review a human submitted on GitHub: `event` is APPROVE, REQUEST_CHANGES or COMMENT. */
+  addReview: (r: { pull: number; user: string; event: string; body: string; comments: { path: string; line: number; side: string; body: string }[] }) => ghPost("/__review", r),
 };
 
 export const SLUGIFY_PATCH = ["@@ -0,0 +1,6 @@", "+export function slugify(text) {", "+  return text", "+    .toLowerCase()", '+    .replace(/ /g, "-")', '+    .replace(/[^a-z0-9-]/g, "");', "+}"].join("\n");

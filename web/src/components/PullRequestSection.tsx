@@ -5,6 +5,7 @@ import { planNote, prTarget } from "../state/format";
 import { markSending, type GateView, type SessionView } from "../state/reducer";
 import { PencilIcon, PullRequestIcon } from "./Icons";
 import { Markdown } from "./Markdown";
+import { PullReviews } from "./PullReviews";
 import { SectionTitle } from "./SectionTitle";
 import { Spinner } from "./Spinner";
 import type { SessionInfo } from "./Timeline";
@@ -43,6 +44,7 @@ export function PullRequestSection({ view, status, session, send, update }: { vi
               </a>
             </div>
             <div className={`mt-1 font-mono break-all ${SMALL}`}>{target}</div>
+            {pr.number !== undefined && !session.closed && <PullReviews pr={pr.number} status={status} send={send} />}
           </>
         ) : (
           <div className={`font-mono break-all ${SMALL}`}>{target}</div>

@@ -127,6 +127,25 @@ describe("pull requests (spec D2: list, read)", () => {
     await expect(github.getPullFile(30, "index.html")).rejects.toMatchObject({ status: 502 });
   });
 
+  it("reads a pull request's submitted reviews with their line comments, newest first", async () => {
+    const { fake, github } = seeded();
+    const head = fake.pulls.find((p) => p.number === 14)!.headSha;
+    await github.postReview({ pr: 14, commitId: head, verdict: "REQUEST_CHANGES", body: "Please fix the hyphens.", comments: [{ path: "src/slugify.js", line: 2, body: "Two spaces become two hyphens." }] });
+    await github.postReview({ pr: 14, commitId: head, verdict: "APPROVE", body: "", comments: [] });
+    await github.postReview({ pr: 14, commitId: head, verdict: "COMMENT", body: "", comments: [{ path: "src/slugify.js", line: 1, body: "Name it toSlug?" }] });
+    fake.reviews.push({ id: 999, pull: 14, user: "TseHang", commit_id: head, event: "PENDING", body: "draft", comments: [] });
+
+    const reviews = await github.getPullReviews(14);
+    // The approval said nothing and the pending one is not submitted: neither is shown.
+    expect(reviews.map((r) => [r.author, r.state, r.body])).toEqual([
+      ["TseHang", "COMMENTED", ""],
+      ["TseHang", "CHANGES_REQUESTED", "Please fix the hyphens."],
+    ]);
+    expect(reviews[0]!.comments).toEqual([{ path: "src/slugify.js", line: 1, body: "Name it toSlug?" }]);
+    expect(reviews[1]!.comments).toEqual([{ path: "src/slugify.js", line: 2, body: "Two spaces become two hyphens." }]);
+    expect(reviews[1]!.url).toMatch(/#pullrequestreview-\d+$/);
+  });
+
   it("resolves the default branch and its head", async () => {
     const { fake, github } = setup({ defaultBranch: "trunk" });
     expect(await github.defaultBranchHead()).toEqual({ branch: "trunk", sha: fake.refs.get("trunk") });

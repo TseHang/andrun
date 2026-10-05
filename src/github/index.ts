@@ -5,13 +5,13 @@
 import { createAppAuth } from "./app-auth";
 import { GitHubError, createRequest } from "./client";
 import { publish, type PublishInput, type PublishResult } from "./publish";
-import { defaultBranchHead, getPull, getPullFile, listPulls, pullState, type PullDetail, type PullState, type PullSummary } from "./pulls";
+import { defaultBranchHead, getPull, getPullFile, getPullReviews, listPulls, pullState, type PullDetail, type PullReview, type PullState, type PullSummary } from "./pulls";
 import { postReview, type ReviewInput } from "./review";
 
 export { GitHubError } from "./client";
 export { commentableLines, numberedPatch } from "./diff-lines";
 export type { PublishFile, PublishInput, PublishResult } from "./publish";
-export type { PullDetail, PullFile, PullState, PullSummary } from "./pulls";
+export type { PullDetail, PullFile, PullReview, PullState, PullSummary } from "./pulls";
 export { REVIEW_FOOTER, buildReview } from "./review";
 export type { ReviewComment, ReviewFinding, ReviewInput } from "./review";
 
@@ -33,6 +33,7 @@ export interface GitHub {
   getPull(n: number): Promise<PullDetail>;
   pullState(n: number): Promise<PullState>;
   getPullFile(n: number, path: string): Promise<string | null>;
+  getPullReviews(n: number): Promise<PullReview[]>;
   postReview(input: ReviewInput): Promise<{ url: string }>;
 }
 
@@ -60,6 +61,7 @@ export function createGitHub(config: GitHubConfig): GitHub {
     getPull: async (n) => getPull(request, repo, await auth.token(), await auth.botLogin(), n),
     pullState: async (n) => pullState(request, repo, await auth.token(), n),
     getPullFile: async (n, path) => getPullFile(request, repo, await auth.token(), n, path),
+    getPullReviews: async (n) => getPullReviews(request, repo, await auth.token(), n),
     postReview: async (input) => postReview(request, repo, await userToken(), input),
   };
 }

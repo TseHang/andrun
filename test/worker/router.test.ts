@@ -470,6 +470,19 @@ describe("router (Phase 3: P3-c, P3-d)", () => {
     expect(refused.headers.get("retry-after")).toBe("60");
   });
 
+  it("reads a pull request's reviews for the Code session that opened it", async () => {
+    const f = withPulls();
+    f.fake.reviews.push({ id: 5, pull: 14, user: "TseHang", commit_id: "x", event: "REQUEST_CHANGES", body: "Please fix.", comments: [] });
+    const res = await handle(req("GET", "/pulls/14/reviews"), f.env);
+    expect(res.status).toBe(200);
+    expect(await json(res)).toMatchObject([{ id: 5, author: "TseHang", state: "CHANGES_REQUESTED", body: "Please fix.", comments: [] }]);
+    expect(f.touched).toEqual([]);
+    expect(f.readKeys).toEqual([IP_A]);
+    await expectError(await handle(req("GET", "/pulls/99/reviews"), f.env), 404);
+    await expectError(await handle(req("GET", "/pulls/abc/reviews"), f.env), 404, /^not found$/);
+    await expectError(await handle(req("POST", "/pulls/14/reviews"), f.env), 404);
+  });
+
   it("review sessions are created from an open pull request", async () => {
     const f = withPulls();
     const res = await post(f.env, { mode: "review", pr: 14, task: "  Review this.  ", model: "zai-org/glm-5.3-flash", reasoning: "high" });
