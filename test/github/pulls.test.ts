@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { BOT } from "../support/fake-github";
 import { setup } from "./helpers";
+import { getPullReviews } from "../../src/github/pulls";
 
 const PATCH = "@@ -0,0 +1,2 @@\n+a\n+b";
 
@@ -144,6 +145,19 @@ describe("pull requests (spec D2: list, read)", () => {
     expect(reviews[0]!.comments).toEqual([{ path: "src/slugify.js", line: 1, body: "Name it toSlug?" }]);
     expect(reviews[1]!.comments).toEqual([{ path: "src/slugify.js", line: 2, body: "Two spaces become two hyphens." }]);
     expect(reviews[1]!.url).toMatch(/#pullrequestreview-\d+$/);
+  });
+
+  it("reads later review and comment pages before choosing the newest review", async () => {
+    const reviews = Array.from({ length: 101 }, (_, i) => ({ id: i + 1, user: { login: "octocat" }, state: "COMMENTED", body: "", html_url: "" }));
+    const comments = Array.from({ length: 101 }, (_, i) => ({ pull_request_review_id: i + 1, path: "a.js", line: 1, body: `Comment ${i + 1}` }));
+    const result = await getPullReviews(async (_method, path) => {
+      const url = new URL(path, "https://api.github.test");
+      const start = (Number(url.searchParams.get("page") ?? 1) - 1) * 100;
+      return (url.pathname.endsWith("/reviews") ? reviews : comments).slice(start, start + 100);
+    }, "owner/repo", "token", 14);
+    expect(result).toHaveLength(101);
+    expect(result[0]).toMatchObject({ id: 101, comments: [{ body: "Comment 101" }] });
+    expect(result.at(-1)).toMatchObject({ id: 1, comments: [{ body: "Comment 1" }] });
   });
 
   it("resolves the default branch and its head", async () => {

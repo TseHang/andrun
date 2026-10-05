@@ -125,8 +125,16 @@ const REVIEW_STATES = new Set(["APPROVED", "CHANGES_REQUESTED", "COMMENTED"]);
 
 /** Submitted reviews, newest first; a review that says nothing (no text, no line comments) is left out. Pending and dismissed ones are not shown. */
 export async function getPullReviews(request: Request, repo: string, token: string, n: number): Promise<PullReview[]> {
-  const raw = (await request("GET", `/repos/${repo}/pulls/${n}/reviews?per_page=100`, token)) as { id: number; user: { login: string } | null; state: string; body: string | null; submitted_at?: string; html_url: string }[];
-  const comments = (await request("GET", `/repos/${repo}/pulls/${n}/comments?per_page=100`, token)) as { pull_request_review_id: number | null; path: string; line: number | null; body: string }[];
+  const readPages = async <T>(kind: "reviews" | "comments"): Promise<T[]> => {
+    const all: T[] = [];
+    for (let page = 1; ; page++) {
+      const rows = (await request("GET", `/repos/${repo}/pulls/${n}/${kind}?per_page=100&page=${page}`, token)) as T[];
+      all.push(...rows);
+      if (rows.length < 100) return all;
+    }
+  };
+  const raw = await readPages<{ id: number; user: { login: string } | null; state: string; body: string | null; submitted_at?: string; html_url: string }>("reviews");
+  const comments = await readPages<{ pull_request_review_id: number | null; path: string; line: number | null; body: string }>("comments");
   return raw
     .filter((r) => REVIEW_STATES.has(r.state))
     .map((r) => ({
