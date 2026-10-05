@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ChevronIcon } from "./Icons";
+import { Chevron } from "./Chevron";
 
 /**
  * A section of the side panel: an icon, a title, and what it counts on the right.
@@ -13,9 +13,7 @@ export function SectionTitle({ icon, title, meta, toggle }: { icon: ReactNode; t
         <h2 className="grow text-[13px] font-semibold">
           <button type="button" aria-expanded={toggle.open} title={toggle.open ? "Collapse all" : "Expand all"} onClick={toggle.onClick} className="-mx-1 flex cursor-pointer items-center gap-1.5 rounded-md px-1 hover:bg-black/5">
             {title}
-            <span className="text-text-secondary">
-              <ChevronIcon open={toggle.open} />
-            </span>
+            <Chevron open={toggle.open} />
           </button>
         </h2>
       ) : (

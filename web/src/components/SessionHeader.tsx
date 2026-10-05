@@ -91,19 +91,7 @@ export function SessionHeader({ title, status, prState, header, review, onDelete
           )}
         </span>
       )}
-      {panel && (
-        <button
-          type="button"
-          aria-label={panel.hidden ? `Show ${panel.noun} · ${panel.count}` : `Hide ${panel.noun}`}
-          aria-pressed={!panel.hidden}
-          title={panel.hidden ? `Show ${panel.noun}` : `Hide ${panel.noun}`}
-          onClick={panel.onToggle}
-          className={`press flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg px-2 ${panel.hidden ? "text-text-secondary hover:bg-black/6" : "bg-black/6 text-text"}`}
-        >
-          <PanelIcon />
-          {panel.hidden && panel.count > 0 && <span className="text-xs font-medium tabular-nums">{panel.count}</span>}
-        </button>
-      )}
+      {panel && <PanelToggle {...panel} />}
       <div className="relative">
         <button
           ref={moreRef}
@@ -137,5 +125,22 @@ export function SessionHeader({ title, status, prState, header, review, onDelete
         )}
       </div>
     </header>
+  );
+}
+
+/** The side panel's show/hide button in a page header: pressed while the panel shows, with the count while it is hidden. */
+export function PanelToggle({ hidden, noun, count, onToggle }: { hidden: boolean; noun: string; count: number; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={hidden ? `Show ${noun} · ${count}` : `Hide ${noun}`}
+      aria-pressed={!hidden}
+      title={hidden ? `Show ${noun}` : `Hide ${noun}`}
+      onClick={onToggle}
+      className={`press flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg px-2 ${hidden ? "text-text-secondary hover:bg-black/6" : "bg-black/6 text-text"}`}
+    >
+      <PanelIcon />
+      {hidden && count > 0 && <span className="text-xs font-medium tabular-nums">{count}</span>}
+    </button>
   );
 }

@@ -206,7 +206,7 @@ export function createFakeGitHub(seed: { files?: Record<string, string>; modes?:
       state: p.state,
       merged: p.merged ?? false,
       html_url: `https://github.com/${FAKE_REPO}/pull/${p.number}`,
-      user: { login: p.user },
+      user: { login: p.user, avatar_url: `https://avatars.githubusercontent.com/${p.user}` },
       head: { ref: p.headRef, sha: p.headSha, repo: { full_name: p.headRepo ?? FAKE_REPO } },
       base: { ref: p.baseRef, repo: { full_name: FAKE_REPO } },
       updated_at: p.updatedAt,

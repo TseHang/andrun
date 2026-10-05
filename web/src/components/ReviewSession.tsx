@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Status } from "../../../src/core/events";
 import type { ClientFrame } from "../../../src/session/protocol";
 import { getPull, type PullDetail } from "../api";
-import { usePanelHidden } from "../state/hidden";
 import type { SessionView } from "../state/reducer";
 import { Findings } from "./Findings";
 import type { Jump } from "./PatchView";
@@ -10,14 +9,11 @@ import { PullOverview } from "./PullOverview";
 import { ReviewFilesPanel } from "./ReviewFilesPanel";
 import { Timeline, type SessionInfo } from "./Timeline";
 
-type Diff = { kind: "loading" } | { kind: "ready"; pull: PullDetail } | { kind: "error"; message: string };
+export type Diff = { kind: "loading" } | { kind: "ready"; pull: PullDetail } | { kind: "error"; message: string };
 
-/** The review's body: the pull request, the agent's activity and the findings in one column, the files on the right. `bar` sits under the column. */
-export function ReviewBody({ view, status, session, pr, send, bar }: { view: SessionView; status: Status; session: SessionInfo; pr: number | null; send: (f: ClientFrame) => boolean; bar: ReactNode }) {
-  const [hidden, setHidden, reopened] = usePanelHidden("andrun.review.files.hidden");
-  const [jump, setJump] = useState<Jump | null>(null);
+/** The reviewed pull request with its diff, read once per number. */
+export function usePull(pr: number | null): Diff {
   const [diff, setDiff] = useState<Diff>({ kind: "loading" });
-
   useEffect(() => {
     if (pr === null) return setDiff({ kind: "error", message: "No pull request for this review." });
     let current = true;
@@ -29,7 +25,15 @@ export function ReviewBody({ view, status, session, pr, send, bar }: { view: Ses
       current = false;
     };
   }, [pr]);
+  return diff;
+}
 
+/**
+ * The review's body: the pull request, the agent's activity and the findings in one column, the files on the right. `bar` sits under the column.
+ * The page owns the files panel's visibility (its toggle is in the header); a jump to a finding shows it.
+ */
+export function ReviewBody({ view, status, session, diff, send, bar, files }: { view: SessionView; status: Status; session: SessionInfo; diff: Diff; send: (f: ClientFrame) => boolean; bar: ReactNode; files: { hidden: boolean; reopened: boolean; show: () => void } }) {
+  const [jump, setJump] = useState<Jump | null>(null);
   const kept = useMemo(() => view.findings.filter((f) => !f.dismissed), [view.findings]);
   const pull = diff.kind === "ready" ? diff.pull : null;
 
@@ -46,7 +50,7 @@ export function ReviewBody({ view, status, session, pr, send, bar }: { view: Ses
               status={status}
               send={send}
               onJump={(path, line) => {
-                setHidden(false);
+                files.show();
                 setJump({ path, line, nonce: Date.now() });
               }}
             />
@@ -54,23 +58,13 @@ export function ReviewBody({ view, status, session, pr, send, bar }: { view: Ses
         />
         {bar}
       </div>
-      {hidden ? (
-        <div className="pointer-events-none absolute top-3 right-5 z-10">
-          <button type="button" onClick={() => setHidden(false)} className="pointer-events-auto cursor-pointer rounded-full bg-fill px-3 py-1 text-xs font-medium">
-            {pull ? `Show files · ${pull.files.length}` : "Show files"}
-          </button>
-        </div>
-      ) : (
+      {!files.hidden && (
         <ReviewFilesPanel
-          motion={reopened ? "side-in" : ""}
+          motion={files.reopened ? "side-in" : ""}
           pull={pull}
           findings={kept}
           jump={jump}
           notice={diff.kind === "loading" ? "Loading the diff" : diff.kind === "error" ? diff.message : undefined}
-          onHide={() => {
-            setJump(null);
-            setHidden(true);
-          }}
         />
       )}
     </>

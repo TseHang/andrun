@@ -73,7 +73,10 @@ describe("pull requests (spec D2: list, read)", () => {
       deletions: 0,
       changedFiles: 2,
       body: "",
+      authorAvatar: `https://avatars.githubusercontent.com/${BOT}`,
+      mine: true, // the bot's, on an agent/ branch
     });
+    expect(await github.getPull(13)).toMatchObject({ mine: false });
     expect(pull.files).toEqual([
       { path: "src/slugify.js", status: "added", additions: 2, deletions: 0, patch: PATCH },
       { path: "logo.png", status: "added", additions: 0, deletions: 0, patch: null },

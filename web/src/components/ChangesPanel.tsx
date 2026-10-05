@@ -5,9 +5,10 @@ import type { ClientFrame } from "../../../src/session/protocol";
 import type { SessionView } from "../state/reducer";
 import { parseDiff } from "../state/diff";
 import { changeTotals, firstLine, isPreviewable, isDeliverable, TASK_FORMAT_NOTE } from "../state/format";
+import { Chevron } from "./Chevron";
 import { DiffView } from "./DiffView";
 import { PreviewPane } from "./HtmlPreview";
-import { BoxIcon, ChevronIcon, DownloadIcon, EyeIcon, FileIcon } from "./Icons";
+import { BoxIcon, DownloadIcon, EyeIcon, FileIcon } from "./Icons";
 import { PlanCard } from "./PlanCard";
 import { PullRequestSection } from "./PullRequestSection";
 import { SectionTitle } from "./SectionTitle";
@@ -41,9 +42,7 @@ function Card({ sessionId, change, task, onPreview, defaultOpen }: { sessionId: 
     <div data-file={change.path} className="mb-3 overflow-hidden rounded-xl border border-black/10">
       <div className="flex items-center gap-2 bg-sidebar pr-3 font-mono text-xs">
         <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex min-w-0 grow cursor-pointer items-center gap-2 py-2 pl-3 text-left">
-          <span className="text-text-secondary">
-            <ChevronIcon open={open} />
-          </span>
+          <Chevron open={open} />
           <span className="min-w-0 grow truncate font-semibold">{change.path}</span>
           <span className="shrink-0 text-text-secondary">{isNew ? `new file · +${change.additions}` : `+${change.additions} −${change.deletions}`}</span>
         </button>

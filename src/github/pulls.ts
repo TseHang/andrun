@@ -26,6 +26,10 @@ export interface PullDetail {
   title: string;
   body: string;
   author: string;
+  /** The author's GitHub avatar; null when GitHub gives none. */
+  authorAvatar: string | null;
+  /** Opened by &run: this App's bot as author, on an `agent/` branch. */
+  mine: boolean;
   headRef: string;
   baseRef: string;
   headSha: string;
@@ -49,7 +53,7 @@ interface RawPull {
   merged?: boolean;
   html_url: string;
   updated_at: string;
-  user: { login: string };
+  user: { login: string; avatar_url?: string };
   head: { ref: string; sha: string; repo: { full_name: string } | null };
   base: { ref: string };
   additions: number;
@@ -78,7 +82,7 @@ export async function listPulls(request: Request, repo: string, token: string, b
   }));
 }
 
-export async function getPull(request: Request, repo: string, token: string, n: number): Promise<PullDetail> {
+export async function getPull(request: Request, repo: string, token: string, botLogin: string, n: number): Promise<PullDetail> {
   const p = (await request("GET", `/repos/${repo}/pulls/${n}`, token)) as RawPull;
   const files = (await request("GET", `/repos/${repo}/pulls/${n}/files?per_page=100`, token)) as RawFile[];
   return {
@@ -86,6 +90,8 @@ export async function getPull(request: Request, repo: string, token: string, n: 
     title: p.title,
     body: p.body ?? "",
     author: p.user.login,
+    authorAvatar: p.user.avatar_url ?? null,
+    mine: p.user.login === botLogin && p.head.ref.startsWith("agent/"),
     headRef: p.head.ref,
     baseRef: p.base.ref,
     headSha: p.head.sha,

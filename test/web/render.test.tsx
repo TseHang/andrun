@@ -284,6 +284,8 @@ const pull = (over: Partial<PullDetail> = {}): PullDetail => ({
   number: 7,
   title: "Add slugify",
   author: "octocat",
+  authorAvatar: null,
+  mine: false,
   headRef: "feat/slugify",
   baseRef: "main",
   headSha: "a41c0b7e5d3f29186c7a4b0e9d2f1c3a5b6d7e8f",
@@ -331,11 +333,14 @@ const post = (html: string, id: string) => new RegExp(`<li[^>]*data-finding="${i
 const AVATAR = /<span[^>]*role="img"[^>]*aria-label="&amp;run"[^>]*>&amp;<\/span>/g;
 
 describe("Review UX: the pull request and the findings", () => {
-  it("the pull request overview shows who merges what and the description as markdown", () => {
+  it("the pull request overview shows the branches and the description as the author's post, in markdown", () => {
     const html = renderToStaticMarkup(<PullOverview pull={pull()} />);
     expect(html).toMatch(/<section[^>]*aria-label="Pull request"/);
-    expect(html).toContain("octocat wants to merge feat/slugify into main");
-    expect(html).toContain("1 file, 6 added");
+    expect(html).toMatch(/data-branches[^>]*>from <span[^>]*>feat\/slugify<\/span> into <span[^>]*>main<\/span>/);
+    expect(html).not.toContain("wants to merge");
+    // The description sits in a framed post headed by its author, so it does not read as the agent's reply.
+    expect(html).toMatch(/<button[^>]*aria-expanded="true"[^>]*>.*?octocat.*?Description/s);
+    expect(renderToStaticMarkup(<PullOverview pull={pull({ mine: true })} />)).toMatch(/aria-label="&amp;run".*?&amp;run bot/s);
     expect(html).toMatch(/<h2[^>]*>Why<\/h2>/);
     expect(html).toMatch(/<strong[^>]*>slugs<\/strong>/);
     // Open by default, with a button that folds it; the review session passes defaultOpen={false} (RV-g).
@@ -343,7 +348,7 @@ describe("Review UX: the pull request and the findings", () => {
     const folded = renderToStaticMarkup(<PullOverview pull={pull()} defaultOpen={false} />);
     expect(folded).toMatch(/<button[^>]*aria-expanded="false"[^>]*>.*?Description/s);
     expect(folded).not.toContain("slugs");
-    expect(folded).toContain("octocat wants to merge feat/slugify into main");
+    expect(folded).toContain("feat/slugify");
   });
 
   it("a pull request without a description says so", () => {
@@ -384,14 +389,16 @@ describe("Review UX: the pull request and the findings", () => {
     }
   });
 
-  const panel = (p: PullDetail, view: SessionView = initialView()) => renderToStaticMarkup(<ReviewFilesPanel pull={p} findings={view.findings} onHide={() => {}} />);
+  const panel = (p: PullDetail, view: SessionView = initialView()) => renderToStaticMarkup(<ReviewFilesPanel pull={p} findings={view.findings} />);
   const card = (html: string, path: string) => new RegExp(`<div[^>]*data-file="${path.replace(/[.]/g, "\\.")}"[^>]*>.*?(?=<div[^>]*data-file=|</aside>)`, "s").exec(html)?.[0] ?? "";
   const HTML_FILE = { path: "index.html", status: "modified", additions: 1, deletions: 1, patch: "@@ -1 +1 @@\n-<h1>a</h1>\n+<h1>b</h1>" };
 
   it("a pull request file card is open by default and has a fold button", () => {
     const html = panel(pull({ changedFiles: 2, files: [...pull().files, HTML_FILE] }));
     expect(html).toMatch(/<aside[^>]*aria-label="Files changed"/);
-    expect(html).toMatch(/<button[^>]*>Hide files<\/button>/);
+    // Laid out like Code's Changes: a section title that folds every card; the header's panel button hides it.
+    expect(html).toMatch(/<h2[^>]*><button[^>]*aria-expanded="true"[^>]*title="Collapse all"[^>]*>Files changed/);
+    expect(html).not.toContain("Hide files");
     expect(count(html, /data-file="/g)).toBe(2);
     const js = card(html, "src/slugify.js");
     expect(js).toMatch(/<button[^>]*aria-expanded="true"[^>]*>/);

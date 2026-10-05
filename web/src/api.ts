@@ -119,6 +119,8 @@ export interface PullDetail {
   title: string;
   body: string;
   author: string;
+  authorAvatar: string | null;
+  mine: boolean;
   headRef: string;
   baseRef: string;
   headSha: string;
