@@ -2,6 +2,8 @@ import { useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
 import { PullReviews } from "../../web/src/components/PullReviews";
+import { PullRequestSection } from "../../web/src/components/PullRequestSection";
+import { initialView } from "../../web/src/state/reducer";
 
 vi.mock("react", async (original) => {
   const react = await original<typeof import("react")>();
@@ -9,6 +11,18 @@ vi.mock("react", async (original) => {
 });
 
 afterEach(() => vi.mocked(useState).mockClear());
+
+it("the pull request section starts expanded and keeps its content mounted when collapsed", () => {
+  const view = { ...initialView(), pr: { number: 4, url: "https://github.com/x/y/pull/4", branch: "agent/test" } };
+  const section = () => renderToStaticMarkup(<PullRequestSection view={view} status="awaiting_input" session={{ id: "s", code: true, baseBranch: "main", pr: 4 }} send={() => true} update={() => {}} />);
+  const expanded = section();
+  expect(expanded).toMatch(/<button[^>]*aria-expanded="true"[^>]*>Pull request/);
+  vi.mocked(useState).mockReturnValueOnce([false, vi.fn()]).mockReturnValueOnce([false, vi.fn()]);
+  const collapsed = section();
+  expect(collapsed).toMatch(/<button[^>]*aria-expanded="false"[^>]*>Pull request/);
+  expect(collapsed).toMatch(/<div hidden=""[^>]*class="rounded-xl bg-sidebar p-3"/);
+  expect(collapsed).toContain('aria-label="Review comments"');
+});
 
 it("renders review bodies and inline comments as compact Markdown in a bounded list", () => {
   vi.mocked(useState).mockReturnValueOnce([{ kind: "ready", reviews: [{
