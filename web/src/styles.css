@@ -118,6 +118,11 @@ input:focus-visible {
   animation: pop 300ms var(--ease-out);
 }
 
+/* A label that changed in place (Code and Task): the old one is gone, the new one comes into focus. */
+.swap {
+  animation: swap 150ms var(--ease-out);
+}
+
 .side-in {
   animation: side-in 200ms var(--ease-out);
 }
@@ -144,6 +149,13 @@ input:focus-visible {
   60% {
     opacity: 1;
     transform: scale(1.12);
+  }
+}
+
+@keyframes swap {
+  from {
+    opacity: 0;
+    filter: blur(2px);
   }
 }
 
