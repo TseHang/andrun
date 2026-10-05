@@ -6,7 +6,6 @@ import { describe, expect, it } from "vitest";
 import type { AgentEvent, EventBody, PlanStep } from "../../src/core/events";
 import type { Config, PullDetail } from "../../web/src/api";
 import { App_ } from "../../web/src/context";
-import { ApprovalBar } from "../../web/src/components/ApprovalBar";
 import { Findings } from "../../web/src/components/Findings";
 import { PullOverview } from "../../web/src/components/PullOverview";
 import { ReviewCard } from "../../web/src/components/ReviewCard";
@@ -30,6 +29,8 @@ function viewOf(...bodies: (EventBody & { step?: number })[]): SessionView {
 const timeline = (view: SessionView) => renderToStaticMarkup(<Timeline view={view} session={SESSION} />);
 const reply = (text: string) => viewOf({ type: "status", status: "running" }, { type: "message", id: "m1", role: "assistant", text }, { type: "status", status: "awaiting_input" });
 const count = (html: string, pattern: RegExp) => (html.match(pattern) ?? []).length;
+/** The side panel's session props: a done session, nothing sent. */
+const panel = (code: boolean) => ({ session: { ...SESSION, id: "s", code }, status: "done" as const, send: () => true, update: () => {} });
 
 const MARKER = /<span[^>]*aria-label="&amp;run"[^>]*>&amp;<\/span>/g;
 
@@ -196,7 +197,7 @@ describe("Session UI: the conversation (slice B)", () => {
 
   it("the composer shows Stop only while running, and no queue hint before a message is typed", () => {
     const composer = (running: boolean) =>
-      renderToStaticMarkup(<Composer view={initialView()} running={running} waiting={!running} code send={() => true} update={() => {}} />);
+      renderToStaticMarkup(<Composer view={initialView()} running={running} waiting={!running} send={() => true} update={() => {}} />);
     const stop = /<button[^>]*>Stop<\/button>/;
     const HINT = "The agent reads your message after its current step";
 
@@ -215,19 +216,34 @@ describe("Session UI: the conversation (slice B)", () => {
     expect(queued).toContain("Queued · read after the current step");
   });
 
-  it("the approval bar renders the finish summary as markdown", () => {
+  it("the finish summary is the agent's last message, and the approval is in the side panel", async () => {
+    const { ChangesPanel } = await import("../../web/src/components/ChangesPanel");
     const view = viewOf(
       { type: "status", status: "running" },
+      { type: "plan_updated", plan: [{ step: "Fix it", status: "completed" }, { step: "Run the tests", status: "in_progress" }] },
       { type: "approval_required", approvalId: "a1", tool: "finish", reason: "finishing requires approval", summary: "Created `index.html`:\n\n- Picks a number\n- **Tracks** attempts" },
       { type: "status", status: "awaiting_approval" },
     );
-    const html = renderToStaticMarkup(<ApprovalBar view={view} gate={view.gate!} session={SESSION} send={() => true} update={() => {}} />);
+    const html = timeline(view);
+    expect(html).toMatch(/data-item="summary"/);
     expect(html).toMatch(/<code[^>]*>index\.html<\/code>/);
     expect(html).toMatch(/<li[^>]*>Picks a number<\/li>/);
     expect(html).toMatch(/<strong[^>]*>Tracks<\/strong>/);
     expect(html).not.toContain("**");
-    // A long summary scrolls inside the bar instead of growing over the timeline.
-    expect(html).toMatch(/data-slot="summary"[^>]*class="[^"]*max-h-\[30vh\][^"]*overflow-y-auto/);
+    // A review posts its summary from the post bar instead.
+    expect(renderToStaticMarkup(<Timeline view={view} session={{ ...SESSION, review: true }} />)).not.toMatch(/data-item="summary"/);
+
+    const side = renderToStaticMarkup(<ChangesPanel {...panel(true)} status="awaiting_approval" view={view} sandboxRunning sha="abcdef" onHide={() => {}} />);
+    expect(side).toMatch(/<form[^>]*aria-label="Approval"/);
+    expect(side).toContain("Approve and open PR");
+    expect(side).toContain("agent/s-1 → main");
+    expect(side).toContain("1 of 2 plan steps not completed");
+    // The plan sits above the approval, at the top of the panel.
+    expect(side.indexOf('aria-label="Plan"')).toBeLessThan(side.indexOf('aria-label="Approval"'));
+
+    // The composer stays: a message asks for changes.
+    const composer = renderToStaticMarkup(<Composer view={view} running={false} waiting={false} finishing send={() => true} update={() => {}} />);
+    expect(composer).toContain('placeholder="Ask for changes instead"');
   });
 
   it("the plan card lists its steps and counts the completed ones", () => {
@@ -476,7 +492,7 @@ it("task: the Files panel lists .html, .md and .csv only and states the limit", 
   for (const path of ["build.js", "package.json", "chart.png", "report.html.js"]) expect(isDeliverable(path)).toBe(false);
   const paths = ["report.html", "notes.md", "data.csv", "build.js", "package.json", "chart.png"];
   const view = viewOf(...paths.map((path): EventBody => ({ type: "file_changed", path, diff: `--- /dev/null\n+++ b/${path}\n@@ -0,0 +1 @@\n+hello\n` })));
-  const task = renderToStaticMarkup(<ChangesPanel id="s" mode="task" view={view} sandboxRunning sha="" onHide={() => {}} />);
+  const task = renderToStaticMarkup(<ChangesPanel {...panel(false)} mode="task" view={view} sandboxRunning sha="" onHide={() => {}} />);
   expect(task).toContain('aria-label="Files"');
   expect(task).toContain("Task produces .html, .md and .csv files. Images, PDF and other binary files are not supported.");
   expect(task).toContain("Web, read-only (GET)");
@@ -485,7 +501,7 @@ it("task: the Files panel lists .html, .md and .csv only and states the limit", 
   for (const path of paths.slice(3)) expect(task).not.toContain(path);
   expect(count(task, />Download<\/button>/g)).toBe(3);
   expect(count(task, />Preview<\/button>/g)).toBe(1);
-  const code = renderToStaticMarkup(<ChangesPanel id="s" view={view} sandboxRunning sha="abcdef" onHide={() => {}} />);
+  const code = renderToStaticMarkup(<ChangesPanel {...panel(true)} view={view} sandboxRunning sha="abcdef" onHide={() => {}} />);
   expect(count(code, /data-file="/g)).toBe(6);
   expect(code).toContain("Base commit");
   expect(code).not.toContain("Download");
@@ -495,7 +511,7 @@ it("a file that was not saved has no download", async () => {
   const { ChangesPanel } = await import("../../web/src/components/ChangesPanel");
   const event = { type: "file_changed", path: "big.csv", diff: "", saved: false } as const;
   const view = viewOf(event);
-  const html = renderToStaticMarkup(<ChangesPanel id="s" mode="task" view={view} sandboxRunning sha="" onHide={() => {}} />);
+  const html = renderToStaticMarkup(<ChangesPanel {...panel(false)} mode="task" view={view} sandboxRunning sha="" onHide={() => {}} />);
   expect(html).toContain('data-file="big.csv"');
   expect(html).toContain("Too large to save (over 1 MB)");
   expect(html).not.toMatch(/>Download<\/button>/);

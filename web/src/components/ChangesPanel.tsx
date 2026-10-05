@@ -1,10 +1,15 @@
 import { useState } from "react";
 import { getFile } from "../api";
+import type { Status } from "../../../src/core/events";
+import type { ClientFrame } from "../../../src/session/protocol";
 import type { SessionView } from "../state/reducer";
 import { parseDiff } from "../state/diff";
 import { changeTotals, firstLine, isPreviewable, isDeliverable, TASK_FORMAT_NOTE } from "../state/format";
 import { DiffView } from "./DiffView";
 import { HtmlPreview } from "./HtmlPreview";
+import { PlanCard } from "./PlanCard";
+import { PullRequestSection } from "./PullRequestSection";
+import type { SessionInfo } from "./Timeline";
 
 const SMALL_BUTTON = "shrink-0 cursor-pointer rounded-full bg-fill px-2.5 py-0.5 text-xs font-medium";
 
@@ -74,7 +79,9 @@ function InfoRow({ label, children, testId }: { label: string; children: string;
   );
 }
 
-export function ChangesPanel({ id, view, sandboxRunning, sha, onHide, mode = "code", motion = "" }: { id: string; view: SessionView; sandboxRunning: boolean; sha: string; onHide: () => void; mode?: "code" | "review" | "task"; motion?: string }) {
+/** What the agent hands over, on the right: its plan, the pull request (or the finish approval), the changes, the sandbox. */
+export function ChangesPanel({ view, status, session, send, update, sandboxRunning, sha, onHide, mode = "code", motion = "" }: { view: SessionView; status: Status; session: SessionInfo; send: (f: ClientFrame) => boolean; update: (fn: (v: SessionView) => SessionView) => void; sandboxRunning: boolean; sha: string; onHide: () => void; mode?: "code" | "review" | "task"; motion?: string }) {
+  const id = session.id;
   const task = mode === "task";
   const changes = task ? view.changes.filter((c) => isDeliverable(c.path)) : view.changes;
   const totals = changeTotals(changes);
@@ -83,13 +90,18 @@ export function ChangesPanel({ id, view, sandboxRunning, sha, onHide, mode = "co
   return (
     <aside
       aria-label={task ? "Files" : "Changes"}
-      className={`min-h-0 min-w-0 shrink-0 overflow-y-auto border-l border-black/10 px-5 pt-4 pb-[calc(var(--bar-h,116px)+60px)] ${wide ? "w-[min(520px,45%)]" : "w-[400px]"} ${motion}`}
+      className={`min-h-0 min-w-0 shrink-0 overflow-y-auto border-l border-black/10 px-5 pt-4 pb-6 ${wide ? "w-[min(520px,45%)]" : "w-[400px]"} ${motion}`}
     >
-      {task && <div className="mb-3 text-xs text-text-secondary">{TASK_FORMAT_NOTE}</div>}
+      <div className="mb-3 flex justify-end">
+        <button type="button" onClick={onHide} className={SMALL_BUTTON}>
+          {task ? "Hide files" : "Hide changes"}
+        </button>
+      </div>
+      {view.plan && <PlanCard plan={view.plan} active={status === "running"} />}
+      <PullRequestSection view={view} status={status} session={session} send={send} update={update} />
       <div className="mb-3 flex items-baseline justify-between">
-        <h2 className="text-[15px] font-semibold">{task ? "Files" : "Changes"}</h2>
-        <span className="flex items-baseline gap-3 text-xs text-text-secondary">
-          <span>
+        <h2 className="text-[13px] font-semibold">{task ? "Files" : "Changes"}</h2>
+        <span className="text-xs text-text-secondary">
           {totals.files === 0 ? (
             "None yet"
           ) : (
@@ -98,12 +110,9 @@ export function ChangesPanel({ id, view, sandboxRunning, sha, onHide, mode = "co
               <span className="text-done-text">+{totals.additions}</span> <span className="text-failed">−{totals.deletions}</span>
             </>
           )}
-          </span>
-          <button type="button" onClick={onHide} className={SMALL_BUTTON}>
-            {task ? "Hide files" : "Hide changes"}
-          </button>
         </span>
       </div>
+      {task && <div className="mb-3 text-xs text-text-secondary">{TASK_FORMAT_NOTE}</div>}
       {!task && view.testPaths.length > 0 && (
         <div className="mb-3 rounded-xl bg-warning-bg p-3 text-xs text-warning-text">
           <div className="font-semibold">This change edits a test</div>

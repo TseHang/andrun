@@ -16,6 +16,8 @@ export interface SessionInfo {
   pr: number | null;
   /** The pull request was merged or closed: the session takes no more messages (A26). */
   closed?: boolean;
+  /** A review: its summary belongs to the post bar, not the conversation. */
+  review?: boolean;
 }
 
 const GITHUB_LINK = (url: string) => (
@@ -60,6 +62,16 @@ function Item({ item, session, latest, live }: { item: TimelineItem; session: Se
       return (
         <div data-item="routed" className="my-3 pl-6 text-xs text-text-secondary">
           Auto · {item.task === "complex" ? "complex task" : "daily coding"} → <span className="font-mono text-[11px]">{modelLabel(item.model)}</span> · {item.reasoning}
+        </div>
+      );
+    case "summary":
+      if (session.review) return null;
+      return (
+        <div data-item="summary" className="my-3 flex items-start gap-2">
+          <span role="img" aria-label="&run" className="w-4 shrink-0 text-[15px] leading-relaxed font-semibold text-accent">&</span>
+          <div className="min-w-0 grow">
+            <Markdown text={item.text} />
+          </div>
         </div>
       );
     case "question":

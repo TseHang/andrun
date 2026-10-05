@@ -3,8 +3,6 @@ import type { ClientFrame } from "../../../src/session/protocol";
 import { addPending, type SessionView } from "../state/reducer";
 import { ChatInput } from "./ChatInput";
 
-/** What "Open pull request" sends: the agent answers by finishing, which asks for approval. */
-const OPEN_PR = "Open a pull request for these changes.";
 const BAR = "pointer-events-auto rounded-2xl border border-black/10 bg-white/80 px-4 py-2.5 shadow-lg backdrop-blur-xl";
 
 /** In the composer's place once the session's pull request is merged or closed: nothing more can be sent (A26). */
@@ -21,7 +19,8 @@ export function ClosedBar({ pr }: { pr: { number: number; state: "merged" | "clo
   );
 }
 
-export function Composer({ view, running, waiting, code, send, update }: { view: SessionView; running: boolean; waiting: boolean; code: boolean; send: (f: ClientFrame) => boolean; update: (fn: (v: SessionView) => SessionView) => void }) {
+/** `finishing`: the agent waits for the finish approval in the side panel; a message here asks for changes instead. */
+export function Composer({ view, running, waiting, finishing = false, send, update }: { view: SessionView; running: boolean; waiting: boolean; finishing?: boolean; send: (f: ClientFrame) => boolean; update: (fn: (v: SessionView) => SessionView) => void }) {
   const [text, setText] = useState("");
   // Stop was pressed: it takes effect at the agent's next check, and a second frame would only be refused.
   const [stopping, setStopping] = useState(false);
@@ -51,18 +50,9 @@ export function Composer({ view, running, waiting, code, send, update }: { view:
           aria-label="Message to the agent"
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={running ? "Redirect the agent" : waiting ? "Reply to the agent" : view.posted ? "Ask &run for another look" : "Send a message to continue"}
+          placeholder={running ? "Redirect the agent" : finishing ? "Ask for changes instead" : waiting ? "Reply to the agent" : view.posted ? "Ask &run for another look" : "Send a message to continue"}
           className="min-w-0 grow"
         />
-        {waiting && code && view.changes.length > 0 && (
-          <button
-            type="button"
-            onClick={() => void send({ type: "message", text: OPEN_PR })}
-            className="press h-9 shrink-0 cursor-pointer rounded-[10px] bg-black/6 px-4 text-[13px] font-semibold text-text"
-          >
-            Open pull request
-          </button>
-        )}
         {running && (
           <button
             type="button"

@@ -37,6 +37,8 @@ export type TimelineItem =
   | { key: string; kind: "routed"; task: "daily" | "complex"; model: string; reasoning: string }
   | { key: string; kind: "steps"; rows: StepRow[] }
   | { key: string; kind: "question"; question: string }
+  /** What the agent says it did when it asks to finish: its last word in the conversation. */
+  | { key: string; kind: "summary"; text: string }
   | { key: string; kind: "notice"; title: string; message: string }
   | { key: string; kind: "failure"; source: ErrorSource; title: string; message: string; next?: string }
   | { key: string; kind: "approved"; finish: boolean }
@@ -363,7 +365,10 @@ function apply(view: SessionView, ev: AgentEvent): SessionView {
     }
     case "approval_required": {
       const next = ev.diffSummary ? withChanges(view, fromSummary(view.changes, ev.diffSummary)) : view;
-      return { ...next, gate: gateFor(view, ev) };
+      const key = `sum:${ev.approvalId}`;
+      const text = ev.tool === "finish" ? ev.summary?.trim() : undefined;
+      const items = text && !next.items.some((i) => i.key === key) ? [...next.items, { key, kind: "summary" as const, text }] : next.items;
+      return { ...next, items, gate: gateFor(view, ev) };
     }
     case "approval_resolved": {
       let items = view.items;

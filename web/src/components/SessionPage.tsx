@@ -10,7 +10,6 @@ import { ChangesPanel } from "./ChangesPanel";
 import { ClosedBar, Composer } from "./Composer";
 import { DeleteDialog } from "./DeleteDialog";
 import { Enter, isLive } from "./Enter";
-import { PlanCard } from "./PlanCard";
 import { QuestionCard } from "./QuestionCard";
 import { PostBar } from "./ReviewBars";
 import { ReviewBody } from "./ReviewSession";
@@ -72,7 +71,7 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
   // Merged or closed on GitHub: nothing more is sent from here (A26). A run that is still going keeps its Stop button.
   const closedPr = snap.pr && snap.pr.state !== "open" ? { number: snap.pr.number, state: snap.pr.state } : null;
   const closed = closedPr !== null && status !== "running" ? closedPr : null;
-  const session = { id, code: snap.mode === "code", baseBranch: snap.baseBranch, pr: snap.pr?.number ?? null, closed: closed !== null };
+  const session = { id, code: snap.mode === "code", baseBranch: snap.baseBranch, pr: snap.pr?.number ?? null, closed: closed !== null, review };
 
   // Re-read the snapshot (sandboxRunning) and the list after each status change.
   const first = useRef(true);
@@ -148,23 +147,20 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
   };
 
   const live = isLive(view);
+  // The agent asks to finish: the approval is in the side panel, and a message asks for changes instead.
+  const finishing = !review && !closed && view.gate?.tool === "finish" && status === "awaiting_approval";
   const barEl = (
     <div ref={bar} data-slot="floating-bar" className="pointer-events-none absolute bottom-5 left-7 right-5">
-      {!review && view.plan && (
-        <div className="mb-2">
-          <PlanCard plan={view.plan} active={status === "running"} />
-        </div>
-      )}
       {closed ? (
         <Enter key="closed" live={live} motion="enter-bar">
           <ClosedBar pr={closed} />
         </Enter>
-      ) : view.gate && status === "awaiting_approval" ? (
+      ) : view.gate && status === "awaiting_approval" && (review || view.gate.tool !== "finish") ? (
         <Enter key={`gate:${view.gate.approvalId}`} live={live} motion="enter-bar">
           {review && view.gate.tool === "finish" ? (
             <PostBar view={view} gate={view.gate} send={send} update={update} />
           ) : (
-            <ApprovalBar view={view} gate={view.gate} session={session} send={send} update={update} />
+            <ApprovalBar view={view} gate={view.gate} send={send} update={update} />
           )}
         </Enter>
       ) : !review && view.question && status === "awaiting_input" ? (
@@ -173,7 +169,7 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
         </Enter>
       ) : (
         <Enter key="composer" live={live} motion="enter-bar">
-          <Composer view={view} running={status === "running"} waiting={status === "awaiting_input"} code={snap.mode === "code"} send={send} update={update} />
+          <Composer view={view} running={status === "running"} waiting={status === "awaiting_input"} finishing={finishing} send={send} update={update} />
         </Enter>
       )}
     </div>
@@ -195,19 +191,35 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
           <ReviewBody view={view} status={closed && status === "awaiting_approval" ? "done" : status} session={session} pr={snap.pr?.number ?? null} send={send} bar={barEl} />
         ) : (
           <>
-            <Timeline view={view} session={session} />
+            {/* The composer floats over the conversation only, as in a review: the side panel keeps its full height. */}
+            <div className="relative flex min-h-0 min-w-0 grow">
+              <Timeline view={view} session={session} />
+              {barEl}
+            </div>
             {changesHidden ? (
               <div className="pointer-events-none absolute top-3 right-5 z-10">
-                <button type="button" onClick={() => setChangesHidden(false)} className="pointer-events-auto cursor-pointer rounded-full bg-fill px-3 py-1 text-xs font-medium">
-                  {snap.mode === "task" ? `Show files · ${view.changes.filter((c) => isDeliverable(c.path)).length}` : view.changes.length > 0 ? `Show changes · ${changeTotals(view.changes).files}` : "Show changes"}
+                {/* The approval waits in the hidden panel: the way back says so. */}
+                <button
+                  type="button"
+                  onClick={() => setChangesHidden(false)}
+                  className={`press pointer-events-auto cursor-pointer rounded-full px-3 py-1 text-xs font-medium ${finishing ? "bg-accent text-white" : "bg-fill"}`}
+                >
+                  {finishing
+                    ? snap.mode === "task"
+                      ? "Approve to finish"
+                      : "Open pull request"
+                    : snap.mode === "task"
+                      ? `Show files · ${view.changes.filter((c) => isDeliverable(c.path)).length}`
+                      : view.changes.length > 0
+                        ? `Show changes · ${changeTotals(view.changes).files}`
+                        : "Show changes"}
                 </button>
               </div>
             ) : (
-              <ChangesPanel motion={changesReopened ? "side-in" : ""} id={id} mode={snap.mode} view={view} sandboxRunning={snap.sandboxRunning} sha={snap.sha} onHide={() => setChangesHidden(true)} />
+              <ChangesPanel motion={changesReopened ? "side-in" : ""} session={session} status={status} send={send} update={update} mode={snap.mode} view={view} sandboxRunning={snap.sandboxRunning} sha={snap.sha} onHide={() => setChangesHidden(true)} />
             )}
           </>
         )}
-        {!review && barEl}
       </div>
       {confirming && <DeleteDialog busy={busy} error={error} onCancel={close} onConfirm={() => void confirm()} />}
     </main>
