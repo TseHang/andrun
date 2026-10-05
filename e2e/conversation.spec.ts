@@ -35,7 +35,7 @@ test("a question is answered by picking an option", async ({ page, request }) =>
   await options.nth(0).click();
   await expect(bubbles(page)).toHaveText([`[choose] ${TASK}`, "Fix the loop bound"]);
   await expect(q).toHaveCount(0);
-  await expect(s.approval).toContainText("Approval required · finish", { timeout: 90_000 });
+  await expect(s.approval).toContainText("The agent is done", { timeout: 90_000 });
   await expect(s.rows("apply_patch")).toHaveCount(1);
 });
 
@@ -52,7 +52,7 @@ test("a question is answered with typed text", async ({ page, request }) => {
   await send.click();
   await expect(bubbles(page)).toHaveText([`[choose] ${TASK}`, "Neither, make it tic-tac-toe"]);
   await expect(q).toHaveCount(0);
-  await expect(s.approval).toContainText("Approval required · finish", { timeout: 90_000 });
+  await expect(s.approval).toContainText("The agent is done", { timeout: 90_000 });
 });
 
 test("an open question survives a reload", async ({ page, request }) => {
@@ -81,13 +81,13 @@ test("a text reply waits for the user, then the run goes on to a pull request", 
   const input = s.composer.getByRole("textbox", { name: "Message to the agent" });
   await expect(input).toHaveAttribute("placeholder", "Reply to the agent");
   // Nothing changed yet, so there is no pull request to ask for.
-  await expect(s.composer.getByRole("button", { name: "Open pull request" })).toHaveCount(0);
+  await expect(s.changes.getByRole("button", { name: "Open pull request" })).toHaveCount(0);
   await expect(s.rows()).toHaveCount(1); // sandbox setup only: the agent did not start on its own
 
   await input.fill("Go with the first one");
   await s.composer.getByRole("button", { name: "Send" }).click();
   await expect(bubbles(page)).toHaveText([`[chat] ${TASK}`, "Go with the first one"]);
-  await expect(s.approval).toContainText("Approval required · finish", { timeout: 90_000 });
+  await expect(s.approval).toContainText("The agent is done", { timeout: 90_000 });
   await s.approval.getByRole("button", { name: "Approve and open PR" }).click();
   await expect(s.status).toHaveText("Done");
   await expect(s.prCard).toContainText(/Pull request #\d+ opened/);
@@ -101,7 +101,8 @@ test("Open pull request asks the agent to finish", async ({ page, request }) => 
   await expect(s.status).toHaveText("Waiting for you", { timeout: 90_000 });
   await expect(s.timeline).toContainText("Fixed the loop bound. Do you want anything else?");
   await expect(s.changes).toContainText("src/sum.js");
-  await s.composer.getByRole("button", { name: "Open pull request" }).click();
+  // The action is in the side panel; the composer stays for the conversation.
+  await s.changes.getByRole("button", { name: "Open pull request" }).click();
   await expect(bubbles(page)).toHaveText([`[stop] ${TASK}`, "Open a pull request for these changes."]);
-  await expect(s.approval).toContainText("Approval required · finish", { timeout: 90_000 });
+  await expect(s.approval).toContainText("The agent is done", { timeout: 90_000 });
 });

@@ -37,6 +37,8 @@ export type TimelineItem =
   | { key: string; kind: "routed"; task: "daily" | "complex"; model: string; reasoning: string }
   | { key: string; kind: "steps"; rows: StepRow[] }
   | { key: string; kind: "question"; question: string }
+  /** What the agent says it did when it asks to finish: its last word in the conversation. */
+  | { key: string; kind: "summary"; text: string }
   | { key: string; kind: "notice"; title: string; message: string }
   | { key: string; kind: "failure"; source: ErrorSource; title: string; message: string; next?: string }
   | { key: string; kind: "approved"; finish: boolean }
@@ -81,6 +83,8 @@ export interface FindingView {
 
 export interface SessionView {
   lastSeq: number;
+  /** When the last event was written (server clock): a recent one arrived live, an old one is a replay. */
+  lastTs: number;
   status: Status | null;
   items: TimelineItem[];
   gate: GateView | null;
@@ -106,6 +110,7 @@ export interface SessionView {
 export function initialView(): SessionView {
   return {
     lastSeq: 0,
+    lastTs: 0,
     status: null,
     items: [],
     gate: null,
@@ -145,7 +150,7 @@ export function dropStreaming(view: SessionView): SessionView {
 export function reduce(view: SessionView, frame: ServerFrame): SessionView {
   if (frame.type === "rejected") return { ...view, sending: false, refused: frame.reason, items: view.items.filter((i) => !(i.kind === "user" && i.pending)) };
   if (frame.seq <= view.lastSeq) return view;
-  return { ...apply(withStep(view, frame), frame), lastSeq: frame.seq };
+  return { ...apply(withStep(view, frame), frame), lastSeq: frame.seq, lastTs: frame.ts };
 }
 
 function withStep(view: SessionView, ev: AgentEvent): SessionView {
@@ -360,7 +365,10 @@ function apply(view: SessionView, ev: AgentEvent): SessionView {
     }
     case "approval_required": {
       const next = ev.diffSummary ? withChanges(view, fromSummary(view.changes, ev.diffSummary)) : view;
-      return { ...next, gate: gateFor(view, ev) };
+      const key = `sum:${ev.approvalId}`;
+      const text = ev.tool === "finish" ? ev.summary?.trim() : undefined;
+      const items = text && !next.items.some((i) => i.key === key) ? [...next.items, { key, kind: "summary" as const, text }] : next.items;
+      return { ...next, items, gate: gateFor(view, ev) };
     }
     case "approval_resolved": {
       let items = view.items;

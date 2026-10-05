@@ -7,8 +7,8 @@ test("the plan is shown, kept across a reload, and unfinished steps are named at
   const id = await createSession(request, `[plan] ${TASK}`);
   await page.goto(`/s/${id}`);
 
-  // Session UI (UI-e): the card sits in the floating bar, above the composer or the approval bar.
-  const plan = page.locator('[data-slot="floating-bar"]').getByRole("region", { name: "Plan" });
+  // The plan sits at the top of the side panel, above the pull request approval.
+  const plan = s.changes.getByRole("region", { name: "Plan" });
   const steps = plan.getByRole("listitem");
   await expect(plan).toBeVisible({ timeout: 60_000 });
   await expect(steps).toHaveCount(3);
@@ -25,11 +25,11 @@ test("the plan is shown, kept across a reload, and unfinished steps are named at
     // The plan is a card, not timeline rows.
     await expect(s.rows("update_plan")).toHaveCount(0);
     await expect(s.rows("apply_patch")).toHaveCount(1);
-    // The card sits above the approval bar, and is no longer in the Changes panel.
+    // The plan is above the approval, and nothing of it floats over the conversation.
     const planBox = (await plan.boundingBox())!;
-    const barBox = (await s.approval.boundingBox())!;
-    expect(planBox.y + planBox.height).toBeLessThanOrEqual(barBox.y);
-    await expect(s.changes.getByRole("region", { name: "Plan" })).toHaveCount(0);
+    const approvalBox = (await s.approval.boundingBox())!;
+    expect(planBox.y + planBox.height).toBeLessThanOrEqual(approvalBox.y);
+    await expect(page.locator('[data-slot="floating-bar"]').getByRole("region", { name: "Plan" })).toHaveCount(0);
     // Its header folds it to one line and opens it again.
     const toggle = plan.getByRole("button", { name: /Plan/ });
     await expect(toggle).toHaveAttribute("aria-expanded", "true");

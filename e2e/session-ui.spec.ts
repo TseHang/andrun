@@ -100,7 +100,8 @@ test("the Changes panel hides and the choice survives a reload", async ({ page, 
   await expect(card(page, "src/sum.js")).toBeVisible();
   const widthBefore = (await s.timeline.boundingBox())!.width;
 
-  await s.changes.getByRole("button", { name: "Hide changes" }).click();
+  // The toggle is in the header, in the same place whether the panel shows or not.
+  await page.getByRole("button", { name: "Hide changes" }).click();
   await expect(s.changes).toHaveCount(0);
   const show = page.getByRole("button", { name: /Show changes/ });
   await expect(show).toBeVisible();
@@ -137,14 +138,16 @@ test("an HTML file can be previewed in a sandboxed frame", async ({ page, reques
   await expect(card(page, "app.js").getByRole("button", { name: "Preview" })).toHaveCount(0);
   await file.getByRole("button", { name: "Preview" }).click();
 
-  const frame = file.locator("iframe");
+  // The preview takes the panel's place, wider, with its own toolbar.
+  const preview = s.changes.locator('[data-preview="index.html"]');
+  const frame = preview.locator("iframe");
   await expect(frame).toHaveAttribute("title", "Preview of index.html");
   await expect(frame).toHaveAttribute("sandbox", "allow-scripts");
   // The page's own script ran, inside the frame.
-  await expect(file.frameLocator("iframe").getByRole("heading")).toHaveText("Hello from the page");
-  await expect(file.locator("[data-diff]")).toHaveCount(0);
+  await expect(preview.frameLocator("iframe").getByRole("heading")).toHaveText("Hello from the page");
+  await expect(file).toHaveCount(0);
   // The frame cannot reach the app.
-  const reach = await file.frameLocator("iframe").locator("body").evaluate(() => {
+  const reach = await preview.frameLocator("iframe").locator("body").evaluate(() => {
     try {
       return String(window.parent.document.title);
     } catch {
@@ -153,7 +156,13 @@ test("an HTML file can be previewed in a sandboxed frame", async ({ page, reques
   });
   expect(reach).toBe("blocked");
 
-  await file.getByRole("button", { name: "Diff" }).click();
-  await expect(file.locator("iframe")).toHaveCount(0);
+  // Full screen keeps the page and Esc leaves it.
+  await preview.getByRole("button", { name: "Full screen" }).click();
+  await expect(page.getByRole("dialog", { name: "Preview of index.html" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  await preview.getByRole("button", { name: "Back to details" }).click();
+  await expect(s.changes.locator("iframe")).toHaveCount(0);
   await expect(file.locator("[data-diff]").first()).toBeVisible();
 });

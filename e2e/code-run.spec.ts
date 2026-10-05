@@ -17,12 +17,13 @@ test("run, watch, approve", async ({ page }) => {
   await expect(s.rows("read_file")).toContainText("src/sum.js");
   await expect(s.rows("apply_patch")).toContainText("src/sum.js");
 
-  // At the gate: the diff and the bar.
+  // At the gate: the diff, and the approval in the side panel.
   await expect(s.changes.getByText("src/sum.js")).toBeVisible();
   await expect(s.changes.locator('[data-diff="del"]')).toHaveCount(1);
   await expect(s.changes.locator('[data-diff="add"]')).toHaveCount(1);
-  await expect(s.approval).toContainText("Approval required · finish");
-  await expect(s.approval).toContainText("Fixed the loop bound in sum()");
+  await expect(s.changes.getByRole("form", { name: "Approval" })).toContainText("The agent is done. Approve to open a pull request.");
+  // The summary is the agent's last message in the conversation.
+  await expect(s.timeline.locator('[data-item="summary"]')).toContainText("Fixed the loop bound in sum()");
   await expect(s.approval.getByRole("button", { name: "Approve and open PR" })).toBeVisible();
   await expect(s.sandbox).toHaveText("Running"); // S19
 
@@ -47,9 +48,12 @@ test("reject with a comment loops back to the gate", async ({ page, request }) =
   await page.goto(`/s/${id}`);
   await expect(s.status).toHaveText("Awaiting approval");
 
-  const seen = await watch(page, ["Sending"]);
-  await s.approval.getByLabel("Comment for the agent").fill("also add a test for the empty array case");
-  await s.approval.getByRole("button", { name: "Send" }).click();
+  // Asking for changes is a message: the composer stays while the approval waits in the side panel.
+  const seen = await watch(page, []);
+  const input = s.composer.getByLabel("Message to the agent");
+  await expect(input).toHaveAttribute("placeholder", "Ask for changes instead");
+  await input.fill("also add a test for the empty array case");
+  await s.composer.getByRole("button", { name: "Send" }).click();
 
   await expect(s.timeline.getByText("also add a test for the empty array case", { exact: true })).toBeVisible();
   await expect(s.status).toHaveText("Awaiting approval", { timeout: 60_000 });
@@ -57,7 +61,6 @@ test("reject with a comment loops back to the gate", async ({ page, request }) =
   await expect(s.changes).toContainText("new file");
   await expect(s.changes).toContainText("This change edits a test");
   const got = await seen();
-  expect(got).toContain("Sending");
   expect(got).toContain("status:Running");
 });
 

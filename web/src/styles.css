@@ -22,6 +22,10 @@
 
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 body {
@@ -64,13 +68,120 @@ input:focus-visible {
   }
 }
 
-@keyframes pulse-dot {
+/* The "&" while the agent works: a slow breath, not a spinner. */
+@keyframes breathe {
   0%,
-  80%,
   100% {
-    opacity: 0.25;
+    opacity: 0.45;
+    transform: scale(0.94);
   }
-  40% {
+  50% {
     opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* A light that sweeps across a label while it is still true ("Thinking", "Reasoning…"). */
+.shimmer {
+  background: linear-gradient(90deg, var(--color-text-tertiary) 40%, var(--color-text) 50%, var(--color-text-tertiary) 60%) 0 0 / 250% 100%;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 2s linear infinite;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+
+/* Something that arrived live (never on a replay): rises 4px into place. */
+.enter {
+  animation: enter 180ms var(--ease-out);
+}
+
+/* A bar that takes the composer's place: rises from where the composer sits. */
+.enter-bar {
+  animation: enter-bar 240ms var(--ease-drawer);
+}
+
+/* The one moment worth a little more: a run approved, a pull request opened. */
+.enter-slow {
+  animation: enter 300ms var(--ease-out);
+}
+
+.enter-slow [data-pop] {
+  display: inline-block;
+  animation: pop 300ms var(--ease-out);
+}
+
+/* A label that changed in place (Code and Task): the old one is gone, the new one comes into focus. */
+.swap {
+  animation: swap 150ms var(--ease-out);
+}
+
+.side-in {
+  animation: side-in 200ms var(--ease-out);
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes enter-bar {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+}
+
+@keyframes swap {
+  from {
+    opacity: 0;
+    filter: blur(2px);
+  }
+}
+
+@keyframes side-in {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+}
+
+/* Pressable actions answer the press. */
+.press {
+  transition: transform 160ms var(--ease-out);
+}
+
+.press:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shimmer {
+    background: none;
+    color: var(--color-text-secondary);
+  }
+
+  .press:active:not(:disabled) {
+    transform: none;
   }
 }

@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, type ReactNode } from "react";
 import type { SessionView, TimelineItem } from "../state/reducer";
 import { activityLabel, modelLabel, prTarget, usageLine } from "../state/format";
 import { Activity } from "./Activity";
+import { Enter, isLive } from "./Enter";
 import { Markdown } from "./Markdown";
 import { StepGroup } from "./StepGroup";
 
@@ -15,6 +16,8 @@ export interface SessionInfo {
   pr: number | null;
   /** The pull request was merged or closed: the session takes no more messages (A26). */
   closed?: boolean;
+  /** A review: its summary belongs to the post bar, not the conversation. */
+  review?: boolean;
 }
 
 const GITHUB_LINK = (url: string) => (
@@ -24,7 +27,7 @@ const GITHUB_LINK = (url: string) => (
 );
 
 /** `latest`: the last posted review, which says how the review goes on. */
-function Item({ item, session, latest }: { item: TimelineItem; session: SessionInfo; latest: boolean }) {
+function Item({ item, session, latest, live }: { item: TimelineItem; session: SessionInfo; latest: boolean; live: boolean }) {
   switch (item.kind) {
     case "user":
       return (
@@ -51,7 +54,7 @@ function Item({ item, session, latest }: { item: TimelineItem; session: SessionI
     case "reasoning":
       return (
         <details data-item="reasoning" open={item.streaming} className="my-3 pl-6 text-xs text-text-secondary">
-          <summary className="cursor-pointer select-none">{item.streaming ? "Reasoning…" : "Reasoning"}</summary>
+          <summary className="cursor-pointer select-none">{item.streaming ? <span className="shimmer">Reasoning…</span> : "Reasoning"}</summary>
           <div className="mt-1.5 border-l-2 border-black/10 pl-3 leading-relaxed break-words whitespace-pre-wrap text-text-tertiary">{item.text}</div>
         </details>
       );
@@ -61,6 +64,16 @@ function Item({ item, session, latest }: { item: TimelineItem; session: SessionI
           Auto · {item.task === "complex" ? "complex task" : "daily coding"} → <span className="font-mono text-[11px]">{modelLabel(item.model)}</span> · {item.reasoning}
         </div>
       );
+    case "summary":
+      if (session.review) return null;
+      return (
+        <div data-item="summary" className="my-3 flex items-start gap-2">
+          <span role="img" aria-label="&run" className="w-4 shrink-0 text-[15px] leading-relaxed font-semibold text-accent">&</span>
+          <div className="min-w-0 grow">
+            <Markdown text={item.text} />
+          </div>
+        </div>
+      );
     case "question":
       return (
         <div className="my-3">
@@ -68,7 +81,7 @@ function Item({ item, session, latest }: { item: TimelineItem; session: SessionI
         </div>
       );
     case "steps":
-      return <StepGroup rows={item.rows} />;
+      return <StepGroup rows={item.rows} live={live} />;
     case "notice":
       return (
         <div className="my-3 rounded-xl bg-sidebar p-3.5">
@@ -113,7 +126,7 @@ function Item({ item, session, latest }: { item: TimelineItem; session: SessionI
         <div className="my-4 flex items-center gap-3 text-xs text-text-secondary">
           <div className="h-px grow bg-black/10" />
           <span className="flex items-center gap-1">
-            <span aria-hidden="true" className="text-done">✓</span>Approved
+            <span aria-hidden="true" data-pop className="text-done">✓</span>Approved
           </span>
           <div className="h-px grow bg-black/10" />
         </div>
@@ -134,15 +147,16 @@ export function Timeline({ view, session, before, after }: { view: SessionView; 
 
   const activity = activityLabel(view);
   const lastPosted = view.items.filter((i) => i.kind === "review_posted").at(-1);
+  const live = isLive(view);
   return (
     <section aria-label="Timeline" ref={ref} className="min-h-0 min-w-0 grow overflow-y-auto">
       <div className="mx-auto max-w-[720px] px-6 pt-4 pb-[calc(var(--bar-h,116px)+60px)]">
         {before}
         {view.items.map((item, i) => (
-          <div key={item.key}>
-            <Item item={item} session={session} latest={item === lastPosted} />
+          <Enter key={item.key} live={live} motion={item.kind === "approved" || item.kind === "pr" ? "enter-slow" : "enter"}>
+            <Item item={item} session={session} latest={item === lastPosted} live={live} />
             {session.code && item.kind === "approved" && item.finish && view.items[i + 1]?.kind !== "pr" && <p className="text-center text-xs text-text-secondary">{NOTE}</p>}
-          </div>
+          </Enter>
         ))}
         {activity && <Activity label={activity} />}
         {after}

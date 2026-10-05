@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { StepRow } from "../state/reducer";
 import { rowSummary, rowTone } from "../state/format";
+import { Enter } from "./Enter";
 import { Spinner } from "./Spinner";
 
 const TONE = { failed: "text-failed", ok: "text-done-text", muted: "text-text-secondary" };
@@ -44,11 +45,18 @@ function Row({ row }: { row: StepRow }) {
   );
 }
 
-export function StepGroup({ rows }: { rows: StepRow[] }) {
+export function StepGroup({ rows, live = false }: { rows: StepRow[]; live?: boolean }) {
+  // The group's first rows come in with the group; only rows added later enter on their own.
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+  }, []);
   return (
     <div className="my-3 divide-y divide-white rounded-xl bg-sidebar py-0.5">
       {rows.map((r) => (
-        <Row key={r.callId} row={r} />
+        <Enter key={r.callId} live={live && mounted.current}>
+          <Row row={r} />
+        </Enter>
       ))}
     </div>
   );

@@ -1,16 +1,22 @@
 import { useState } from "react";
 import { getFile } from "../api";
+import type { Status } from "../../../src/core/events";
+import type { ClientFrame } from "../../../src/session/protocol";
 import type { SessionView } from "../state/reducer";
 import { parseDiff } from "../state/diff";
 import { changeTotals, firstLine, isPreviewable, isDeliverable, TASK_FORMAT_NOTE } from "../state/format";
 import { DiffView } from "./DiffView";
-import { HtmlPreview } from "./HtmlPreview";
+import { PreviewPane } from "./HtmlPreview";
+import { BoxIcon, DownloadIcon, EyeIcon, FileIcon } from "./Icons";
+import { PlanCard } from "./PlanCard";
+import { PullRequestSection } from "./PullRequestSection";
+import { SectionTitle } from "./SectionTitle";
+import type { SessionInfo } from "./Timeline";
 
-const SMALL_BUTTON = "shrink-0 cursor-pointer rounded-full bg-fill px-2.5 py-0.5 text-xs font-medium";
+const SMALL_BUTTON = "press flex shrink-0 cursor-pointer items-center gap-1 rounded-full bg-fill px-2.5 py-0.5 font-sans text-xs font-medium";
 
-function Card({ sessionId, change, task }: { sessionId: string; change: SessionView["changes"][number]; task: boolean }) {
+function Card({ sessionId, change, task, onPreview }: { sessionId: string; change: SessionView["changes"][number]; task: boolean; onPreview: () => void }) {
   const [open, setOpen] = useState(true);
-  const [preview, setPreview] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const download = async () => {
     setDownloadError(null);
@@ -42,11 +48,15 @@ function Card({ sessionId, change, task }: { sessionId: string; change: SessionV
           <span className="shrink-0 text-text-secondary">{isNew ? `new file · +${change.additions}` : `+${change.additions} −${change.deletions}`}</span>
         </button>
         {task && saved && !deleted && (
-          <button type="button" onClick={() => void download()} className={SMALL_BUTTON}>Download</button>
+          <button type="button" onClick={() => void download()} className={SMALL_BUTTON}>
+            <DownloadIcon />
+            Download
+          </button>
         )}
         {canPreview && (
-          <button type="button" onClick={() => setPreview(!preview)} className={SMALL_BUTTON}>
-            {preview ? "Diff" : "Preview"}
+          <button type="button" onClick={onPreview} className={SMALL_BUTTON}>
+            <EyeIcon />
+            Preview
           </button>
         )}
       </div>
@@ -56,8 +66,6 @@ function Card({ sessionId, change, task }: { sessionId: string; change: SessionV
           <div className="px-3 py-2.5 text-xs text-text-secondary">{change.unavailableReason ?? "Too large to save (over 1 MB)"}</div>
         ) : change.diff === null ? (
           <div className="px-3 py-2.5 text-xs text-text-secondary">Changed by a command. Diff not available.</div>
-        ) : canPreview && preview ? (
-          <HtmlPreview load={() => getFile(sessionId, change.path)} path={change.path} version={change.diff} />
         ) : (
           <DiffView diff={change.diff} />
         ))}
@@ -74,36 +82,47 @@ function InfoRow({ label, children, testId }: { label: string; children: string;
   );
 }
 
-export function ChangesPanel({ id, view, sandboxRunning, sha, onHide, mode = "code" }: { id: string; view: SessionView; sandboxRunning: boolean; sha: string; onHide: () => void; mode?: "code" | "review" | "task" }) {
+/**
+ * What the agent hands over, on the right: its plan, the pull request (or the finish approval), the changes, the sandbox.
+ * `preview` names an HTML file shown in the panel's place, wider, until Back.
+ */
+export function ChangesPanel({ view, status, session, send, update, sandboxRunning, sha, preview = null, onPreview = () => {}, mode = "code", motion = "" }: { view: SessionView; status: Status; session: SessionInfo; send: (f: ClientFrame) => boolean; update: (fn: (v: SessionView) => SessionView) => void; sandboxRunning: boolean; sha: string; preview?: string | null; onPreview?: (path: string | null) => void; mode?: "code" | "review" | "task"; motion?: string }) {
+  const id = session.id;
   const task = mode === "task";
   const changes = task ? view.changes.filter((c) => isDeliverable(c.path)) : view.changes;
   const totals = changeTotals(changes);
   const wide = changes.length > 0 || view.gate !== null;
   const last = view.lastCommand;
+  const label = task ? "Files" : "Changes";
+
+  const shown = preview === null ? undefined : changes.find((c) => c.path === preview && c.diff !== null);
+  if (shown) {
+    return (
+      <aside aria-label={label} className={`flex min-h-0 min-w-0 w-[55%] shrink-0 flex-col border-l border-black/10 p-4 ${motion}`}>
+        <PreviewPane load={() => getFile(id, shown.path)} path={shown.path} version={shown.diff!} onBack={() => onPreview(null)} />
+      </aside>
+    );
+  }
+
   return (
-    <aside
-      aria-label={task ? "Files" : "Changes"}
-      className={`min-h-0 min-w-0 shrink-0 overflow-y-auto border-l border-black/10 px-5 pt-4 pb-[calc(var(--bar-h,116px)+60px)] ${wide ? "w-[min(520px,45%)]" : "w-[400px]"}`}
-    >
-      {task && <div className="mb-3 text-xs text-text-secondary">{TASK_FORMAT_NOTE}</div>}
-      <div className="mb-3 flex items-baseline justify-between">
-        <h2 className="text-[15px] font-semibold">{task ? "Files" : "Changes"}</h2>
-        <span className="flex items-baseline gap-3 text-xs text-text-secondary">
-          <span>
-          {totals.files === 0 ? (
+    <aside aria-label={label} className={`min-h-0 min-w-0 shrink-0 overflow-y-auto border-l border-black/10 px-5 pt-4 pb-6 ${wide ? "w-[min(520px,45%)]" : "w-[400px]"} ${motion}`}>
+      {view.plan && <PlanCard plan={view.plan} active={status === "running"} />}
+      <PullRequestSection view={view} status={status} session={session} send={send} update={update} />
+      <SectionTitle
+        icon={<FileIcon />}
+        title={label}
+        meta={
+          totals.files === 0 ? (
             "None yet"
           ) : (
             <>
               {`${totals.files} ${totals.files === 1 ? "file" : "files"} · `}
               <span className="text-done-text">+{totals.additions}</span> <span className="text-failed">−{totals.deletions}</span>
             </>
-          )}
-          </span>
-          <button type="button" onClick={onHide} className={SMALL_BUTTON}>
-            {task ? "Hide files" : "Hide changes"}
-          </button>
-        </span>
-      </div>
+          )
+        }
+      />
+      {task && <div className="mb-3 text-xs text-text-secondary">{TASK_FORMAT_NOTE}</div>}
       {!task && view.testPaths.length > 0 && (
         <div className="mb-3 rounded-xl bg-warning-bg p-3 text-xs text-warning-text">
           <div className="font-semibold">This change edits a test</div>
@@ -116,10 +135,13 @@ export function ChangesPanel({ id, view, sandboxRunning, sha, onHide, mode = "co
           <div className="mt-1 text-xs text-text-secondary">{task ? "Deliverable files appear here as the agent writes them." : "Diffs appear here as the agent edits files."}</div>
         </div>
       ) : (
-        changes.map((c) => <Card key={c.path} sessionId={id} change={c} task={task} />)
+        changes.map((c) => <Card key={c.path} sessionId={id} change={c} task={task} onPreview={() => onPreview(c.path)} />)
       )}
+      <div className="mt-5">
+        <SectionTitle icon={<BoxIcon />} title="Environment" />
+      </div>
       {last && (
-        <div className="mb-4 flex items-baseline gap-1.5 text-xs text-text-secondary">
+        <div className="mb-2 flex items-baseline gap-1.5 text-xs text-text-secondary">
           <span className="shrink-0">Last command:</span>
           <code title={last.command} className="min-w-0 truncate font-mono text-text">{firstLine(last.command)}</code>
           <span className={`shrink-0 ${last.exitCode === 0 ? "text-done-text" : "text-failed"}`}>· exit {last.exitCode === null ? "timed out" : last.exitCode}</span>

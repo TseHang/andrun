@@ -8,6 +8,7 @@ import { PullRequestsPage } from "./components/PullRequestsPage";
 import { ReviewStartPage } from "./components/ReviewStartPage";
 import { Sidebar } from "./components/Sidebar";
 import { App_, type AppContext } from "./context";
+import { usePanelHidden } from "./state/hidden";
 
 export function App() {
   const [config, setConfig] = useState<Config | null>(null);
@@ -16,6 +17,20 @@ export function App() {
   const [stale, setStale] = useState(false);
   const [pulls, setPulls] = useState<{ pulls: PullRow[] | null; error: string | null }>({ pulls: null, error: null });
   const [live, setLive] = useState<{ id: string; status: Status } | null>(null);
+  const [sidebarHidden, setSidebarHidden] = usePanelHidden("andrun.sidebar.hidden");
+  const [instant, setInstant] = useState(false);
+
+  // ⌘\ (Ctrl+\ elsewhere) shows or hides the sidebar. A key press is instant: no slide on a shortcut.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "\\" || !(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
+      e.preventDefault();
+      setInstant(true);
+      setSidebarHidden(!sidebarHidden);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [sidebarHidden, setSidebarHidden]);
 
   useEffect(() => {
     void getConfig().then(setConfig, () => undefined);
@@ -112,7 +127,19 @@ export function App() {
   return (
     <App_.Provider value={ctx}>
       <div className="flex h-screen min-w-[1024px] overflow-hidden bg-white">
-        <Sidebar sessions={sessions} stale={stale} path={path} live={live} pullCount={pulls.pulls?.length ?? null} />
+        <Sidebar
+          sessions={sessions}
+          stale={stale}
+          path={path}
+          live={live}
+          pullCount={pulls.pulls?.length ?? null}
+          collapsed={sidebarHidden}
+          instant={instant}
+          onToggle={() => {
+            setInstant(false);
+            setSidebarHidden(!sidebarHidden);
+          }}
+        />
         {sessionId ? (
           <SessionPage id={sessionId} />
         ) : onPrs ? (

@@ -14,7 +14,7 @@ type Diff = { kind: "loading" } | { kind: "ready"; pull: PullDetail } | { kind: 
 
 /** The review's body: the pull request, the agent's activity and the findings in one column, the files on the right. `bar` sits under the column. */
 export function ReviewBody({ view, status, session, pr, send, bar }: { view: SessionView; status: Status; session: SessionInfo; pr: number | null; send: (f: ClientFrame) => boolean; bar: ReactNode }) {
-  const [hidden, setHidden] = usePanelHidden("andrun.review.files.hidden");
+  const [hidden, setHidden, reopened] = usePanelHidden("andrun.review.files.hidden");
   const [jump, setJump] = useState<Jump | null>(null);
   const [diff, setDiff] = useState<Diff>({ kind: "loading" });
 
@@ -62,6 +62,7 @@ export function ReviewBody({ view, status, session, pr, send, bar }: { view: Ses
         </div>
       ) : (
         <ReviewFilesPanel
+          motion={reopened ? "side-in" : ""}
           pull={pull}
           findings={kept}
           jump={jump}

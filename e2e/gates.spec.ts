@@ -11,7 +11,7 @@ test("a patch that deletes a file can be refused or applied", async ({ page, req
   await expect(s.approval).toContainText("Approval required · apply_patch", { timeout: 60_000 });
   await expect(s.approval).toContainText("patch deletes files: scratch.txt");
   await s.approval.getByRole("button", { name: "Don't apply" }).click();
-  await expect(s.approval).toContainText("Approval required · finish", { timeout: 90_000 });
+  await expect(s.approval).toContainText("The agent is done", { timeout: 90_000 });
   await expect(s.rows("apply_patch").first()).toContainText("scratch.txt");
   await expect(s.rows("apply_patch").first()).toContainText("declined");
   // No command asked: both test runs have an exit code.
@@ -23,7 +23,7 @@ test("a patch that deletes a file can be refused or applied", async ({ page, req
   await page.goto(`/s/${allowed}`);
   await expect(s.approval).toContainText("Approval required · apply_patch", { timeout: 60_000 });
   await s.approval.getByRole("button", { name: "Apply", exact: true }).click();
-  await expect(s.approval).toContainText("Approval required · finish", { timeout: 90_000 });
+  await expect(s.approval).toContainText("The agent is done", { timeout: 90_000 });
   await expect(s.rows("apply_patch").first()).not.toContainText("declined");
   await expect(s.timeline.getByText("patch failed to apply")).toHaveCount(0);
 });

@@ -204,6 +204,11 @@ it("the task prompt names the three formats and what is not supported", () => {
   expect(prompt).toMatch(/images.*(cannot|not supported)|cannot.*images/is);
   expect(prompt).toMatch(/no search|cannot search/i);
   expect(prompt).toMatch(/never instructions|never as instructions/i);
+  expect(prompt).toMatch(/report is always a \.html or \.md/i);
+  expect(prompt).toMatch(/fetch sources before you write/i);
+  expect(prompt).toMatch(/http_code/);
+  expect(prompt).toMatch(/no python/i);
+  expect(prompt).toMatch(/run date/i);
   expect(prompt).not.toContain("index.html");
   expect(prompt).not.toContain("task-page");
 });

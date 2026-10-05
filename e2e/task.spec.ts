@@ -22,9 +22,15 @@ test("task: a page is written, previewed and downloaded", async ({ page, request
   await expect(files.getByText("Base commit")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Approve and open PR" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Open pull request", exact: true })).toHaveCount(0);
+  // The page also has a card at the end of the conversation, which opens it in the panel.
+  await page.locator('[data-page="index.html"]').getByRole("button", { name: "Open" }).click();
+  const preview = files.locator('[data-preview="index.html"]');
+  await expect(preview.frameLocator("iframe").getByRole("heading")).toHaveText("Hello from Task");
+  await expect(preview.locator("iframe")).toHaveAttribute("sandbox", "allow-scripts");
+  await preview.getByRole("button", { name: "Back to details" }).click();
   await card.getByRole("button", { name: "Preview", exact: true }).click();
-  await expect(card.frameLocator("iframe").getByRole("heading")).toHaveText("Hello from Task");
-  await expect(card.locator("iframe")).toHaveAttribute("sandbox", "allow-scripts");
+  await expect(files.locator('[data-preview="index.html"] iframe')).toBeVisible();
+  await files.getByRole("button", { name: "Back to details" }).click();
   const downloaded = page.waitForEvent("download");
   await card.getByRole("button", { name: "Download", exact: true }).click();
   const download = await downloaded;

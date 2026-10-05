@@ -51,7 +51,8 @@ describe("view state (P3-a)", () => {
     const events = readFileSync(file, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as AgentEvent);
     const v = run(events);
 
-    expect(kinds(v)).toEqual(["user", "steps", "assistant", "steps", "assistant", "steps"]);
+    // The finish summary closes the conversation: it is what the agent says it did.
+    expect(kinds(v)).toEqual(["user", "steps", "assistant", "steps", "assistant", "steps", "summary"]);
     expect(v.items[0]).toMatchObject({ kind: "user", text: "make the failing test pass", pending: false });
     expect(v.items[2]).toMatchObject({ kind: "assistant", text: "Running the tests first.", streaming: false });
     for (const item of v.items) {
@@ -458,8 +459,8 @@ describe("Phase 4: pull requests and reviews", () => {
       e({ type: "approval_resolved", approvalId: "a1", approved: true }),
       e({ type: "status", status: "done" }),
     ]);
-    expect(kinds(v)).toEqual(["approved", "pr"]); // the marker first, then what the approval did
-    expect(v.items[1]).toMatchObject({ kind: "pr", url, number: 12, branch: "agent/1a2b3c4d-1", updated: false });
+    expect(kinds(v)).toEqual(["summary", "approved", "pr"]); // the marker first, then what the approval did
+    expect(v.items[2]).toMatchObject({ kind: "pr", url, number: 12, branch: "agent/1a2b3c4d-1", updated: false });
     expect(v.pr).toEqual({ url, number: 12, branch: "agent/1a2b3c4d-1" });
 
     // Round 2 on the same pull request: a second card, and `pr` stays the same pull request.
@@ -503,8 +504,8 @@ describe("Phase 4: pull requests and reviews", () => {
       e({ type: "approval_resolved", approvalId: "a1", approved: true }),
       e({ type: "status", status: "done" }),
     ]);
-    expect(kinds(v)).toEqual(["review_posted"]); // no "Approved" marker: the card says what happened
-    expect(v.items[0]).toMatchObject({ kind: "review_posted", url, verdict: "REQUEST_CHANGES" });
+    expect(kinds(v)).toEqual(["summary", "review_posted"]); // no "Approved" marker: the card says what happened (the summary shows only outside a review)
+    expect(v.items[1]).toMatchObject({ kind: "review_posted", url, verdict: "REQUEST_CHANGES" });
     expect(v.posted).toEqual({ url, verdict: "REQUEST_CHANGES" });
     expect(v.gate).toBeNull();
     expect(initialView().posted).toBeNull();
