@@ -135,8 +135,8 @@ async function getPullFile(request: Request, env: RouterEnv, n: string): Promise
   const refused = await limited(env.githubReadLimiter, request);
   if (refused) return refused;
   const path = new URL(request.url).searchParams.get("path");
-  // Only what the preview shows: an HTML page. Nothing else of the repo is served here.
-  if (!path || !/\.html?$/i.test(path)) return error(404, "no such file");
+  // Only HTML pages and the JavaScript they can inline for the preview.
+  if (!path || !/\.(html?|js)$/i.test(path)) return error(404, "no such file");
   try {
     const content = await env.github.getPullFile(Number(n), path);
     return content === null ? error(404, "no such file") : json({ path, content });

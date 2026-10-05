@@ -85,7 +85,7 @@ export function FileDiff({ file, findings = [], note, previewPr, jump, defaultOp
       </div>
       {open &&
         (canPreview && preview ? (
-          <PreviewPane inline load={() => getPullFile(previewPr, file.path)} path={file.path} version={file.patch!} />
+          <PreviewPane inline load={() => getPullFile(previewPr, file.path)} loadFile={(path) => getPullFile(previewPr, path)} path={file.path} version={file.patch!} />
         ) : parsed ? (
           <div className="overflow-x-auto py-1.5 font-mono text-[11.5px] leading-[1.6]">
             <div className="min-w-max">

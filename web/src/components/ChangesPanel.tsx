@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getFile } from "../api";
+import { getFile, getPullFile } from "../api";
 import type { Status } from "../../../src/core/events";
 import type { ClientFrame } from "../../../src/session/protocol";
 import type { SessionView } from "../state/reducer";
@@ -100,7 +100,7 @@ export function ChangesPanel({ view, status, session, send, update, sandboxRunni
   if (shown) {
     return (
       <aside aria-label={label} className={`flex min-h-0 min-w-0 w-[55%] shrink-0 flex-col border-l border-black/10 p-4 ${motion}`}>
-        <PreviewPane load={() => getFile(id, shown.path)} path={shown.path} version={shown.diff!} onBack={() => onPreview(null)} />
+        <PreviewPane load={() => getFile(id, shown.path)} loadFile={async (path) => (await getFile(id, path)) ?? (session.pr === null ? null : getPullFile(session.pr, path))} path={shown.path} version={shown.diff!} onBack={() => onPreview(null)} />
       </aside>
     );
   }

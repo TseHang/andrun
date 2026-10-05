@@ -434,7 +434,7 @@ describe("router (Phase 3: P3-c, P3-d)", () => {
 
   it("reads a file of a pull request at its head commit", async () => {
     const f = withPulls();
-    f.fake.pulls.find((p) => p.number === 14)!.contents = { "index.html": "<h1>hi</h1>\n" };
+    f.fake.pulls.find((p) => p.number === 14)!.contents = { "index.html": "<h1>hi</h1>\n", "src/snake.js": "window.Snake = {};" };
     f.fake.addPull({ number: 16, title: "From a fork", headRef: "patch-1", user: "stranger", headRepo: "stranger/andrun-demo", contents: { "index.html": "<h1>fork</h1>" } });
 
     const res = await handle(req("GET", "/pulls/14/files?path=index.html"), f.env);
@@ -447,9 +447,12 @@ describe("router (Phase 3: P3-c, P3-d)", () => {
     await expectError(await handle(req("GET", "/pulls/14/files"), f.env), 404, /^no such file$/);
     await expectError(await handle(req("GET", "/pulls/14/files?path="), f.env), 404, /^no such file$/);
     await expectError(await handle(req("GET", "/pulls/14/files?path=missing.html"), f.env), 404, /^no such file$/);
-    // Only HTML pages are served: the rest of the repo is not readable through the preview (code review).
+    const script = await handle(req("GET", "/pulls/14/files?path=src/snake.js"), f.env);
+    expect(script.status).toBe(200);
+    expect(await json(script)).toEqual({ path: "src/snake.js", content: "window.Snake = {};" });
+    // Only HTML and JavaScript are served for the preview.
     const asked = f.fake.requests.length;
-    for (const other of ["README.md", ".env", "src/slugify.js", "index.html.txt", "html"]) {
+    for (const other of ["README.md", ".env", "style.css", "index.html.txt", "html"]) {
       await expectError(await handle(req("GET", `/pulls/14/files?path=${other}`), f.env), 404, /^no such file$/);
     }
     expect(f.fake.requests.length).toBe(asked); // refused before any GitHub request

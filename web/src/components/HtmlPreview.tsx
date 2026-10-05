@@ -1,14 +1,15 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { BackIcon, CollapseIcon, ExpandIcon, ReloadIcon } from "./Icons";
+import { inlinePreviewScripts } from "../state/preview";
 
 /** An HTML file's content, isolated in a sandboxed frame. `load` reads it; a new `version` (or `nonce`) loads it again. */
-export function HtmlPreview({ load, path, version, nonce = 0, className = "h-[420px]" }: { load: () => Promise<string | null>; path: string; version: string; nonce?: number; className?: string }) {
+export function HtmlPreview({ load, loadFile, path, version, nonce = 0, className = "h-[420px]" }: { load: () => Promise<string | null>; loadFile?: (path: string) => Promise<string | null>; path: string; version: string; nonce?: number; className?: string }) {
   const [content, setContent] = useState<string | null | undefined>(undefined);
 
   useEffect(() => {
     let current = true;
     setContent(undefined);
-    load().then(
+    load().then((c) => c !== null && loadFile ? inlinePreviewScripts(c, path, loadFile) : c).then(
       (c) => current && setContent(c),
       () => current && setContent(null),
     );
@@ -28,7 +29,7 @@ const TOOL = "press flex size-7 shrink-0 cursor-pointer items-center justify-cen
  * A preview with its own toolbar: back (when it took a panel's place), the file, reload, full screen.
  * Full screen only restyles the same box, so the page in the frame keeps its state. Esc leaves it.
  */
-export function PreviewPane({ load, path, version, onBack, inline = false }: { load: () => Promise<string | null>; path: string; version: string; onBack?: () => void; inline?: boolean }) {
+export function PreviewPane({ load, loadFile, path, version, onBack, inline = false }: { load: () => Promise<string | null>; loadFile?: (path: string) => Promise<string | null>; path: string; version: string; onBack?: () => void; inline?: boolean }) {
   const [nonce, setNonce] = useState(0);
   const [full, setFull] = useState(false);
 
@@ -58,7 +59,8 @@ export function PreviewPane({ load, path, version, onBack, inline = false }: { l
         {button("Reload", <ReloadIcon />, () => setNonce((n) => n + 1))}
         {full ? button("Exit full screen", <CollapseIcon />, () => setFull(false)) : button("Full screen", <ExpandIcon />, () => setFull(true))}
       </div>
-      <HtmlPreview load={load} path={path} version={version} nonce={nonce} className={full || !inline ? "min-h-0 grow" : "h-[60vh]"} />
+      <HtmlPreview load={load} loadFile={loadFile} path={path} version={version} nonce={nonce} className={full || !inline ? "min-h-0 grow" : "h-[60vh]"} />
+      <p className="shrink-0 border-t border-black/8 px-3 py-2 text-[11px] text-text-secondary">Local scripts load from saved files or the PR. Module imports, other local assets and browser storage are not supported.</p>
     </div>
   );
 }
