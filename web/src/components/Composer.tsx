@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ClientFrame } from "../../../src/session/protocol";
 import { addPending, type SessionView } from "../state/reducer";
+import { ChatInput } from "./ChatInput";
 
 /** What "Open pull request" sends: the agent answers by finishing, which asks for approval. */
 const OPEN_PR = "Open a pull request for these changes.";
@@ -45,13 +46,13 @@ export function Composer({ view, running, waiting, code, send, update }: { view:
         submit();
       }}
     >
-      <div className="flex items-center gap-3">
-        <input
+      <div className="flex items-end gap-3">
+        <ChatInput
           aria-label="Message to the agent"
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder={running ? "Redirect the agent" : waiting ? "Reply to the agent" : view.posted ? "Ask &run for another look" : "Send a message to continue"}
-          className="h-9 min-w-0 grow rounded-[10px] bg-black/5 px-3 text-[14px] transition-[background-color,box-shadow] focus:bg-white focus:shadow-[0_0_0_1px_rgba(0,0,0,0.2)]"
+          className="min-w-0 grow"
         />
         {waiting && code && view.changes.length > 0 && (
           <button

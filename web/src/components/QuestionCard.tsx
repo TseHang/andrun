@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { ClientFrame } from "../../../src/session/protocol";
 import type { SessionView } from "../state/reducer";
+import { ChatInput } from "./ChatInput";
 
 type Question = NonNullable<SessionView["question"]>;
 
@@ -50,13 +51,13 @@ export function QuestionCard({ view, question, send }: { view: SessionView; ques
           {view.refused ?? "Not connected. Try again in a moment."}
         </div>
       )}
-      <div className="mt-3 flex items-center gap-2">
-        <input
+      <div className="mt-3 flex items-end gap-2">
+        <ChatInput
           aria-label="Your answer"
           value={answer}
           onChange={(e) => setAnswer(e.target.value)}
           placeholder="Or type your answer"
-          className="h-9 min-w-0 grow rounded-[10px] bg-black/5 px-3 text-[14px] transition-[background-color,box-shadow] focus:bg-white focus:shadow-[0_0_0_1px_rgba(0,0,0,0.2)]"
+          className="min-w-0 grow"
         />
         <button type="submit" disabled={!text || locked} className="press h-9 shrink-0 cursor-pointer rounded-[10px] bg-black/6 px-4 text-[13px] font-semibold text-text disabled:cursor-default disabled:bg-black/4 disabled:text-text-tertiary">
           Send

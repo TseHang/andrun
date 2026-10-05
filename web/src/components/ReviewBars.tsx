@@ -4,6 +4,7 @@ import { EMPTY_REVIEW, MAX_REVIEW_COMMENT_CHARS, type ClientFrame } from "../../
 import { useApp } from "../context";
 import { markSending, type GateView, type SessionView } from "../state/reducer";
 import { Spinner } from "./Spinner";
+import { ChatInput } from "./ChatInput";
 
 const ICON = { width: 14, height: 14, viewBox: "0 0 14 14", fill: "none", stroke: "currentColor", strokeWidth: 1.5, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true, className: "shrink-0" } as const;
 
@@ -58,7 +59,7 @@ export function PostBar({ view, gate, send, update }: { view: SessionView; gate:
   const [body, setBody] = useState("");
   const [offline, setOffline] = useState(false);
   const radios = useRef<(HTMLButtonElement | null)[]>([]);
-  const input = useRef<HTMLInputElement>(null);
+  const input = useRef<HTMLTextAreaElement>(null);
   const text = comment.trim();
   const sending = view.sending;
   const kept = view.findings.filter((f) => !f.dismissed && !f.posted);
@@ -159,14 +160,14 @@ export function PostBar({ view, gate, send, update }: { view: SessionView; gate:
         </div>
       )}
       {asking && (
-        <div className="mt-3 flex items-center gap-2">
-          <input
+        <div className="mt-3 flex items-end gap-2">
+          <ChatInput
             ref={input}
             aria-label="Comment for the agent"
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             placeholder="Ask the agent for another look instead"
-            className="h-9 min-w-0 grow rounded-[10px] bg-black/5 px-3 text-[14px] transition-[background-color,box-shadow] focus:bg-white focus:shadow-[0_0_0_1px_rgba(0,0,0,0.2)]"
+            className="min-w-0 grow"
           />
           <button type="submit" disabled={sending || !text} className="press shrink-0 rounded-full bg-fill px-3.5 py-1.5 text-[13px] font-medium disabled:opacity-40">
             Send

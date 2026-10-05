@@ -5,13 +5,14 @@ import { markSending, type GateView, type SessionView } from "../state/reducer";
 import { Markdown } from "./Markdown";
 import { Spinner } from "./Spinner";
 import type { SessionInfo } from "./Timeline";
+import { ChatInput } from "./ChatInput";
 
 const FALLBACK: Record<string, string> = { run_command: "Do not run this command.", apply_patch: "Do not apply this patch." };
 
 export function ApprovalBar({ view, gate, session, send, update }: { view: SessionView; gate: GateView; session: SessionInfo; send: (f: ClientFrame) => boolean; update: (fn: (v: SessionView) => SessionView) => void }) {
   const [comment, setComment] = useState("");
   const [offline, setOffline] = useState(false);
-  const input = useRef<HTMLInputElement>(null);
+  const input = useRef<HTMLTextAreaElement>(null);
   const text = comment.trim();
   const finish = gate.tool === "finish";
   const open = gate.callId !== undefined;
@@ -60,20 +61,14 @@ export function ApprovalBar({ view, gate, session, send, update }: { view: Sessi
           {view.refused ?? "Not connected. Try again in a moment."}
         </div>
       )}
-      <div className="mt-3 flex items-center gap-2">
-        <input
+      <div className="mt-3 flex items-end gap-2">
+        <ChatInput
           ref={input}
           aria-label="Comment for the agent"
           value={comment}
           onChange={(e) => setComment(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-              e.preventDefault();
-              if (text && !secondaryDisabled) secondary();
-            }
-          }}
           placeholder={finish ? "Ask for changes instead" : "Tell the agent what to do instead"}
-          className="h-9 min-w-0 grow rounded-[10px] bg-black/5 px-3 text-[14px] transition-[background-color,box-shadow] focus:bg-white focus:shadow-[0_0_0_1px_rgba(0,0,0,0.2)]"
+          className="min-w-0 grow"
         />
         <button type="button" disabled={secondaryDisabled} onClick={secondary} className="press shrink-0 rounded-full bg-fill px-3.5 py-1.5 text-[13px] font-medium disabled:opacity-40">
           {gate.secondary}
