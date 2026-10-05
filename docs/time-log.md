@@ -11,6 +11,7 @@
 | Phase 4: GitHub PR + Review mode | 10/03 20:30-23:30 | 3 | Note: move MyPR as TODO to improve answer experience first |
 | Improvement: General harness improvement | 10/04 10:30-13:00 10/04 14:00-15:00 10/04 17:30-18:30 | 4.5 | make &run can complete general work |
 | Improvement: Review mode | 10/04 20:15-21:45 | 1.5 | |
-| Phase 5: Task mode (bonus) | | | |
+| Phase 5: Task mode (bonus) | 10/04 22:30-00:30 | 2 | Reasoning effort / Task mode / UI improvement |
+| Improvement: UX | | |  |
 | README + demo video | | | |
-| **Total** | 09/30-10/04 | 20.5 | |
+| **Total** | 09/30-10/05 | 22.5 | |
