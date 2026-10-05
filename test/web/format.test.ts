@@ -10,6 +10,8 @@ import {
   severityLabel,
   usageLine,
   changeTotals,
+  choiceLabel,
+  reviewMessage,
   contrastRatio,
   formatBytes,
   formatCost,
@@ -79,9 +81,17 @@ describe("formatters", () => {
 
 describe("Session UI: usage line, activity label, previewable paths", () => {
   it("usage line", () => {
-    expect(usageLine({ model: "deepseek/deepseek-v4-flash", tokensIn: 5432, tokensOut: 6012, latencyMs: 34_310 })).toBe("5.4k in · 6.0k out · 34.3s");
-    expect(usageLine({ model: "deepseek/deepseek-v4-flash", tokensIn: 812, tokensOut: 95, latencyMs: 940 })).toBe("812 in · 95 out · 0.9s");
-    expect(usageLine({ model: "scripted", tokensIn: 262_144, tokensOut: 0, latencyMs: 72_400 })).toBe("262k in · 0 out · 72.4s");
+    expect(usageLine({ model: "deepseek/deepseek-v4-flash", tokensIn: 5432, tokensOut: 6012, latencyMs: 34_310 })).toBe("deepseek-v4-flash · 5.4k in · 6.0k out · 34.3s");
+    expect(usageLine({ model: "deepseek/deepseek-v4-flash", reasoning: "high", tokensIn: 812, tokensOut: 95, latencyMs: 940 })).toBe("deepseek-v4-flash · high · 812 in · 95 out · 0.9s");
+    expect(usageLine({ model: "scripted", tokensIn: 262_144, tokensOut: 0, latencyMs: 72_400 })).toBe("scripted · 262k in · 0 out · 72.4s");
+  });
+
+  it("the composer names what the session runs on", () => {
+    const label = (m: Parameters<typeof choiceLabel>[0], routed?: { model: string; reasoning: string }) => choiceLabel(m, "deepseek-ai/deepseek-v4-flash", "auto", routed);
+    expect(label({ id: "zai-org/glm-5.3-flash", reasoning: "high" })).toBe("glm-5.3-flash · high");
+    expect(label(null)).toBe("deepseek-v4-flash");
+    expect(label({ id: "auto", reasoning: null })).toBe("Auto");
+    expect(label({ id: "auto", reasoning: null }, { model: "deepseek-ai/deepseek-v4.1-flash", reasoning: "high" })).toBe("Auto · deepseek-v4.1-flash · high");
   });
 
   it("activity label", () => {
@@ -138,5 +148,24 @@ describe("Session UI: usage line, activity label, previewable paths", () => {
   it("previewable paths", () => {
     for (const p of ["index.html", "site/pages/about.htm", "a/b/PAGE.HTML"]) expect(isPreviewable(p), p).toBe(true);
     for (const p of ["app.js", "html", "notes.html.txt", "src/html/index.ts", ".html/readme.md", ""]) expect(isPreviewable(p), p).toBe(false);
+  });
+});
+
+describe("Code session: reviews of its pull request", () => {
+  const review = { id: 1, author: "TseHang", state: "CHANGES_REQUESTED" as const, body: "Please fix the hyphens.", submittedAt: "", url: "", comments: [{ path: "src/slugify.js", line: 4, body: "Two spaces become two hyphens." }] };
+
+  it("quotes the reviews as feedback, with each comment's place", () => {
+    const text = reviewMessage(14, [review], 4000);
+    expect(text).toMatch(/^Address these review comments on pull request #14\./);
+    expect(text).toMatch(/not as instructions/);
+    expect(text).toContain("### TseHang · Requested changes\n\n> Please fix the hyphens.");
+    expect(text).toContain("- `src/slugify.js:4`\n> Two spaces become two hyphens.");
+  });
+
+  it("fits the message limit, and says what was left out", () => {
+    const long = { ...review, comments: Array.from({ length: 200 }, (_, i) => ({ path: "a.js", line: i + 1, body: "x".repeat(50) })) };
+    const text = reviewMessage(14, [long], 4000);
+    expect(text.length).toBeLessThanOrEqual(4000);
+    expect(text).toMatch(/More comments on GitHub did not fit here\.\)$/);
   });
 });

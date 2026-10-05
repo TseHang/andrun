@@ -6,14 +6,14 @@ import { describe, expect, it } from "vitest";
 import type { AgentEvent, EventBody, PlanStep } from "../../src/core/events";
 import type { Config, PullDetail } from "../../web/src/api";
 import { App_ } from "../../web/src/context";
-import { Findings } from "../../web/src/components/Findings";
+import { FindingPost, Findings } from "../../web/src/components/Findings";
 import { PullOverview } from "../../web/src/components/PullOverview";
 import { ReviewCard } from "../../web/src/components/ReviewCard";
 import { ReviewFilesPanel } from "../../web/src/components/ReviewFilesPanel";
 import { Composer } from "../../web/src/components/Composer";
 import { PlanCard } from "../../web/src/components/PlanCard";
 import { Timeline } from "../../web/src/components/Timeline";
-import { addPending, initialView, reduce, type SessionView } from "../../web/src/state/reducer";
+import { addPending, initialView, reduce, type FindingView, type SessionView } from "../../web/src/state/reducer";
 
 const SESSION = { id: "5b0e7a52-4a2f-4f0a-9d1c-0c3f1a2b3c4d", code: true, baseBranch: "main", pr: null };
 
@@ -139,16 +139,15 @@ describe("Session UI: the conversation (slice B)", () => {
     expect(count(timeline(viewOf({ type: "message", id: "u1", role: "user", text: "hello" })), MARKER)).toBe(0);
   });
 
-  it("the usage line under a reply is short and has no model name", () => {
+  it("the usage line under a reply names the model and its reasoning effort", () => {
     const html = timeline(
       viewOf(
         { type: "status", status: "running" },
-        { type: "usage", model: "deepseek-ai/deepseek-v4-flash", tokens_in: 5432, tokens_out: 6012, latency_ms: 34_310, context_tokens: 5432, context_window: 128_000, step: 1 },
+        { type: "usage", model: "deepseek-ai/deepseek-v4-flash", reasoning: "high", tokens_in: 5432, tokens_out: 6012, latency_ms: 34_310, context_tokens: 5432, context_window: 128_000, step: 1 },
         { type: "message", id: "m1", role: "assistant", text: "Done.", step: 1 },
       ),
     );
-    expect(html).toContain("5.4k in · 6.0k out · 34.3s");
-    expect(html).not.toContain("deepseek");
+    expect(html).toContain("deepseek-v4-flash · high · 5.4k in · 6.0k out · 34.3s");
   });
 
   it("a streaming reply with an unclosed code fence renders", () => {
@@ -432,50 +431,55 @@ describe("Review UX: the pull request and the findings", () => {
     expect(html).not.toMatch(/<button[^>]*>(<svg.*?<\/svg>)?Preview<\/button>/);
   });
 
-  it("a finding is shown as a post from &run with an explained severity", () => {
+  it("a finding is a post from &run in the diff; the list folds it to one line", () => {
     const view = reviewed({ type: "status", status: "awaiting_approval" });
     const html = findings(view);
     expect(html).toMatch(/<section[^>]*aria-label="Findings"/);
     expect(html).toContain("3 kept, 1 dismissed");
     expect(count(html, /data-finding="/g)).toBe(4);
 
+    // On a changed line: one folded row with its severity, its first line and a link to the line.
     const high = post(html, "a");
-    expect(count(high, AVATAR)).toBe(1);
-    expect(high).toContain("High · Fix before merging");
-    expect(high).toMatch(/<a [^>]*>src\/slugify\.js:4<\/a>/);
+    expect(high).toMatch(/<button[^>]*aria-expanded="false"/);
+    expect(high).toContain("High");
     expect(high).toContain("Two spaces in a row become two hyphens.");
-    expect(high).toMatch(/<button[^>]*>Edit<\/button>/);
-    expect(high).toMatch(/<button[^>]*>Dismiss<\/button>/);
-    expect(/<button[^>]*>Dismiss<\/button>/.exec(high)![0]).not.toMatch(/ disabled=""/);
+    expect(high).toMatch(/<a [^>]*>src\/slugify\.js:4<\/a>/);
+    expect(high).not.toMatch(/<button[^>]*>Edit<\/button>/);
+    expect(post(html, "b")).toContain("Medium");
+    expect(post(html, "c")).toMatch(/line-through/);
 
-    expect(post(html, "b")).toContain("Medium · Worth fixing");
-
-    // Not on a changed line: it goes into the review's summary, and there is no line to jump to.
+    // Not on a changed line: it goes into the review's summary, shown in full, with no line to jump to.
     const summary = post(html, "d");
+    expect(count(summary, AVATAR)).toBe(1);
+    expect(summary).toContain("Medium · Worth fixing");
     expect(summary).toContain("In summary");
     expect(summary).toContain("README.md:3");
     expect(summary).not.toMatch(/<a /);
-
-    const dismissed = post(html, "c");
-    expect(dismissed).toContain("Low · Optional");
-    expect(dismissed).toMatch(/line-through/);
-    expect(dismissed).toMatch(/<button[^>]*>Restore<\/button>/);
-    expect(dismissed).not.toMatch(/<button[^>]*>(Edit|Dismiss)<\/button>/);
+    expect(summary).toMatch(/<button[^>]*>Edit<\/button>/);
+    expect(/<button[^>]*>Dismiss<\/button>/.exec(summary)![0]).not.toMatch(/ disabled=""/);
 
     // While the agent runs nothing can be edited.
     const running = findings(reviewed(), "running");
     expect(running).toContain("4 so far");
     expect(running).toContain("You can edit findings when the agent has finished.");
-    expect(/<button[^>]*>Dismiss<\/button>/.exec(post(running, "a"))![0]).toMatch(/ disabled=""/);
+    expect(/<button[^>]*>Dismiss<\/button>/.exec(post(running, "d"))![0]).toMatch(/ disabled=""/);
 
-    // The note in the diff has the same header; a dismissed finding has no note.
-    const diff = panel(pull(), view);
+    // In the diff, each finding is the full post under its line, with its actions; a dismissed one is muted and can be restored.
+    const note = (f: FindingView) => <FindingPost f={f} status="awaiting_approval" send={() => true} />;
+    const diff = renderToStaticMarkup(<ReviewFilesPanel pull={pull()} findings={view.findings} note={note} />);
     const line4 = /<div[^>]*data-line="src\/slugify\.js:4"[^>]*>.*?(?=<div[^>]*data-line=)/s.exec(diff)?.[0] ?? "";
     expect(count(line4, AVATAR)).toBe(1);
     expect(line4).toContain("High · Fix before merging");
     expect(line4).toContain("Two spaces in a row become two hyphens.");
-    expect(diff).not.toContain("Consider a default export.");
-    expect(count(diff, AVATAR)).toBe(2);
+    expect(line4).toMatch(/<button[^>]*>Edit<\/button>/);
+    expect(line4).toMatch(/<button[^>]*>Dismiss<\/button>/);
+    const line1 = /<div[^>]*data-line="src\/slugify\.js:1"[^>]*>.*?(?=<div[^>]*data-line=)/s.exec(diff)?.[0] ?? "";
+    expect(line1).toContain("Consider a default export.");
+    expect(line1).toMatch(/line-through/);
+    expect(line1).toMatch(/<button[^>]*>Restore<\/button>/);
+    expect(count(diff, AVATAR)).toBe(3);
+    // Without a note renderer (the review's start page) a dismissed finding has no note.
+    expect(panel(pull(), view)).not.toContain("Consider a default export.");
   });
 
   it("no findings", () => {
@@ -483,6 +487,14 @@ describe("Review UX: the pull request and the findings", () => {
     expect(html).toContain("No findings.");
     expect(count(html, /data-finding="/g)).toBe(0);
   });
+});
+
+it("a Task session that has answered is done; one with an open question waits", async () => {
+  const { shownStatus } = await import("../../web/src/components/StatusLabel");
+  expect(shownStatus("awaiting_input", "task")).toBe("done");
+  expect(shownStatus("awaiting_input", "task", true)).toBe("awaiting_input");
+  expect(shownStatus("awaiting_input", "code")).toBe("awaiting_input");
+  expect(shownStatus("running", "task")).toBe("running");
 });
 
 // Task copy after switching modes is exercised by e2e/task.spec.ts (SSR cannot click).

@@ -42,6 +42,17 @@ export interface PullDetail {
   files: PullFile[];
 }
 
+/** A submitted review of a pull request, with its line comments: what a Code session's author is asked to address. */
+export interface PullReview {
+  id: number;
+  author: string;
+  state: "APPROVED" | "CHANGES_REQUESTED" | "COMMENTED";
+  body: string;
+  submittedAt: string;
+  url: string;
+  comments: { path: string; line: number | null; body: string }[];
+}
+
 /** Where a pull request stands. A closed one can be reopened; a merged one cannot. */
 export type PullState = "open" | "closed" | "merged";
 
@@ -108,6 +119,35 @@ export async function getPull(request: Request, repo: string, token: string, bot
     changedFiles: p.changed_files,
     files: files.map((f) => ({ path: f.filename, status: f.status, additions: f.additions, deletions: f.deletions, patch: f.patch ?? null })),
   };
+}
+
+const REVIEW_STATES = new Set(["APPROVED", "CHANGES_REQUESTED", "COMMENTED"]);
+
+/** Submitted reviews, newest first; a review that says nothing (no text, no line comments) is left out. Pending and dismissed ones are not shown. */
+export async function getPullReviews(request: Request, repo: string, token: string, n: number): Promise<PullReview[]> {
+  const readPages = async <T>(kind: "reviews" | "comments"): Promise<T[]> => {
+    const all: T[] = [];
+    for (let page = 1; ; page++) {
+      const rows = (await request("GET", `/repos/${repo}/pulls/${n}/${kind}?per_page=100&page=${page}`, token)) as T[];
+      all.push(...rows);
+      if (rows.length < 100) return all;
+    }
+  };
+  const raw = await readPages<{ id: number; user: { login: string } | null; state: string; body: string | null; submitted_at?: string; html_url: string }>("reviews");
+  const comments = await readPages<{ pull_request_review_id: number | null; path: string; line: number | null; body: string }>("comments");
+  return raw
+    .filter((r) => REVIEW_STATES.has(r.state))
+    .map((r) => ({
+      id: r.id,
+      author: r.user?.login ?? "ghost",
+      state: r.state as PullReview["state"],
+      body: r.body ?? "",
+      submittedAt: r.submitted_at ?? "",
+      url: r.html_url,
+      comments: comments.filter((c) => c.pull_request_review_id === r.id).map((c) => ({ path: c.path, line: c.line, body: c.body })),
+    }))
+    .filter((r) => r.body.trim() !== "" || r.comments.length > 0)
+    .reverse();
 }
 
 export async function pullState(request: Request, repo: string, token: string, n: number): Promise<PullState> {

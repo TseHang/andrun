@@ -199,6 +199,7 @@ async function loop(ctx: RunContext): Promise<RunOutcome> {
     emit(ctx, {
       type: "usage",
       model: response.model,
+      ...(profile.reasoning !== undefined && { reasoning: profile.reasoning }),
       tokens_in,
       tokens_out,
       latency_ms: response.latency_ms,

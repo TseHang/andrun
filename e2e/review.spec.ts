@@ -185,17 +185,25 @@ test("review a pull request: dismiss, edit, request changes, post", async ({ pag
   expect(posts.x + posts.width).toBeLessThanOrEqual(files.x + 1);
   expect(bar.x + bar.width).toBeLessThanOrEqual(files.x + 1); // the bar does not cover the files
 
-  // Findings: four drafted, one of them not on a changed line. Each is a post from &run.
+  // Findings: four drafted, one of them not on a changed line. Each is a post from &run under its line in the diff;
+  // the list beside the conversation folds those to one line, and shows the one for the summary in full.
   const finding = (text: string) => s.findings.locator("[data-finding]").filter({ hasText: text });
+  const note = (text: string) => s.files.locator("[data-note]").filter({ hasText: text });
   await expect(s.findings.locator("[data-finding]")).toHaveCount(4);
   await expect(s.findings).toContainText("4 kept");
-  await expect(finding("Two spaces in a row")).toContainText("High · Fix before merging");
-  await expect(finding("Two spaces in a row").getByRole("img", { name: "&run" })).toBeVisible();
+  await expect(finding("Two spaces in a row")).toContainText("High");
+  await expect(finding("Two spaces in a row").getByRole("button", { name: "Edit" })).toHaveCount(0);
   await expect(finding("README still shows")).toContainText("In summary");
+  await expect(finding("README still shows").getByRole("img", { name: "&run" })).toBeVisible();
   await expect(s.rows("report_finding")).toHaveCount(4);
   const line = s.files.locator('[data-line="src/slugify.js:4"]');
   await expect(line).toContainText("Two spaces in a row become two hyphens.");
+  await expect(line).toContainText("High · Fix before merging");
   await expect(line.getByRole("img", { name: "&run" })).toBeVisible();
+
+  // A folded row opens in place.
+  await finding("Two spaces in a row").getByRole("button", { expanded: false }).click();
+  await expect(finding("Two spaces in a row").getByRole("button", { name: "Edit" })).toBeVisible();
 
   // A finding's location opens its file, even when the panel is hidden and the card folded.
   await s.files.locator('[data-file="src/slugify.js"]').getByRole("button", { name: /src\/slugify\.js/ }).click();
@@ -205,19 +213,18 @@ test("review a pull request: dismiss, edit, request changes, post", async ({ pag
   await expect(line).toBeInViewport();
   await expect(line).toContainText("Two spaces in a row become two hyphens.");
 
-  // Dismiss one, edit another.
-  await finding("Consider a default export").getByRole("button", { name: "Dismiss" }).click();
-  await expect(finding("Consider a default export").getByRole("button", { name: "Restore" })).toBeVisible();
+  // Dismiss one in the diff, edit another; the list follows.
+  await note("Consider a default export").getByRole("button", { name: "Dismiss" }).click();
+  await expect(note("Consider a default export").getByRole("button", { name: "Restore" })).toBeVisible();
   await expect(s.findings).toContainText("3 kept, 1 dismissed");
-  await expect(s.files).not.toContainText("Consider a default export");
-  await finding("Consider a default export").getByRole("button", { name: "Restore" }).click();
+  await note("Consider a default export").getByRole("button", { name: "Restore" }).click();
   await expect(s.findings).toContainText("4 kept");
-  await expect(s.files.locator('[data-line="src/slugify.js:1"]')).toContainText("Consider a default export");
-  await finding("Consider a default export").getByRole("button", { name: "Dismiss" }).click();
+  await note("Consider a default export").getByRole("button", { name: "Dismiss" }).click();
   await expect(s.findings).toContainText("3 kept, 1 dismissed");
-  await finding("Two spaces in a row").getByRole("button", { name: "Edit" }).click();
-  await s.findings.getByLabel("Finding text").fill("Collapse runs of whitespace into one hyphen.");
-  await s.findings.getByRole("button", { name: "Save" }).click();
+  await note("Two spaces in a row").getByRole("button", { name: "Edit" }).click();
+  await s.files.getByLabel("Finding text").fill("Collapse runs of whitespace into one hyphen.");
+  await s.files.getByRole("button", { name: "Save" }).click();
+  await expect(note("Collapse runs of whitespace")).toContainText("Edited");
   await expect(finding("Collapse runs of whitespace")).toContainText("Edited");
 
   // The bar says exactly what will be posted, and as whom.
@@ -332,11 +339,11 @@ test("findings cannot be edited while the agent runs, and a refused review stays
   // While running: the findings arrive, Edit and Dismiss are off (P4-d), and there is nothing to post yet.
   await expect(s.findings.locator("[data-finding]").first()).toBeVisible({ timeout: 120_000 });
   if ((await s.status.textContent()) === "Running") {
-    await expect(s.findings.getByRole("button", { name: "Dismiss" }).first()).toBeDisabled();
+    await expect(s.files.getByRole("button", { name: "Dismiss" }).first()).toBeDisabled();
     await expect(s.findings).toContainText("You can edit findings when the agent has finished.");
   }
   await expect(s.status).toHaveText("Ready to post", { timeout: 120_000 });
-  await expect(s.findings.getByRole("button", { name: "Dismiss" }).first()).toBeEnabled();
+  await expect(s.files.getByRole("button", { name: "Dismiss" }).first()).toBeEnabled();
   const verdict = s.postBar.getByRole("radiogroup", { name: "Verdict" });
 
   // GitHub refuses Request changes on one's own pull request: the message is shown and the gate stays.

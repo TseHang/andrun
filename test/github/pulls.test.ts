@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { BOT } from "../support/fake-github";
 import { setup } from "./helpers";
+import { getPullReviews } from "../../src/github/pulls";
 
 const PATCH = "@@ -0,0 +1,2 @@\n+a\n+b";
 
@@ -125,6 +126,38 @@ describe("pull requests (spec D2: list, read)", () => {
     await expect(github.getPullFile(99, "index.html")).rejects.toMatchObject({ status: 404 });
     fake.fail({ path: /\/contents\//, status: 502 });
     await expect(github.getPullFile(30, "index.html")).rejects.toMatchObject({ status: 502 });
+  });
+
+  it("reads a pull request's submitted reviews with their line comments, newest first", async () => {
+    const { fake, github } = seeded();
+    const head = fake.pulls.find((p) => p.number === 14)!.headSha;
+    await github.postReview({ pr: 14, commitId: head, verdict: "REQUEST_CHANGES", body: "Please fix the hyphens.", comments: [{ path: "src/slugify.js", line: 2, body: "Two spaces become two hyphens." }] });
+    await github.postReview({ pr: 14, commitId: head, verdict: "APPROVE", body: "", comments: [] });
+    await github.postReview({ pr: 14, commitId: head, verdict: "COMMENT", body: "", comments: [{ path: "src/slugify.js", line: 1, body: "Name it toSlug?" }] });
+    fake.reviews.push({ id: 999, pull: 14, user: "TseHang", commit_id: head, event: "PENDING", body: "draft", comments: [] });
+
+    const reviews = await github.getPullReviews(14);
+    // The approval said nothing and the pending one is not submitted: neither is shown.
+    expect(reviews.map((r) => [r.author, r.state, r.body])).toEqual([
+      ["TseHang", "COMMENTED", ""],
+      ["TseHang", "CHANGES_REQUESTED", "Please fix the hyphens."],
+    ]);
+    expect(reviews[0]!.comments).toEqual([{ path: "src/slugify.js", line: 1, body: "Name it toSlug?" }]);
+    expect(reviews[1]!.comments).toEqual([{ path: "src/slugify.js", line: 2, body: "Two spaces become two hyphens." }]);
+    expect(reviews[1]!.url).toMatch(/#pullrequestreview-\d+$/);
+  });
+
+  it("reads later review and comment pages before choosing the newest review", async () => {
+    const reviews = Array.from({ length: 101 }, (_, i) => ({ id: i + 1, user: { login: "octocat" }, state: "COMMENTED", body: "", html_url: "" }));
+    const comments = Array.from({ length: 101 }, (_, i) => ({ pull_request_review_id: i + 1, path: "a.js", line: 1, body: `Comment ${i + 1}` }));
+    const result = await getPullReviews(async (_method, path) => {
+      const url = new URL(path, "https://api.github.test");
+      const start = (Number(url.searchParams.get("page") ?? 1) - 1) * 100;
+      return (url.pathname.endsWith("/reviews") ? reviews : comments).slice(start, start + 100);
+    }, "owner/repo", "token", 14);
+    expect(result).toHaveLength(101);
+    expect(result[0]).toMatchObject({ id: 101, comments: [{ body: "Comment 101" }] });
+    expect(result.at(-1)).toMatchObject({ id: 1, comments: [{ body: "Comment 1" }] });
   });
 
   it("resolves the default branch and its head", async () => {

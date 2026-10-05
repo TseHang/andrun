@@ -114,3 +114,35 @@ test("delete keeps the pull request", async ({ page, request }) => {
   await expect(row.getByRole("link", { name: "Review with &run" })).toBeVisible();
   expect((await gh.state()).pulls).toMatchObject([{ number: 12, state: "open" }]);
 });
+
+test("a review on GitHub shows in the Code session, which hands it to the agent", async ({ page }) => {
+  const s = ui(page);
+  await page.goto("/");
+  await page.getByLabel("Task").fill(TASK);
+  await page.getByRole("button", { name: "Run" }).click();
+  await expect(s.status).toHaveText("Awaiting approval", { timeout: 90_000 });
+  await s.approval.getByRole("button", { name: "Approve and open PR" }).click();
+  await expect(s.prCard).toContainText("Pull request #12 opened");
+
+  const reviews = page.getByRole("region", { name: "Review comments" });
+  await expect(reviews).toContainText("No reviews yet.");
+  await gh.addReview({ pull: 12, user: "octocat", event: "COMMENT", body: "An older note.", comments: [] });
+  await gh.addReview({ pull: 12, user: "TseHang", event: "REQUEST_CHANGES", body: "Please add a test.", comments: [{ path: "src/sum.js", line: 3, side: "RIGHT", body: "Use < here." }] });
+  await reviews.getByRole("button", { name: "Refresh" }).click();
+
+  // Newest first; only the newest is picked for the agent.
+  await expect(reviews.locator("[data-review]")).toHaveCount(2);
+  await expect(reviews.locator("[data-review]").first()).toContainText("TseHang");
+  await expect(reviews.locator("[data-review]").first()).toContainText("Requested changes");
+  await expect(reviews.locator("[data-review]").first()).toContainText("src/sum.js:3");
+  await expect(reviews.getByRole("checkbox")).toHaveCount(2);
+  await expect(reviews.getByRole("checkbox").first()).toBeChecked();
+  await expect(reviews.getByRole("checkbox").last()).not.toBeChecked();
+
+  await reviews.getByRole("button", { name: "Ask &run to address this" }).click();
+  const sent = s.timeline.locator('[data-item="user"]').last();
+  await expect(sent).toContainText("Address these review comments on pull request #12.");
+  await expect(sent).toContainText("Please add a test.");
+  await expect(sent).toContainText("Use < here.");
+  await expect(sent).not.toContainText("An older note.");
+});

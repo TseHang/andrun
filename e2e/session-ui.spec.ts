@@ -25,7 +25,7 @@ test("an agent reply is rendered as markdown, with the & marker", async ({ page,
   await expect(s.timeline).not.toContainText("##");
   await expect(s.timeline).not.toContainText("**");
   await expect(s.timeline.getByLabel("&run")).toHaveCount(1);
-  await expect(s.timeline.getByText(/^[\d.]+k? in · [\d.]+k? out · \d+\.\ds$/)).toHaveCount(1);
+  await expect(s.timeline.getByText(/^\S+( · \w+)? · [\d.]+k? in · [\d.]+k? out · \d+\.\ds$/)).toHaveCount(1);
   // Nothing is running: no activity indicator.
   await expect(s.timeline.getByRole("status")).toHaveCount(0);
 });

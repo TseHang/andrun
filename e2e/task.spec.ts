@@ -55,7 +55,7 @@ test("task: local runtime egress survives a sandbox rebuild and Code stays offli
   await page.goto(`/s/${id}`);
   const status = page.getByTestId("session-status");
   const verify = async () => {
-    await expect(status).toHaveText("Waiting for you", { timeout: 120_000 });
+    await expect(status).toHaveText("Done", { timeout: 120_000 }); // a Task that has answered is done
     const res = await request.get(`/sessions/${id}/files?path=network.md`);
     expect(res.status()).toBe(200);
     const { content } = await res.json();

@@ -40,7 +40,7 @@ test("the picked model is sent and shown", async ({ page }) => {
   // The model's reasoning is in the timeline, folded once the step is done.
   await expect(ui(page).timeline.locator('[data-item="reasoning"]').first()).toContainText("Reasoning");
 
-  await expect(ui(page).timeline.getByText(/^[\d.]+k? in · [\d.]+k? out · \d+\.\ds$/).first()).toBeVisible({ timeout: 60_000 });
+  await expect(ui(page).timeline.getByText(/^\S+( · \w+)? · [\d.]+k? in · [\d.]+k? out · \d+\.\ds$/).first()).toBeVisible({ timeout: 60_000 });
 });
 
 test("auto picks the model for each message and says which", async ({ page }) => {

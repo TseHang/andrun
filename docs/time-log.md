@@ -12,6 +12,5 @@
 | Improvement: General harness improvement | 10/04 10:30-13:00 10/04 14:00-15:00 10/04 17:30-18:30 | 4.5 | make &run can complete general work |
 | Improvement: Review mode | 10/04 20:15-21:45 | 1.5 | |
 | Phase 5: Task mode (bonus) | 10/04 22:30-00:30 | 2 | Reasoning effort / Task mode / UI improvement |
-| Improvement: UX | | |  |
-| README + demo video | | | |
-| **Total** | 09/30-10/05 | 22.5 | |
+| Improvement: UX | 10/05 09:00-10:30 | 1.5 | UI/UX |
+| **Total** | 09/30-10/05 | 24 | |

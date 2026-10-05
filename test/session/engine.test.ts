@@ -254,6 +254,9 @@ describe("S1: a created session runs to the approval gate and is persisted", () 
     ]);
     // Thinking is shown, never sent back to the model.
     expect(JSON.stringify(model.requests[1]!.messages)).not.toContain("The loop bound looks wrong.");
+    // The page shows the choice: on each reply's usage line and under the composer.
+    expect(w.events().find((e) => e.type === "usage")).toMatchObject({ reasoning: "high" });
+    expect(engine.snapshot()?.model).toEqual({ id: "zai-org/glm-5.3-flash", reasoning: "high" });
   });
 
   it("auto sorts each turn with the small model and runs it on the model for that kind", async () => {

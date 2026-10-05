@@ -48,6 +48,9 @@ const VERDICTS: { value: ReviewVerdict; label: string; button: string; text: str
   },
 ];
 
+// A secondary action: small, but plainly a button.
+const LINK = "press cursor-pointer rounded-full bg-fill px-2.5 py-1 text-xs font-medium text-text hover:bg-black/8";
+
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
 
 /** The review's finish gate: says what will be posted and as whom, and takes the verdict. */
@@ -114,7 +117,7 @@ export function PostBar({ view, gate, send, update }: { view: SessionView; gate:
         className="mt-3 block max-h-40 min-h-9 w-full resize-y rounded-[10px] bg-black/5 px-3 py-2 text-[14px] leading-5 transition-[background-color,box-shadow] focus:bg-white focus:shadow-[0_0_0_1px_rgba(0,0,0,0.2)]"
       />
       {summary && !body.includes(summary) && (
-        <button type="button" onClick={() => setBody((body.trim() ? `${body.trim()}\n\n${summary}` : summary).slice(0, MAX_REVIEW_COMMENT_CHARS))} className="mt-1.5 cursor-pointer text-xs text-text-secondary">
+        <button type="button" onClick={() => setBody((body.trim() ? `${body.trim()}\n\n${summary}` : summary).slice(0, MAX_REVIEW_COMMENT_CHARS))} className={`mt-2 ${LINK}`}>
           Use &run's summary
         </button>
       )}
@@ -138,7 +141,7 @@ export function PostBar({ view, gate, send, update }: { view: SessionView; gate:
         ))}
       </div>
       <div className="mt-3 flex items-center gap-3">
-        <button type="button" aria-expanded={asking} onClick={() => setAsking(!asking)} className="cursor-pointer text-xs text-text-secondary">
+        <button type="button" aria-expanded={asking} onClick={() => setAsking(!asking)} className={LINK}>
           Ask &run for another look
         </button>
         <span className="grow" />

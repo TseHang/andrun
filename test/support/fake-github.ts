@@ -5,7 +5,7 @@
 // It holds one repo in memory: blobs, trees, commits, branch refs, pull requests, reviews and review
 // comments. Tokens decide who acts: `ghs_…` is the App bot, `github_pat_…` is TseHang.
 //
-// Control routes (HTTP server only): POST /__reset, GET /__state, POST /__fail, POST /__pull, POST /__comment.
+// Control routes (HTTP server only): POST /__reset, GET /__state, POST /__fail, POST /__pull, POST /__comment, POST /__review.
 
 import { createHash, generateKeyPairSync } from "node:crypto";
 import { createServer } from "node:http";
@@ -66,6 +66,8 @@ export interface FakeComment {
   line: number;
   body: string;
   in_reply_to_id?: number;
+  /** The review it was posted with. */
+  review?: number;
   created_at: string;
 }
 
@@ -191,6 +193,14 @@ export function createFakeGitHub(seed: { files?: Record<string, string>; modes?:
     return pull;
   }
 
+  /** A review a human submitted on GitHub, with its line comments. */
+  function addReview(r: Omit<FakeReview, "id" | "commit_id"> & { commit_id?: string }): FakeReview {
+    const review = { id: ++ids, commit_id: "", ...r };
+    reviews.push(review);
+    for (const c of r.comments) addComment({ pull: r.pull, user: r.user, path: c.path, line: c.line, body: c.body, review: review.id });
+    return review;
+  }
+
   function addComment(c: Omit<FakeComment, "id" | "created_at"> & { id?: number }): FakeComment {
     const comment = { id: c.id ?? ++ids, created_at: tick(), ...c };
     comments.push(comment);
@@ -224,6 +234,7 @@ export function createFakeGitHub(seed: { files?: Record<string, string>; modes?:
     path: c.path,
     line: c.line,
     body: c.body,
+    pull_request_review_id: c.review ?? null,
     created_at: c.created_at,
     html_url: `https://github.com/${FAKE_REPO}/pull/${c.pull}#discussion_r${c.id}`,
     ...(c.in_reply_to_id !== undefined && { in_reply_to_id: c.in_reply_to_id }),
@@ -385,8 +396,16 @@ export function createFakeGitHub(seed: { files?: Record<string, string>; modes?:
         if (list.length === 0 && !String(body.body ?? "").trim() && event !== "APPROVE") return err(422, "Unprocessable Entity: body is required");
         const review: FakeReview = { id: ++ids, pull: pull.number, user: actor, commit_id: String(body.commit_id), event, body: String(body.body ?? ""), comments: list };
         reviews.push(review);
-        for (const c of list) addComment({ pull: pull.number, user: actor, path: c.path, line: c.line, body: c.body });
+        for (const c of list) addComment({ pull: pull.number, user: actor, path: c.path, line: c.line, body: c.body, review: review.id });
         return json({ id: review.id, state: event, html_url: `https://github.com/${FAKE_REPO}/pull/${pull.number}#pullrequestreview-${review.id}` });
+      }
+      if (sub === "/reviews" && method === "GET") {
+        const state = { APPROVE: "APPROVED", REQUEST_CHANGES: "CHANGES_REQUESTED", COMMENT: "COMMENTED" } as Record<string, string>;
+        return json(
+          reviews
+            .filter((r) => r.pull === pull.number)
+            .map((r) => ({ id: r.id, user: { login: r.user }, state: state[r.event] ?? r.event, body: r.body, submitted_at: "2026-10-05T00:00:00Z", html_url: `https://github.com/${FAKE_REPO}/pull/${pull.number}#pullrequestreview-${r.id}` })),
+        );
       }
       if (sub === "/comments" && method === "GET") return json(comments.filter((c) => c.pull === pull.number).map(commentJson));
       if (m[3] && method === "POST") {
@@ -423,6 +442,7 @@ export function createFakeGitHub(seed: { files?: Record<string, string>; modes?:
     filesOf,
     addPull,
     addComment,
+    addReview,
     /** The next matching requests answer with this status instead (`times`, default 1). */
     fail(f: Omit<Failure, "times"> & { times?: number }): void {
       failures.push({ times: 1, ...f });
@@ -469,6 +489,7 @@ export function startFakeGitHub(port: number) {
         if (control === "/__fail") return fake.fail({ ...data, path: new RegExp(String(data.path)) } as never), send(200, { ok: true });
         if (control === "/__pull") return send(200, fake.addPull(data as never));
         if (control === "/__comment") return send(200, fake.addComment(data as never));
+        if (control === "/__review") return send(200, fake.addReview(data as never));
         const response = await fake.handle(
           new Request(url, { method: req.method, headers: req.headers as Record<string, string>, ...(raw && { body: raw }) }),
         );

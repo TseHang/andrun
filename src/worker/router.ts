@@ -119,6 +119,17 @@ async function getPull(request: Request, env: RouterEnv, n: string): Promise<Res
   }
 }
 
+async function getPullReviews(request: Request, env: RouterEnv, n: string): Promise<Response> {
+  if (!/^[1-9]\d{0,14}$/.test(n)) return notFound();
+  const refused = await limited(env.githubReadLimiter, request);
+  if (refused) return refused;
+  try {
+    return json(await env.github.getPullReviews(Number(n)));
+  } catch (err) {
+    return githubFailure(err);
+  }
+}
+
 async function getPullFile(request: Request, env: RouterEnv, n: string): Promise<Response> {
   if (!/^[1-9]\d{0,14}$/.test(n)) return notFound();
   const refused = await limited(env.githubReadLimiter, request);
@@ -169,7 +180,7 @@ async function route(request: Request, env: RouterEnv): Promise<Response> {
   if (parts[0] === "" && parts[1] === "repo" && parts.length === 2) return method === "GET" ? repoInfo(request, env) : notFound();
   if (parts[0] === "" && parts[1] === "pulls") {
     if (parts.length > 4 || method !== "GET") return notFound();
-    if (parts.length === 4) return parts[3] === "files" ? getPullFile(request, env, parts[2]!) : notFound();
+    if (parts.length === 4) return parts[3] === "files" ? getPullFile(request, env, parts[2]!) : parts[3] === "reviews" ? getPullReviews(request, env, parts[2]!) : notFound();
     return parts.length === 2 ? listPulls(request, env) : getPull(request, env, parts[2]!);
   }
   if (parts[0] !== "" || parts[1] !== "sessions") return notFound();

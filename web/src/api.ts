@@ -170,6 +170,24 @@ export async function getPullFile(n: number, path: string): Promise<string | nul
   return ((await res.json()) as { path: string; content: string }).content;
 }
 
+export interface PullReview {
+  id: number;
+  author: string;
+  state: "APPROVED" | "CHANGES_REQUESTED" | "COMMENTED";
+  body: string;
+  submittedAt: string;
+  url: string;
+  comments: { path: string; line: number | null; body: string }[];
+}
+
+/** A pull request's submitted reviews, newest first. */
+export async function getPullReviews(n: number): Promise<PullReview[]> {
+  const res = await fetch(`/pulls/${n}/reviews`);
+  if (res.ok) return (await res.json()) as PullReview[];
+  if (res.status === 429) throw new Error("Too many requests. Try again in 60 seconds.");
+  throw new Error("Could not load the reviews.");
+}
+
 /** A changed file's saved content, null when there is none; throws on other failures. */
 export async function getFile(id: string, path: string): Promise<string | null> {
   const res = await fetch(`/sessions/${id}/files?path=${encodeURIComponent(path)}`);

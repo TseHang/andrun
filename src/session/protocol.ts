@@ -73,6 +73,8 @@ export interface SessionSnapshot {
   sha: string;
   /** `state` is what GitHub last said; anything but "open" closes the session (A26). */
   pr: { number: number; url: string | null; branch: string | null; state: PullState } | null;
+  /** The model chosen when the session started ("auto" picks one per message), and its reasoning effort; null for the defaults. */
+  model: { id: string; reasoning: string | null } | null;
 }
 
 export type ParsedFrame = { ok: true; frame: ClientFrame } | { ok: false; reason: string };

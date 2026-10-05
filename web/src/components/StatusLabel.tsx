@@ -34,6 +34,12 @@ export const STATUS_COLOR: Record<Status, string> = {
 /** Sidebar text colour: only the statuses that wait for the human are coloured; the dot carries the rest. */
 export const LIST_COLOR = (s: Status) => (s === "awaiting_approval" || s === "awaiting_input" ? "text-accent-text" : "text-text-secondary");
 
+/**
+ * A Task session has no finish: once the agent has answered, it is done, though the human can still ask more.
+ * Only an open question waits for them. The list has no questions, so `question` is false there.
+ */
+export const shownStatus = (status: Status, mode: string, question = false): Status => (mode === "task" && status === "awaiting_input" && !question ? "done" : status);
+
 export type ClosedPr = "merged" | "closed";
 
 /** A session whose pull request was merged or closed takes no more messages (A26): that is shown in place of its status, unless a run is still going. */

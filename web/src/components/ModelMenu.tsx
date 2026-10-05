@@ -15,10 +15,19 @@ const CHECK = (
   </svg>
 );
 
+const INFO = (
+  <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" aria-hidden="true">
+    <circle cx="7" cy="7" r="5.75" />
+    <path d="M7 6.25v3.5M7 4.35v.01" />
+  </svg>
+);
+
 export function ModelMenu({ models, autoModel, current, onPick }: Props) {
   const auto = current.model === autoModel;
   const efforts = models.find((m) => m.id === current.model)?.efforts ?? [];
   const [open, setOpen] = useState(false);
+  // What Auto does, opened from the ⓘ beside it.
+  const [about, setAbout] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
 
@@ -80,22 +89,32 @@ export function ModelMenu({ models, autoModel, current, onPick }: Props) {
               <span>{modelLabel(m.id)}</span>
             </button>
           ))}
-          <button
-            type="button"
-            role="option"
-            aria-selected={auto}
-            title="Picks the model and reasoning for each message"
-            onClick={() => {
-              onPick({ model: autoModel });
-              setOpen(false);
-              button.current?.focus();
-            }}
-            className="flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2 text-left hover:bg-black/6"
-          >
-            <span className="flex size-3 shrink-0">{auto && CHECK}</span>
-            <span className="grow">Auto</span>
-            <span className="text-[11px] text-text-tertiary">Picks per message</span>
-          </button>
+          <div className="flex items-center gap-0.5">
+            <button
+              type="button"
+              role="option"
+              aria-selected={auto}
+              title="Picks the model and reasoning for each message"
+              onClick={() => {
+                onPick({ model: autoModel });
+                setOpen(false);
+                button.current?.focus();
+              }}
+              className="flex h-7 min-w-0 grow cursor-pointer items-center gap-1.5 rounded-md px-2 text-left hover:bg-black/6"
+            >
+              <span className="flex size-3 shrink-0">{auto && CHECK}</span>
+              <span className="grow">Auto</span>
+              <span className="text-[11px] text-text-tertiary">Picks per message</span>
+            </button>
+            <button type="button" aria-label="About Auto" aria-expanded={about} onClick={() => setAbout(!about)} className={`flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md hover:bg-black/6 ${about ? "text-text" : "text-text-tertiary"}`}>
+              {INFO}
+            </button>
+          </div>
+          {about && (
+            <p data-testid="auto-about" className="m-0 mx-2 mb-1.5 rounded-md bg-black/4 px-2.5 py-2 text-[11.5px] leading-[1.45] text-text-secondary">
+              &run reads each message and picks the model for it: a fast one for everyday coding, a stronger one with deeper reasoning when the work is complex. You get speed where it is enough and depth where it counts, without choosing each time.
+            </p>
+          )}
           {efforts.length > 0 && (
             <>
               <div role="separator" className="mx-2 my-[5px] h-px bg-black/10" />
