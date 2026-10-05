@@ -38,7 +38,7 @@ export function QuestionCard({ view, question, send }: { view: SessionView; ques
             data-option
             disabled={locked}
             onClick={() => reply(o.label)}
-            className="flex w-full min-w-0 flex-col items-start rounded-[10px] bg-black/5 px-3 py-2 text-left disabled:opacity-60"
+            className="press flex w-full min-w-0 flex-col items-start rounded-[10px] bg-black/5 px-3 py-2 text-left disabled:opacity-60"
           >
             <span className="min-w-0 text-[13px] font-medium break-words">{o.label}</span>
             {o.description && <span className="min-w-0 text-xs break-words text-text-secondary">{o.description}</span>}
@@ -58,7 +58,7 @@ export function QuestionCard({ view, question, send }: { view: SessionView; ques
           placeholder="Or type your answer"
           className="h-9 min-w-0 grow rounded-[10px] bg-black/5 px-3 text-[14px] transition-[background-color,box-shadow] focus:bg-white focus:shadow-[0_0_0_1px_rgba(0,0,0,0.2)]"
         />
-        <button type="submit" disabled={!text || locked} className="h-9 shrink-0 cursor-pointer rounded-[10px] bg-black/6 px-4 text-[13px] font-semibold text-text disabled:cursor-default disabled:bg-black/4 disabled:text-text-tertiary">
+        <button type="submit" disabled={!text || locked} className="press h-9 shrink-0 cursor-pointer rounded-[10px] bg-black/6 px-4 text-[13px] font-semibold text-text disabled:cursor-default disabled:bg-black/4 disabled:text-text-tertiary">
           Send
         </button>
       </div>

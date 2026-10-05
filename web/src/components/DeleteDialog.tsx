@@ -44,10 +44,10 @@ export function DeleteDialog({ busy, error, onCancel, onConfirm }: Props) {
           </div>
         )}
         <div className="mt-3 flex gap-2">
-          <button ref={cancel} type="button" onClick={onCancel} className="h-8 grow cursor-pointer rounded-[9px] bg-black/6 font-semibold">
+          <button ref={cancel} type="button" onClick={onCancel} className="press h-8 grow cursor-pointer rounded-[9px] bg-black/6 font-semibold">
             Cancel
           </button>
-          <button ref={confirm} type="button" disabled={busy} onClick={onConfirm} className="h-8 grow cursor-pointer rounded-[9px] bg-danger-bg font-semibold text-danger-text disabled:opacity-50">
+          <button ref={confirm} type="button" disabled={busy} onClick={onConfirm} className="press h-8 grow cursor-pointer rounded-[9px] bg-danger-bg font-semibold text-danger-text disabled:opacity-50">
             Delete
           </button>
         </div>

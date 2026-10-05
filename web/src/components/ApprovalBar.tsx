@@ -75,10 +75,10 @@ export function ApprovalBar({ view, gate, session, send, update }: { view: Sessi
           placeholder={finish ? "Ask for changes instead" : "Tell the agent what to do instead"}
           className="h-9 min-w-0 grow rounded-[10px] bg-black/5 px-3 text-[14px] transition-[background-color,box-shadow] focus:bg-white focus:shadow-[0_0_0_1px_rgba(0,0,0,0.2)]"
         />
-        <button type="button" disabled={secondaryDisabled} onClick={secondary} className="shrink-0 rounded-full bg-fill px-3.5 py-1.5 text-[13px] font-medium disabled:opacity-40">
+        <button type="button" disabled={secondaryDisabled} onClick={secondary} className="press shrink-0 rounded-full bg-fill px-3.5 py-1.5 text-[13px] font-medium disabled:opacity-40">
           {gate.secondary}
         </button>
-        <button type="button" disabled={sending} onClick={approve} className="flex shrink-0 items-center gap-1.5 rounded-full bg-accent px-3.5 py-1.5 text-[13px] font-medium text-white disabled:opacity-60">
+        <button type="button" disabled={sending} onClick={approve} className="press flex shrink-0 items-center gap-1.5 rounded-full bg-accent px-3.5 py-1.5 text-[13px] font-medium text-white disabled:opacity-60">
           {sending ? (
             <>
               <Spinner />

@@ -141,7 +141,7 @@ export function PostBar({ view, gate, send, update }: { view: SessionView; gate:
           Ask &run for another look
         </button>
         <span className="grow" />
-        <button type="button" disabled={sending || empty} onClick={post} className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-medium text-white disabled:cursor-default disabled:opacity-60 ${current.bg}`}>
+        <button type="button" disabled={sending || empty} onClick={post} className={`press flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-medium text-white disabled:cursor-default disabled:opacity-60 ${current.bg}`}>
           {sending ? (
             <>
               <Spinner />
@@ -168,7 +168,7 @@ export function PostBar({ view, gate, send, update }: { view: SessionView; gate:
             placeholder="Ask the agent for another look instead"
             className="h-9 min-w-0 grow rounded-[10px] bg-black/5 px-3 text-[14px] transition-[background-color,box-shadow] focus:bg-white focus:shadow-[0_0_0_1px_rgba(0,0,0,0.2)]"
           />
-          <button type="submit" disabled={sending || !text} className="shrink-0 rounded-full bg-fill px-3.5 py-1.5 text-[13px] font-medium disabled:opacity-40">
+          <button type="submit" disabled={sending || !text} className="press shrink-0 rounded-full bg-fill px-3.5 py-1.5 text-[13px] font-medium disabled:opacity-40">
             Send
           </button>
         </div>

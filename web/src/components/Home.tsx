@@ -71,8 +71,9 @@ export function Home({ sessions }: { sessions: SessionSummary[] }) {
               type="button"
               disabled={!canRun}
               onClick={() => void run()}
-              className="h-8 cursor-pointer rounded-full bg-accent px-[18px] text-sm font-semibold text-white disabled:cursor-default disabled:opacity-40"
+              className={`press flex h-8 cursor-pointer items-center gap-1.5 rounded-full bg-accent px-[18px] text-sm font-semibold text-white disabled:cursor-default ${busy ? "" : "disabled:opacity-40"}`}
             >
+              {busy && <Spinner />}
               Run
             </button>
           </div>

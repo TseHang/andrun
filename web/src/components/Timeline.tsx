@@ -51,7 +51,7 @@ function Item({ item, session, latest }: { item: TimelineItem; session: SessionI
     case "reasoning":
       return (
         <details data-item="reasoning" open={item.streaming} className="my-3 pl-6 text-xs text-text-secondary">
-          <summary className="cursor-pointer select-none">{item.streaming ? "Reasoning…" : "Reasoning"}</summary>
+          <summary className="cursor-pointer select-none">{item.streaming ? <span className="shimmer">Reasoning…</span> : "Reasoning"}</summary>
           <div className="mt-1.5 border-l-2 border-black/10 pl-3 leading-relaxed break-words whitespace-pre-wrap text-text-tertiary">{item.text}</div>
         </details>
       );

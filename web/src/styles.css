@@ -22,6 +22,10 @@
 
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 body {
@@ -64,13 +68,52 @@ input:focus-visible {
   }
 }
 
-@keyframes pulse-dot {
+/* The "&" while the agent works: a slow breath, not a spinner. */
+@keyframes breathe {
   0%,
-  80%,
   100% {
-    opacity: 0.25;
+    opacity: 0.45;
+    transform: scale(0.94);
   }
-  40% {
+  50% {
     opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* A light that sweeps across a label while it is still true ("Thinking", "Reasoning…"). */
+.shimmer {
+  background: linear-gradient(90deg, var(--color-text-tertiary) 40%, var(--color-text) 50%, var(--color-text-tertiary) 60%) 0 0 / 250% 100%;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 2s linear infinite;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+
+/* Pressable actions answer the press. */
+.press {
+  transition: transform 160ms var(--ease-out);
+}
+
+.press:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shimmer {
+    background: none;
+    color: var(--color-text-secondary);
+  }
+
+  .press:active:not(:disabled) {
+    transform: none;
   }
 }

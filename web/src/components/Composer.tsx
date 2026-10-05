@@ -57,7 +57,7 @@ export function Composer({ view, running, waiting, code, send, update }: { view:
           <button
             type="button"
             onClick={() => void send({ type: "message", text: OPEN_PR })}
-            className="h-9 shrink-0 cursor-pointer rounded-[10px] bg-black/6 px-4 text-[13px] font-semibold text-text"
+            className="press h-9 shrink-0 cursor-pointer rounded-[10px] bg-black/6 px-4 text-[13px] font-semibold text-text"
           >
             Open pull request
           </button>
@@ -67,12 +67,12 @@ export function Composer({ view, running, waiting, code, send, update }: { view:
             type="button"
             disabled={stopping}
             onClick={() => setStopping(send({ type: "stop" }))}
-            className="h-9 shrink-0 cursor-pointer rounded-[10px] bg-black/6 px-4 text-[13px] font-semibold text-text disabled:cursor-default disabled:text-text-tertiary"
+            className="press h-9 shrink-0 cursor-pointer rounded-[10px] bg-black/6 px-4 text-[13px] font-semibold text-text disabled:cursor-default disabled:text-text-tertiary"
           >
             {stopping ? "Stopping" : "Stop"}
           </button>
         )}
-        <button type="submit" disabled={!text.trim()} className="h-9 shrink-0 cursor-pointer rounded-[10px] bg-black/6 px-4 text-[13px] font-semibold text-text disabled:cursor-default disabled:bg-black/4 disabled:text-text-tertiary">
+        <button type="submit" disabled={!text.trim()} className="press h-9 shrink-0 cursor-pointer rounded-[10px] bg-black/6 px-4 text-[13px] font-semibold text-text disabled:cursor-default disabled:bg-black/4 disabled:text-text-tertiary">
           Send
         </button>
       </div>

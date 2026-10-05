@@ -167,8 +167,10 @@ describe("Session UI: the conversation (slice B)", () => {
     const status = /<[a-z]+[^>]*role="status"[^>]*>/g;
     expect(count(html, status)).toBe(1);
     expect(html).toContain("Running npm test");
-    expect(count(html, /data-dot/g)).toBe(3);
-    expect(count(html, /<[a-z]+[^>]*data-dot[^>]*aria-hidden="true"|<[a-z]+[^>]*aria-hidden="true"[^>]*data-dot/g)).toBe(3);
+    // The breathing &run mark, hidden from screen readers: the label says what is going on.
+    expect(count(html, /data-mark/g)).toBe(1);
+    expect(count(html, /<[a-z]+[^>]*aria-hidden="true"[^>]*data-mark/g)).toBe(1);
+    expect(html).toMatch(/role="status"[^>]*>Running npm test</);
     // After the last timeline item.
     expect(html.search(status)).toBeGreaterThan(html.lastIndexOf("data-step-name"));
 
@@ -179,7 +181,7 @@ describe("Session UI: the conversation (slice B)", () => {
     for (const s of ["awaiting_input", "awaiting_approval", "done", "failed"] as const) {
       const stopped = timeline(viewOf(...events, { type: "status", status: s }));
       expect(count(stopped, status), s).toBe(0);
-      expect(count(stopped, /data-dot/g), s).toBe(0);
+      expect(count(stopped, /data-mark/g), s).toBe(0);
     }
   });
 
