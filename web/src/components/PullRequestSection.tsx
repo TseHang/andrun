@@ -19,7 +19,8 @@ const SMALL = "text-xs text-text-secondary";
  */
 export function PullRequestSection({ view, status, session, send, update }: { view: SessionView; status: Status; session: SessionInfo; send: (f: ClientFrame) => boolean; update: (fn: (v: SessionView) => SessionView) => void }) {
   const [offline, setOffline] = useState(false);
-  const gate = view.gate?.tool === "finish" && status === "awaiting_approval" ? view.gate : null;
+  // A closed pull request's session takes nothing more (A26), so it offers no approval.
+  const gate = view.gate?.tool === "finish" && status === "awaiting_approval" && !session.closed ? view.gate : null;
   const target = prTarget(view.pr?.branch, session.id, session.baseBranch);
 
   if (gate) {

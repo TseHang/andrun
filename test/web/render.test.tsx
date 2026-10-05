@@ -240,6 +240,11 @@ describe("Session UI: the conversation (slice B)", () => {
     expect(side).toContain("1 of 2 plan steps not completed");
     // The plan sits above the approval, at the top of the panel.
     expect(side.indexOf('aria-label="Plan"')).toBeLessThan(side.indexOf('aria-label="Approval"'));
+    // A merged or closed pull request's session offers no approval.
+    const closed = panel(true);
+    const sideClosed = renderToStaticMarkup(<ChangesPanel {...closed} session={{ ...closed.session, closed: true }} status="awaiting_approval" view={view} sandboxRunning sha="abcdef" />);
+    expect(sideClosed).not.toContain('aria-label="Approval"');
+    expect(sideClosed).not.toContain("Approve and open PR");
 
     // The composer stays: a message asks for changes.
     const composer = renderToStaticMarkup(<Composer view={view} running={false} waiting={false} finishing send={() => true} update={() => {}} />);

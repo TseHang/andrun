@@ -72,6 +72,15 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
     setChangesHidden(false);
     setPreview(path);
   };
+  // Hiding the panel also closes a preview, so showing it again lands on the details.
+  const togglePanel = () => {
+    if (!changesHidden) setPreview(null);
+    setChangesHidden(!changesHidden);
+  };
+  const showDetails = () => {
+    setPreview(null);
+    setChangesHidden(false);
+  };
   const more = useRef<HTMLButtonElement>(null);
   const status = view.status ?? snap.status;
   const review = snap.mode === "review";
@@ -200,7 +209,7 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
         review={review}
         onDelete={() => setConfirming(true)}
         moreRef={more}
-        panel={review ? undefined : { hidden: changesHidden, noun: snap.mode === "task" ? "files" : "changes", count: snap.mode === "task" ? view.changes.filter((c) => isDeliverable(c.path)).length : changeTotals(view.changes).files, onToggle: () => setChangesHidden(!changesHidden) }}
+        panel={review ? undefined : { hidden: changesHidden, noun: snap.mode === "task" ? "files" : "changes", count: snap.mode === "task" ? view.changes.filter((c) => isDeliverable(c.path)).length : changeTotals(view.changes).files, onToggle: () => togglePanel() }}
       />
       <div className="relative flex min-h-0 grow">
         {review ? (
@@ -211,17 +220,16 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
             <div className="relative flex min-h-0 min-w-0 grow">
               <Timeline view={view} session={session} after={snap.mode === "task" && status !== "running" && <FileCards changes={view.changes} onOpen={openPreview} />} />
               {barEl}
-            </div>
-            {changesHidden ? (
-              finishing && (
+              {finishing && (changesHidden || preview !== null) && (
                 <div className="pointer-events-none absolute top-3 right-5 z-10">
-                  {/* The approval waits in the hidden panel: the way back says so. */}
-                  <button type="button" onClick={() => setChangesHidden(false)} className="press pointer-events-auto cursor-pointer rounded-full bg-accent px-3 py-1 text-xs font-medium text-white">
+                  {/* The approval waits in the hidden panel, or behind the preview: the way back says so. */}
+                  <button type="button" onClick={showDetails} className="press pointer-events-auto cursor-pointer rounded-full bg-accent px-3 py-1 text-xs font-medium text-white">
                     {snap.mode === "task" ? "Approve to finish" : "Open pull request"}
                   </button>
                 </div>
-              )
-            ) : (
+              )}
+            </div>
+            {!changesHidden && (
               <ChangesPanel
                 motion={changesReopened ? "side-in" : ""}
                 session={session}
