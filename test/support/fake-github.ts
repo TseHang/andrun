@@ -365,6 +365,10 @@ export function createFakeGitHub(seed: { files?: Record<string, string>; modes?:
       if (!pull) return err(404, "Not Found");
       const sub = m[2] ?? "";
       if (sub === "" && method === "GET") return json(pullJson(pull, true));
+      if (sub === "" && method === "PATCH") {
+        Object.assign(pull, { ...(body.title !== undefined && { title: String(body.title) }), ...(body.body !== undefined && { body: String(body.body) }), updatedAt: tick() });
+        return json(pullJson(pull, true));
+      }
       if (sub === "/files" && method === "GET") return json(filesOf(pull));
       if (sub === "/reviews" && method === "POST") {
         const event = String(body.event);

@@ -14,7 +14,7 @@ import { SandboxLostError, STOP_REASON, type AgentDeps, type AgentState, type Ap
 import { OutputCoalescer } from "./coalesce";
 import { parseClientFrame, titleOf } from "./frames";
 import type { EngineDeps } from "./ports";
-import { EMPTY_REVIEW, RESTORED_NOTE, type ClientFrame, type PendingView, type ServerFrame, type SessionSnapshot } from "./protocol";
+import { EMPTY_REVIEW, MAX_PR_TITLE_CHARS, RESTORED_NOTE, type ClientFrame, type PendingView, type ServerFrame, type SessionSnapshot } from "./protocol";
 import { SessionStore, type GitHubState, type StoredFinding } from "./store";
 
 const WATCHDOG_MS = 60_000;
@@ -24,7 +24,9 @@ const FRAME_PR_STATE_MAX_AGE_MS = 5_000;
 
 /** The pull request context sent to the model in a review; larger than this and only file names go (P4-l). */
 const MAX_PR_CONTEXT_CHARS = 60_000;
-const MAX_PR_TITLE_CHARS = 100;
+
+/** The pull request title and description the human edited before approving a finish. */
+type PrEdits = { title?: string | undefined; summary?: string | undefined };
 
 const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
@@ -272,7 +274,8 @@ export class SessionEngine {
 
     if (state.pending?.kind === "question") return reply({ type: "rejected", reason: "Answer the agent's question to continue." });
     const decision: ApprovalDecision = frame.type === "approve" ? { approved: true } : { approved: false, comment: frame.comment };
-    this.decide(state, decision, reply, frame.approvalId, ip);
+    const edits = frame.type === "approve" ? { title: frame.title, summary: frame.summary } : {};
+    this.decide(state, decision, reply, frame.approvalId, ip, edits);
   }
 
   async remove(): Promise<boolean> {
@@ -319,7 +322,7 @@ export class SessionEngine {
   // ---------- Frames ----------
 
   /** Approve/reject of the pending approval `approvalId`; refused unless it is the one waiting and no run is in flight. */
-  private decide(state: AgentState, decision: ApprovalDecision, reply: (frame: ServerFrame) => void, approvalId: string, ip: string): void {
+  private decide(state: AgentState, decision: ApprovalDecision, reply: (frame: ServerFrame) => void, approvalId: string, ip: string, edits: PrEdits = {}): void {
     const pending = state.pending;
     if (this.inflight || !pending || pending.approvalId !== approvalId) {
       return reply({ type: "rejected", reason: "no such pending approval" });
@@ -328,7 +331,7 @@ export class SessionEngine {
     const onFinish = this.onFinish(state);
     if (onFinish === "draft_review") return reply({ type: "rejected", reason: "Choose a verdict and post the review." });
     if (onFinish === "answer") return this.startSegment(decision, false);
-    this.startSegment(decision, false, () => this.publishChanges(state, pending, reply, ip));
+    this.startSegment(decision, false, () => this.publishChanges(state, pending, reply, ip, edits));
   }
 
   /** How this session's finish is handled (from its mode's profile). */
@@ -424,7 +427,7 @@ export class SessionEngine {
   }
 
   /** Approving a Code session's finish opens or updates its pull request from the stored changes (P4-g). False keeps the gate open. */
-  private async publishChanges(state: AgentState, pending: PendingApproval, reply: (frame: ServerFrame) => void, ip: string): Promise<boolean> {
+  private async publishChanges(state: AgentState, pending: PendingApproval, reply: (frame: ServerFrame) => void, ip: string, edits: PrEdits): Promise<boolean> {
     const { deps, store } = this;
     const changes = store.changes();
     if (changes.length === 0) return true; // nothing to write: the guard is not asked
@@ -443,9 +446,10 @@ export class SessionEngine {
       return false;
     }
 
-    const summary = pending.kind === "strikes" || pending.kind === "question" ? "" : (pending.summary ?? "");
+    // The human's edits at the gate win over what the agent wrote.
+    const summary = edits.summary ?? (pending.kind === "strikes" || pending.kind === "question" ? "" : (pending.summary ?? ""));
     const task = state.messages.find((m) => m.role === "user")?.content ?? "";
-    const title = (pending.kind === "tool" ? finishTitle(pending) : null) ?? meta.title;
+    const title = edits.title ?? (pending.kind === "tool" ? finishTitle(pending) : null) ?? meta.title;
     const body = [
       summary,
       `**Task:** ${task}`,

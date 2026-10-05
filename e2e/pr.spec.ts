@@ -21,6 +21,14 @@ test("approve opens a pull request and it appears under My PRs", async ({ page }
   await expect(s.approval).toContainText(`${branch} → main`);
   expect((await gh.state()).writes).toEqual([]);
 
+  // The description is the agent's summary; Edit opens the fields, and the edit goes with the approval.
+  await expect(s.approval).toContainText("Fix the loop bound in sum()");
+  await s.approval.getByRole("button", { name: "Edit" }).click();
+  await s.approval.getByLabel("Pull request description").fill("Fixed the loop bound in sum(), edited before approving.");
+  await page.screenshot({ path: "test-results/pr-description-edit.png" });
+  await s.approval.getByRole("button", { name: "Done" }).click();
+  await expect(s.approval).toContainText("Description · edited");
+
   await s.approval.getByRole("button", { name: "Approve and open PR" }).click();
   await expect(s.status).toHaveText("Done");
   await expect(s.timeline.getByText("Approved")).toBeVisible();
@@ -32,7 +40,7 @@ test("approve opens a pull request and it appears under My PRs", async ({ page }
   const state = await gh.state();
   expect(state.pulls).toHaveLength(1);
   expect(state.pulls[0]).toMatchObject({ number: 12, user: "andrun[bot]", headRef: branch, baseRef: "main", title: "Fix the loop bound in sum()" });
-  expect(state.pulls[0]!.body).toContain("Fixed the loop bound in sum()");
+  expect(state.pulls[0]!.body).toContain("Fixed the loop bound in sum(), edited before approving.");
   expect(state.authors[state.refs[branch]!]).toBe("andrun[bot]");
 
   // The pull request is on the Review PRs page (spec test B), under every tab it belongs to.

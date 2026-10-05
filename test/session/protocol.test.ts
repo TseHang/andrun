@@ -17,6 +17,11 @@ describe("S15: client frames are validated", () => {
     });
     // Unknown fields are dropped, not passed on.
     expect(parse({ type: "approve", approvalId: "a1", admin: true })).toEqual({ ok: true, frame: { type: "approve", approvalId: "a1" } });
+    // The pull request title and summary the human edited: trimmed, and dropped when empty.
+    expect(parse({ type: "approve", approvalId: "a1", title: "  Fix   sum ", summary: " Adds every value. \n" })).toEqual({ ok: true, frame: { type: "approve", approvalId: "a1", title: "Fix sum", summary: "Adds every value." } });
+    expect(parse({ type: "approve", approvalId: "a1", title: " ", summary: "" })).toEqual({ ok: true, frame: { type: "approve", approvalId: "a1" } });
+    expect(parse({ type: "approve", approvalId: "a1", title: "x".repeat(101) })).toMatchObject({ ok: false });
+    expect(parse({ type: "approve", approvalId: "a1", summary: 3 })).toMatchObject({ ok: false });
 
     const bad: unknown[] = [
       "not json",

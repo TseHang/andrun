@@ -240,6 +240,15 @@ describe("Session UI: the conversation (slice B)", () => {
     expect(side).toContain("1 of 2 plan steps not completed");
     // The plan sits above the approval, at the top of the panel.
     expect(side.indexOf('aria-label="Plan"')).toBeLessThan(side.indexOf('aria-label="Approval"'));
+    // The pull request's description is the summary, behind an Edit toggle; the title falls back to the session's.
+    expect(side).toMatch(/data-pr-description/);
+    expect(side).toMatch(/<button[^>]*aria-expanded="false"[^>]*><svg.*?<\/svg>Edit<\/button>/);
+    expect(side).toContain("Picks a number");
+    const titled = viewOf({ type: "approval_required", approvalId: "a2", tool: "finish", reason: "r", summary: "s", title: "Add a guessing game" }, { type: "status", status: "awaiting_approval" });
+    expect(renderToStaticMarkup(<ChangesPanel {...panel(true)} status="awaiting_approval" view={titled} sandboxRunning sha="abcdef" />)).toContain("Add a guessing game");
+    // Changes open or close all at once from the section title.
+    const many = viewOf({ type: "file_changed", path: "a.js", diff: "--- a/a.js\n+++ b/a.js\n@@ -1 +1 @@\n-a\n+b" });
+    expect(renderToStaticMarkup(<ChangesPanel {...panel(true)} view={many} sandboxRunning sha="abcdef" />)).toMatch(/<h2[^>]*><button[^>]*aria-expanded="true"[^>]*title="Collapse all"/);
     // A merged or closed pull request's session offers no approval.
     const closed = panel(true);
     const sideClosed = renderToStaticMarkup(<ChangesPanel {...closed} session={{ ...closed.session, closed: true }} status="awaiting_approval" view={view} sandboxRunning sha="abcdef" />);

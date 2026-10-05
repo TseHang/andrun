@@ -276,7 +276,7 @@ async function processCalls(ctx: RunContext, calls: ToolCall[]): Promise<RunOutc
         reason: decision.reason,
         call,
         remaining,
-        ...(isFinish && { summary: stringArg(args, "summary"), diffSummary: await currentDiffSummary(ctx) }),
+        ...(isFinish && { summary: stringArg(args, "summary"), ...(stringArg(args, "title")?.trim() && { title: stringArg(args, "title")!.trim() }), diffSummary: await currentDiffSummary(ctx) }),
       });
     }
 
@@ -441,6 +441,7 @@ function pause(ctx: RunContext, pending: Exclude<PendingApproval, { kind: "quest
     tool: pending.kind === "tool" ? pending.call.function.name : pending.kind === "strikes" ? pending.tool : "finish",
     reason: pending.reason,
     ...(pending.kind !== "strikes" && pending.summary !== undefined && { summary: pending.summary }),
+    ...(pending.kind === "tool" && pending.title && { title: pending.title }),
     ...(pending.kind !== "strikes" && pending.diffSummary && { diffSummary: pending.diffSummary }),
   });
   setStatus(ctx, "awaiting_approval");

@@ -11,6 +11,8 @@ const VERDICT = { COMMENT: "Comment", APPROVE: "Approve", REQUEST_CHANGES: "Requ
 
 export interface SessionInfo {
   id: string;
+  /** The session's title: the pull request's title when the agent gives none. */
+  title?: string;
   code: boolean;
   baseBranch: string | null;
   pr: number | null;

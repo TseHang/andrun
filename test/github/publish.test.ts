@@ -87,7 +87,8 @@ describe("publish (D9, P4-f)", () => {
     expect(fake.filesAt(head2)["test/new.test.js"]).toBe("// test\n");
     expect(fake.filesAt(head2)["docs/old.md"]).toBeUndefined();
     expect(fake.pulls).toHaveLength(1);
-    expect(fake.pulls[0]!.title).toBe("Fix the loop bound in sum()"); // the pull request keeps its title
+    // The open pull request takes the new round's title and description.
+    expect(fake.pulls[0]).toMatchObject({ title: "Add a test", body: "The loop stopped one element early." });
 
     fake.pulls[0]!.state = "closed";
     const third = await github.publish(input(fake, { files: more, title: "Add a test" }));

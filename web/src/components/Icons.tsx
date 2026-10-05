@@ -89,3 +89,15 @@ export const GlobeIcon = ({ size = 14 }: { size?: number }) => (
     <path d="M1.75 8h12.5M8 1.75c1.7 1.8 2.5 3.9 2.5 6.25S9.7 12.45 8 14.25C6.3 12.45 5.5 10.35 5.5 8S6.3 3.55 8 1.75z" />
   </Icon>
 );
+
+export const PencilIcon = () => (
+  <Icon size={12}>
+    <path d="M10.5 2.5l3 3-8 8H2.5v-3z" />
+  </Icon>
+);
+
+export const ChevronIcon = ({ open }: { open: boolean }) => (
+  <svg aria-hidden="true" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" className={`shrink-0 transition-transform duration-150 ease-out motion-reduce:transition-none ${open ? "rotate-90" : ""}`}>
+    <path d="M3.5 1.5 7 5l-3.5 3.5" />
+  </svg>
+);

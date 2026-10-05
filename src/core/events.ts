@@ -60,6 +60,8 @@ export type EventBody =
       tool: string;
       reason: string;
       summary?: string;
+      /** The pull request title the agent proposed with finish (Code). */
+      title?: string;
       diffSummary?: DiffSummary;
     }
   | {

@@ -87,7 +87,7 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
   // Merged or closed on GitHub: nothing more is sent from here (A26). A run that is still going keeps its Stop button.
   const closedPr = snap.pr && snap.pr.state !== "open" ? { number: snap.pr.number, state: snap.pr.state } : null;
   const closed = closedPr !== null && status !== "running" ? closedPr : null;
-  const session = { id, code: snap.mode === "code", baseBranch: snap.baseBranch, pr: snap.pr?.number ?? null, closed: closed !== null, review };
+  const session = { id, title: snap.title, code: snap.mode === "code", baseBranch: snap.baseBranch, pr: snap.pr?.number ?? null, closed: closed !== null, review };
 
   // Re-read the snapshot (sandboxRunning) and the list after each status change.
   const first = useRef(true);

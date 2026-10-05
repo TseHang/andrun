@@ -26,6 +26,8 @@ export interface PublishResult {
 
 interface RawPull {
   number: number;
+  title: string;
+  body: string | null;
   state: string;
   html_url: string;
   user: { login: string };
@@ -75,6 +77,8 @@ export async function publish(request: Request, repo: string, token: string, bot
     }
   }
 
+  // An open pull request takes this round's title and description: the summary describes the whole change.
+  if (open && (open.title !== input.title || (open.body ?? "") !== input.body)) await request("PATCH", `/repos/${repo}/pulls/${open.number}`, token, { title: input.title, body: input.body });
   const pull =
     open ?? ((await post("/pulls", { title: input.title, head: branch, base: input.baseBranch, body: input.body })) as RawPull);
   return { number: pull.number, url: pull.html_url, branch, round, updated };

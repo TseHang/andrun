@@ -140,6 +140,8 @@ describe("CF: the code prompt describes a conversation", () => {
     // finish is for work that is ready for a pull request, not how every turn ends.
     expect(code).toMatch(/finish.{0,120}ready for a pull request/is);
     expect(code).not.toMatch(/when you are done, call finish/i);
+    // The summary is the pull request description: the whole change, not the last step.
+    expect(code).toMatch(/whole change this session made/);
   });
 });
 

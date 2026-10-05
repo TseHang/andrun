@@ -1,6 +1,6 @@
 // Validation of frames received from the browser (P2-b). Platform-free.
 
-import { MAX_FINDING_CHARS, MAX_REVIEW_COMMENT_CHARS, MAX_TASK_CHARS, TITLE_CHARS, type ParsedFrame } from "./protocol";
+import { MAX_FINDING_CHARS, MAX_PR_SUMMARY_CHARS, MAX_PR_TITLE_CHARS, MAX_REVIEW_COMMENT_CHARS, MAX_TASK_CHARS, TITLE_CHARS, type ParsedFrame } from "./protocol";
 
 const bad = (reason: string): ParsedFrame => ({ ok: false, reason });
 const nonEmpty = (v: unknown): v is string => typeof v === "string" && v.length > 0;
@@ -16,9 +16,16 @@ export function parseClientFrame(raw: string | ArrayBuffer): ParsedFrame {
   if (!v || typeof v !== "object" || Array.isArray(v)) return bad("frame must be a JSON object");
   const f = v as Record<string, unknown>;
   switch (f.type) {
-    case "approve":
+    case "approve": {
       if (!nonEmpty(f.approvalId)) return bad("approve needs an approvalId");
-      return { ok: true, frame: { type: "approve", approvalId: f.approvalId } };
+      if (f.title !== undefined && typeof f.title !== "string") return bad("title must be text");
+      if (f.summary !== undefined && typeof f.summary !== "string") return bad("summary must be text");
+      const title = f.title?.replace(/\s+/g, " ").trim() ?? "";
+      const summary = f.summary?.trim() ?? "";
+      if (title.length > MAX_PR_TITLE_CHARS) return bad(`title is longer than ${MAX_PR_TITLE_CHARS} characters`);
+      if (summary.length > MAX_PR_SUMMARY_CHARS) return bad(`summary is longer than ${MAX_PR_SUMMARY_CHARS} characters`);
+      return { ok: true, frame: { type: "approve", approvalId: f.approvalId, ...(title && { title }), ...(summary && { summary }) } };
+    }
     case "reject":
       if (!nonEmpty(f.approvalId)) return bad("reject needs an approvalId");
       if (typeof f.comment !== "string" || f.comment.trim() === "") return bad("reject needs a comment");
