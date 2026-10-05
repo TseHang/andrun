@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { Status } from "../../../src/core/events";
 import type { ClientFrame } from "../../../src/session/protocol";
 import type { FindingView, SessionView } from "../state/reducer";
+import { isLive } from "./Enter";
 import { FindingHeader } from "./PatchView";
 
 const BADGE = "rounded-full bg-fill px-2 py-px text-[11px] text-text-secondary";
-const ACTION = "h-7 cursor-pointer rounded-lg px-2.5 font-medium text-text-secondary disabled:cursor-default disabled:opacity-40";
+const ACTION = "press h-7 cursor-pointer rounded-lg px-2.5 font-medium text-text-secondary disabled:cursor-default disabled:opacity-40";
 
 function countText(findings: FindingView[], running: boolean): string {
   if (running) return `${findings.length} so far`;
@@ -20,6 +21,7 @@ export function Findings({ view, status, send, onJump }: { view: SessionView; st
   const running = status === "running";
   const atGate = status === "awaiting_approval";
   const findings = view.findings;
+  const live = isLive(view);
 
   const save = (f: FindingView) => {
     const text = editing?.draft.trim() ?? "";
@@ -40,7 +42,7 @@ export function Findings({ view, status, send, onJump }: { view: SessionView; st
           const where = `${f.path}:${f.line}`;
           const editable = atGate && !f.posted;
           return (
-            <li key={f.id} data-finding={f.id} className={`flex flex-col gap-2 rounded-2xl p-3.5 shadow-[0_0_0_1px_rgba(0,0,0,0.08)] ${f.dismissed ? "bg-sidebar text-text-tertiary" : ""}`}>
+            <Finding key={f.id} id={f.id} live={live} className={`flex flex-col gap-2 rounded-2xl p-3.5 shadow-[0_0_0_1px_rgba(0,0,0,0.08)] ${f.dismissed ? "bg-sidebar text-text-tertiary" : ""}`}>
               <FindingHeader severity={f.severity} muted={f.dismissed} />
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 {f.inline ? (
@@ -105,11 +107,21 @@ export function Findings({ view, status, send, onJump }: { view: SessionView; st
                   </div>
                 </>
               )}
-            </li>
+            </Finding>
           );
         })}
       </ul>
       {running && <p className="m-0 text-xs text-text-secondary">Still reading. More findings may appear.</p>}
     </section>
+  );
+}
+
+/** One finding's post. A finding that arrives while the review runs rises in; the stored ones on load do not. */
+function Finding({ id, live, className, children }: { id: string; live: boolean; className: string; children: ReactNode }) {
+  const [play] = useState(live);
+  return (
+    <li data-finding={id} className={`${play ? "enter " : ""}${className}`}>
+      {children}
+    </li>
   );
 }

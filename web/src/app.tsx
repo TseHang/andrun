@@ -19,6 +19,7 @@ export function App() {
   const [live, setLive] = useState<{ id: string; status: Status } | null>(null);
   const [sidebarHidden, setSidebarHidden] = usePanelHidden("andrun.sidebar.hidden");
   const [instant, setInstant] = useState(false);
+  const content = useRef<HTMLDivElement>(null);
 
   // ⌘\ (Ctrl+\ elsewhere) shows or hides the sidebar. A key press is instant: no slide on a shortcut.
   useEffect(() => {
@@ -138,18 +139,33 @@ export function App() {
           onToggle={() => {
             setInstant(false);
             setSidebarHidden(!sidebarHidden);
+            slideContent(content.current, sidebarHidden ? -SIDEBAR_TRAVEL : SIDEBAR_TRAVEL);
           }}
         />
-        {sessionId ? (
-          <SessionPage id={sessionId} />
-        ) : onPrs ? (
-          <PullRequestsPage pulls={pulls.pulls} error={pulls.error} />
-        ) : reviewNumber ? (
-          <ReviewStartPage number={Number(reviewNumber)} />
-        ) : (
-          <Home sessions={sessions} />
-        )}
+        <div ref={content} className="flex min-w-0 grow">
+          {sessionId ? (
+            <SessionPage id={sessionId} />
+          ) : onPrs ? (
+            <PullRequestsPage pulls={pulls.pulls} error={pulls.error} />
+          ) : reviewNumber ? (
+            <ReviewStartPage number={Number(reviewNumber)} />
+          ) : (
+            <Home sessions={sessions} />
+          )}
+        </div>
       </div>
     </App_.Provider>
   );
+}
+
+/** How far the sidebar's edge moves: 248 px open, 52 px as a rail. */
+const SIDEBAR_TRAVEL = 248 - 52;
+
+/**
+ * The page takes its new width at once (one reflow, not one per frame) and slides from where the sidebar's edge was,
+ * with the sidebar's duration and curve, so the two move together. Skipped for reduced motion.
+ */
+function slideContent(el: HTMLElement | null, from: number): void {
+  if (!el?.animate || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+  el.animate([{ transform: `translateX(${from}px)` }, { transform: "none" }], { duration: 240, easing: "cubic-bezier(0.32, 0.72, 0, 1)" });
 }
