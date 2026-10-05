@@ -455,22 +455,17 @@ describe("A merged or closed pull request closes its sessions (A26)", () => {
     expect(g.fake.requests).toHaveLength(requests);
   });
 
-  it("an answer that arrives late does not reopen a merged pull request", async () => {
+  it("a frame that arrives while GitHub is being asked waits for that answer", async () => {
     const g = await published();
-    Object.assign(g.fake.pulls[0]!, { state: "closed" });
-    await g.engine.refreshPr();
-    // Asked while reopened, answered after a second request has seen the merge.
-    const answers: ((state: "open" | "merged") => void)[] = [];
-    g.github.pullState = () => new Promise((resolve) => answers.push(resolve));
-    const { engine } = g;
-    const first = engine.refreshPr();
-    const second = engine.refreshPr();
-    answers[1]!("merged");
-    await second;
-    answers[0]!("open");
-    await first;
-    expect(engine.snapshot()).toMatchObject({ pr: { state: "merged" } });
-    expect(g.upserts.at(-1)).toMatchObject({ prState: "merged" });
+    Object.assign(g.fake.pulls[0]!, { state: "closed", merged: true });
+    const requests = () => g.fake.requests.filter((r) => r.path.endsWith("/pulls/12")).length;
+    const before = requests();
+    const replies: unknown[] = [];
+    const frame = JSON.stringify({ type: "message", text: "also add a test" });
+    await Promise.all([g.engine.receive(frame, (r) => replies.push(r), { ip: IP }), g.engine.receive(frame, (r) => replies.push(r), { ip: IP })]);
+    await g.engine.idle();
+    expect(replies).toEqual([{ type: "rejected", reason: MERGED }, { type: "rejected", reason: MERGED }]);
+    expect(requests()).toBe(before + 1);
   });
 
   it("a session without a pull request never asks GitHub", async () => {

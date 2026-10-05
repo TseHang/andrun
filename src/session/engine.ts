@@ -77,6 +77,7 @@ export class SessionEngine {
   private reconcileChain: Promise<void> = Promise.resolve();
   /** When GitHub was last asked about the pull request. Lost on eviction: it is asked once more. */
   private prCheckedAt: number | null = null;
+  private prRefresh: Promise<void> | null = null;
   private readonly upserts = new Set<Promise<void>>();
   private indexChain: Promise<void> = Promise.resolve();
   /** The last diff emitted per path, so a command-only change is announced once (P4-i). Lost on eviction: a duplicate is harmless. */
@@ -160,7 +161,13 @@ export class SessionEngine {
    * Asks GitHub whether the session's pull request is still open (A26), unless it was asked less than
    * `maxAgeMs` ago. A merge is final and is not asked about again. A failure keeps what was known.
    */
-  async refreshPr(maxAgeMs = 0): Promise<void> {
+  refreshPr(maxAgeMs = 0): Promise<void> {
+    // One question at a time: a frame that arrives while GitHub is being asked waits for that answer.
+    this.prRefresh ??= this.askPrState(maxAgeMs).finally(() => (this.prRefresh = null));
+    return this.prRefresh;
+  }
+
+  private async askPrState(maxAgeMs: number): Promise<void> {
     if (this.deleted || !this.store.exists()) return;
     const gh = this.store.githubState();
     const number = gh.review?.number ?? gh.pr?.number;
@@ -174,9 +181,7 @@ export class SessionEngine {
       console.error("reading the pull request's state failed:", err);
       return;
     }
-    // An older answer can arrive after a newer one: what is stored now decides, and a merge is never undone.
-    const known = this.deleted ? "merged" : this.store.githubState().prState;
-    if (known === "merged" || prState === (known ?? "open")) return;
+    if (this.deleted || prState === (gh.prState ?? "open")) return;
     this.store.saveGithubState({ prState });
     const status = this.liveStatus ?? this.store.loadState()?.status;
     if (status) this.upsertIndex(status);
