@@ -2,6 +2,7 @@
 
 import type { AgentEvent, DiffSummary, ReviewVerdict, Status } from "../core/events";
 import type { ModeName } from "../core/types";
+import type { PullState } from "../github";
 
 export const MAX_TASK_CHARS = 4000;
 
@@ -44,6 +45,8 @@ export interface SessionSummary {
   updated_at: number;
   /** The pull request this session opened (code) or reviews (review). */
   pr?: number;
+  /** Set once that pull request is merged or closed: the session takes no more messages (A26). Absent while it is open. */
+  prState?: Exclude<PullState, "open">;
 }
 
 export interface PendingView {
@@ -65,7 +68,8 @@ export interface SessionSnapshot {
   /** The branch a Code session's pull request goes into; null until it is known (a pinned commit, or a review). */
   baseBranch: string | null;
   sha: string;
-  pr: { number: number; url: string | null; branch: string | null } | null;
+  /** `state` is what GitHub last said; anything but "open" closes the session (A26). */
+  pr: { number: number; url: string | null; branch: string | null; state: PullState } | null;
 }
 
 export type ParsedFrame = { ok: true; frame: ClientFrame } | { ok: false; reason: string };

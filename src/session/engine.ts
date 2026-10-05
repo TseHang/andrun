@@ -19,6 +19,8 @@ import { SessionStore, type GitHubState, type StoredFinding } from "./store";
 
 const WATCHDOG_MS = 60_000;
 const COALESCE_WINDOW_MS = 250;
+/** How old the pull request's state may be when a frame arrives (A26): a socket that sends many frames costs one GitHub request per window. */
+const FRAME_PR_STATE_MAX_AGE_MS = 5_000;
 
 /** The pull request context sent to the model in a review; larger than this and only file names go (P4-l). */
 const MAX_PR_CONTEXT_CHARS = 60_000;
@@ -73,6 +75,9 @@ export class SessionEngine {
   /** The status last emitted in this object's lifetime; the core's reaches SQLite only at its next checkpoint. */
   private liveStatus: AgentState["status"] | null = null;
   private reconcileChain: Promise<void> = Promise.resolve();
+  /** When GitHub was last asked about the pull request. Lost on eviction: it is asked once more. */
+  private prCheckedAt: number | null = null;
+  private prRefresh: Promise<void> | null = null;
   private readonly upserts = new Set<Promise<void>>();
   private indexChain: Promise<void> = Promise.resolve();
   /** The last diff emitted per path, so a command-only change is announced once (P4-i). Lost on eviction: a duplicate is harmless. */
@@ -91,7 +96,7 @@ export class SessionEngine {
 
   create(input: {
     id: string;
-    mode: "code" | "review";
+    mode: "code" | "review" | "task";
     task: string;
     model?: string;
     reasoning?: string;
@@ -110,8 +115,8 @@ export class SessionEngine {
         id: input.id,
         mode: input.mode,
         title: input.pr ? titleOf(`Review PR #${input.pr.number}: ${input.pr.title}`) : titleOf(input.task),
-        repo: this.deps.repo.name,
-        sha: input.sha ?? this.deps.repo.sha,
+        repo: profile.sandboxSetup === "empty" ? "" : this.deps.repo.name,
+        sha: profile.sandboxSetup === "empty" ? "" : input.sha ?? this.deps.repo.sha,
         created_at: now,
         updated_at: now,
         ...(input.model !== undefined && { model: input.reasoning !== undefined ? `${input.model}@${input.reasoning}` : input.model }),
@@ -147,8 +152,48 @@ export class SessionEngine {
   }
 
   private prOf(repo: string, gh: GitHubState): SessionSnapshot["pr"] {
-    if (gh.review) return { number: gh.review.number, url: `https://github.com/${repo}/pull/${gh.review.number}`, branch: null };
-    return gh.pr ? { number: gh.pr.number, url: gh.pr.url, branch: gh.pr.branch } : null;
+    const state = gh.prState ?? "open";
+    if (gh.review) return { number: gh.review.number, url: `https://github.com/${repo}/pull/${gh.review.number}`, branch: null, state };
+    return gh.pr ? { number: gh.pr.number, url: gh.pr.url, branch: gh.pr.branch, state } : null;
+  }
+
+  /**
+   * Asks GitHub whether the session's pull request is still open (A26), unless it was asked less than
+   * `maxAgeMs` ago. A merge is final and is not asked about again. A failure keeps what was known.
+   */
+  refreshPr(maxAgeMs = 0): Promise<void> {
+    // One question at a time: a frame that arrives while GitHub is being asked waits for that answer.
+    this.prRefresh ??= this.askPrState(maxAgeMs).finally(() => (this.prRefresh = null));
+    return this.prRefresh;
+  }
+
+  private async askPrState(maxAgeMs: number): Promise<void> {
+    if (this.deleted || !this.store.exists()) return;
+    const gh = this.store.githubState();
+    const number = gh.review?.number ?? gh.pr?.number;
+    if (number === undefined || gh.prState === "merged") return;
+    if (this.prCheckedAt !== null && this.now() - this.prCheckedAt < maxAgeMs) return;
+    this.prCheckedAt = this.now();
+    let prState;
+    try {
+      prState = await this.deps.github.pullState(number);
+    } catch (err) {
+      console.error("reading the pull request's state failed:", err);
+      return;
+    }
+    if (this.deleted || prState === (gh.prState ?? "open")) return;
+    this.store.saveGithubState({ prState });
+    const status = this.liveStatus ?? this.store.loadState()?.status;
+    if (status) this.upsertIndex(status);
+    await this.indexChain;
+  }
+
+  /** Why the session takes nothing more: its pull request was merged or closed (A26). Null while it is open. */
+  private closedReason(): string | null {
+    const gh = this.store.githubState();
+    const number = gh.review?.number ?? gh.pr?.number;
+    if (number === undefined || gh.prState === undefined || gh.prState === "open") return null;
+    return `Pull request #${number} was ${gh.prState}. Start a new session to continue.`;
   }
 
   /**
@@ -166,6 +211,14 @@ export class SessionEngine {
     return this.store.eventsAfter(lastSeq);
   }
 
+  /** `handleFrame`, after asking GitHub about the pull request: a frame to a merged one is refused (A26). */
+  async receive(raw: string | ArrayBuffer, reply: (frame: ServerFrame) => void, ctx?: { ip?: string }): Promise<void> {
+    const parsed = parseClientFrame(raw);
+    // Stop never waits for GitHub.
+    if (parsed.ok && parsed.frame.type !== "stop") await this.refreshPr(FRAME_PR_STATE_MAX_AGE_MS);
+    this.handleFrame(raw, reply, ctx);
+  }
+
   handleFrame(raw: string | ArrayBuffer, reply: (frame: ServerFrame) => void, ctx?: { ip?: string }): void {
     const parsed = parseClientFrame(raw);
     if (!parsed.ok) return reply({ type: "rejected", reason: parsed.reason });
@@ -173,6 +226,10 @@ export class SessionEngine {
     if (!state) return reply({ type: "rejected", reason: "no such session" });
     const { frame } = parsed;
     const ip = ctx?.ip ?? "unknown";
+
+    // A run that is still going can be stopped; nothing else reaches a session whose pull request is merged or closed.
+    const closed = frame.type === "stop" ? null : this.closedReason();
+    if (closed) return reply({ type: "rejected", reason: closed });
 
     // While the core runs it owns the event sequence, so an edit is refused at once, not queued (P4-d).
     if (frame.type === "finding" && this.inflight && (this.liveStatus ?? state.status) === "running") {
@@ -510,7 +567,8 @@ export class SessionEngine {
     if (!meta) return;
     const gh = this.store.githubState();
     const pr = gh.review?.number ?? gh.pr?.number;
-    const row = { id: meta.id, mode: meta.mode, title: meta.title, status, created_at: meta.created_at, updated_at: this.now(), ...(pr !== undefined && { pr }) };
+    const prState = gh.prState === "merged" || gh.prState === "closed" ? gh.prState : undefined;
+    const row = { id: meta.id, mode: meta.mode, title: meta.title, status, created_at: meta.created_at, updated_at: this.now(), ...(pr !== undefined && { pr }), ...(prState && { prState }) };
     const tracked: Promise<void> = this.indexChain
       .then(() => (this.deleted ? undefined : this.deps.index.upsert(row)))
       .catch((err) => console.error("session index upsert failed:", err))
@@ -596,7 +654,7 @@ export class SessionEngine {
     let profile = { ...base, model, ...(reasoning !== undefined && { reasoning }) };
 
     // The repo context goes after the task (the first user message is the pull request's Task) and is not an event.
-    if (needSandbox && state.step === 0 && !state.messages.some((m) => m.role === "user" && m.content.startsWith(REPO_CONTEXT_HEADER))) {
+    if (needSandbox && base.sandboxSetup !== "empty" && state.step === 0 && !state.messages.some((m) => m.role === "user" && m.content.startsWith(REPO_CONTEXT_HEADER))) {
       try {
         const content = await buildRepoContext(deps.sandbox, { agentsMd: base.sandboxSetup !== "pr-head@sha" });
         if (this.deleted) return;
@@ -662,8 +720,18 @@ export class SessionEngine {
     try {
       const paths = new Set<string>();
       for (const change of this.store.changes()) {
-        if (change.skipped) continue;
         paths.add(change.path);
+        if (change.skipped) {
+          if (this.store.meta()?.mode === "task" && this.lastDiff.get(change.path) !== "unsaved") {
+            this.lastDiff.set(change.path, "unsaved");
+            const file = (await this.deps.sandbox.changedFiles()).find((f) => f.path === change.path);
+            this.ownEmit({ type: "file_changed", path: change.path, diff: "", saved: false,
+              unavailableReason: file?.size !== null && file?.size !== undefined && file.size > MAX_FILE_BYTES
+                ? "Too large to save (over 1 MB)" : "File not saved (binary or unavailable)",
+            });
+          }
+          continue;
+        }
         const diff = await this.deps.sandbox.diff(change.path);
         if (this.deleted) return;
         if (this.lastDiff.get(change.path) === diff) continue;
@@ -694,17 +762,19 @@ export class SessionEngine {
     const meta = store.meta();
     if (!meta) return false;
 
+    const profile = getProfile(meta.mode, deps.config);
+    const empty = profile.sandboxSetup === "empty";
     const callId = crypto.randomUUID();
     this.ownEmit({
       type: "tool_call",
       callId,
       name: "sandbox_setup",
-      args: { repo: meta.repo, sha: meta.sha },
+      args: empty ? {} : { repo: meta.repo, sha: meta.sha },
       summary: "Starting sandbox…",
     });
     try {
-      const tarball = await deps.fetchTarball(meta.repo, meta.sha);
-      const { readyMs } = await deps.sandbox.setup(tarball);
+      const tarball = empty ? null : await deps.fetchTarball(meta.repo, meta.sha);
+      const { readyMs } = await deps.sandbox.setup(tarball, { network: profile.network === "get" });
       if (this.deleted) {
         await deps.sandbox.destroy().catch(() => {});
         return false;

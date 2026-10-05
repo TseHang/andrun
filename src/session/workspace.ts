@@ -5,7 +5,7 @@ import type { SessionSummary } from "./protocol";
 
 const SCHEMA = `CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY, mode TEXT NOT NULL, title TEXT NOT NULL, status TEXT NOT NULL,
-  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, pr INTEGER)`;
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, pr INTEGER, pr_state TEXT)`;
 
 export class WorkspaceIndex {
   private ready = false;
@@ -16,10 +16,12 @@ export class WorkspaceIndex {
   private table(): void {
     if (this.ready) return;
     this.sql.exec(SCHEMA);
-    try {
-      this.sql.exec("ALTER TABLE sessions ADD COLUMN pr INTEGER");
-    } catch (e) {
-      if (!(e instanceof Error && /duplicate column/i.test(e.message))) throw e;
+    for (const column of ["pr INTEGER", "pr_state TEXT"]) {
+      try {
+        this.sql.exec(`ALTER TABLE sessions ADD COLUMN ${column}`);
+      } catch (e) {
+        if (!(e instanceof Error && /duplicate column/i.test(e.message))) throw e;
+      }
     }
     this.ready = true;
   }
@@ -27,7 +29,7 @@ export class WorkspaceIndex {
   upsert(row: SessionSummary): void {
     this.table();
     this.sql.exec(
-      "INSERT OR REPLACE INTO sessions (id, mode, title, status, created_at, updated_at, pr) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      "INSERT OR REPLACE INTO sessions (id, mode, title, status, created_at, updated_at, pr, pr_state) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
       row.id,
       row.mode,
       row.title,
@@ -35,6 +37,7 @@ export class WorkspaceIndex {
       row.created_at,
       row.updated_at,
       row.pr ?? null,
+      row.prState ?? null,
     );
   }
 
@@ -47,7 +50,7 @@ export class WorkspaceIndex {
   list(): SessionSummary[] {
     this.table();
     return this.sql
-      .exec<Omit<SessionSummary, "pr"> & { pr: number | null }>("SELECT id, mode, title, status, created_at, updated_at, pr FROM sessions ORDER BY created_at DESC, id")
-      .map((r) => ({ id: r.id, mode: r.mode, title: r.title, status: r.status, created_at: r.created_at, updated_at: r.updated_at, ...(r.pr !== null && { pr: r.pr }) }));
+      .exec<Omit<SessionSummary, "pr" | "prState"> & { pr: number | null; pr_state: SessionSummary["prState"] | null }>("SELECT id, mode, title, status, created_at, updated_at, pr, pr_state FROM sessions ORDER BY created_at DESC, id")
+      .map((r) => ({ id: r.id, mode: r.mode, title: r.title, status: r.status, created_at: r.created_at, updated_at: r.updated_at, ...(r.pr !== null && { pr: r.pr }), ...(r.pr_state !== null && { prState: r.pr_state }) }));
   }
 }

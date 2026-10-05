@@ -119,7 +119,7 @@ v3（2026-10-04）：對照 Codex 與 Claude Code 的 harness 後改寫，並納
 | Slice | 內容 | 依賴 |
 |---|---|---|
 | **A** | 第 1 到 5 項。checklist：`harness-improvement-implementation-checklist.md`（已核准） | 無 |
-| **B** | 7a：Task mode（空沙箱 + artifact） | A |
+| **B** | 7a：Task mode（空沙箱，產出 `.html` / `.md` / `.csv`）＋ Task 限定的唯讀連網（GET-only egress，先 spike）。checklist：`task-mode/task-mode-implementation-checklist.md`（已核准 2026-10-04；本機實作／驗證 2026-10-05，部署檢查待 Henry） | A |
 | **C** | 6b：egress spike（先證明 HTTPS 攔截可行），再做 registries allowlist。修訂 ADR A13 | spike 結果 |
 | **D** | 依 C 的結果：放寬成 GET-only 全網域，或做 6a 的 Worker 端工具；搜尋服務到時再選。接上 7b | C |
 
@@ -144,6 +144,12 @@ v3（2026-10-04）：對照 Codex 與 Claude Code 的 harness 後改寫，並納
   - 分類只看該輪的使用者訊息（前 4000 字），不看對話歷史與 repo；分錯時沒有中途升級模型的機制。
   - 兩條路由是寫死的（`autoConfig`），沒有用 eval 比較過成本與成功率。跑真實模型 eval 前先問 Henry。
 - [ ] **Reasoning 沒有回傳給模型**：`delta.reasoning` 只顯示在 UI，不放進下一次請求的 messages。高 effort 的多步任務是否需要回傳、對品質有沒有影響，沒有驗證過。
+
+### TODO（2026-10-04，Task mode 之後）
+
+- [ ] **搜尋（Henry，2026-10-04：這次來不及，之後做）**：Task mode 能連網（GET-only），但沒有搜尋工具，只能抓模型已經知道的網址，所以「做 xxx 研究」找不到它不知道的來源。要做的是 Worker 端的 `web_search` 工具（第 6a 項），需先選搜尋服務（要 API key，按次計費）。Slice B 的 spike 會記錄直接 GET 搜尋引擎結果頁是否可行，作為這項的參考。
+- [ ] **Code / Review 的連網**（第 6b 項）：只放行 package registries 的 allowlist，讓 repo 裡能 `npm install`。Slice B 只開 Task。
+- [ ] **Task 的其他產出格式**：目前只有 `.html`、`.md`、`.csv`，UI 有標明。圖片、PDF 等二進位檔需要 R2（`limits.md` L2、L4）。
 
 ## 驗收（最低標準）
 

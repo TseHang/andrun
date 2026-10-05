@@ -6,6 +6,20 @@ import { addPending, type SessionView } from "../state/reducer";
 const OPEN_PR = "Open a pull request for these changes.";
 const BAR = "pointer-events-auto rounded-2xl border border-black/10 bg-white/80 px-4 py-2.5 shadow-lg backdrop-blur-xl";
 
+/** In the composer's place once the session's pull request is merged or closed: nothing more can be sent (A26). */
+export function ClosedBar({ pr }: { pr: { number: number; state: "merged" | "closed" } }) {
+  return (
+    <div role="status" className={`${BAR} flex items-center gap-3 text-[13px]`}>
+      <span className="min-w-0 grow text-text-secondary">
+        Pull request #{pr.number} was {pr.state}. This session is closed.
+      </span>
+      <a href="/" className="shrink-0 font-semibold text-accent-text">
+        New session
+      </a>
+    </div>
+  );
+}
+
 export function Composer({ view, running, waiting, code, send, update }: { view: SessionView; running: boolean; waiting: boolean; code: boolean; send: (f: ClientFrame) => boolean; update: (fn: (v: SessionView) => SessionView) => void }) {
   const [text, setText] = useState("");
   // Stop was pressed: it takes effect at the agent's next check, and a second frame would only be refused.

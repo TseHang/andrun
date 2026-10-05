@@ -1,0 +1,9 @@
+{
+  "name": "andrun-spike-egress",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": { "bindings": [{ "name": "SPIKE", "class_name": "SpikeSandbox" }] },
+  "containers": [{ "class_name": "SpikeSandbox", "scheduling_policy": "durable_object", "images": { "sandbox": { "dockerfile": "./Dockerfile" } } }],
+  "exports": { "SpikeSandbox": { "type": "durable-object", "storage": "sqlite" } }
+}

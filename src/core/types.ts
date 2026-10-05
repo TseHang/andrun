@@ -142,6 +142,7 @@ export interface ModeProfile {
   /** Text added to a tool's description in this mode (e.g. what `run_command` may run in a review). */
   toolNotes?: Partial<Record<ToolName, string>>;
   policy: ApprovalPolicy;
+  network: "off" | "get";
   sandboxSetup: "tarball@sha" | "pr-head@sha" | "empty" | "none";
   onFinish: "open_pr" | "draft_review" | "answer";
   /** A reply without a tool call: `wait` ends the turn for the user; `finish` goes to the finish gate. */

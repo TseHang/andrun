@@ -61,7 +61,7 @@ export const defaultChoice = (config: Config): ModelChoice => {
   return { model: config.defaultModel, ...(reasoning !== undefined && { reasoning }) };
 };
 
-export const createSession = (task: string, choice: ModelChoice): Promise<CreateResult> => create({ mode: "code", task, ...choice });
+export const createSession = (task: string, choice: ModelChoice, mode: "code" | "task" = "code"): Promise<CreateResult> => create({ mode, task, ...choice });
 
 export const createReview = (pr: number, task: string, choice: ModelChoice): Promise<CreateResult> => create({ mode: "review", pr, task, ...choice });
 

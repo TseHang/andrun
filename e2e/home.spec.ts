@@ -28,7 +28,7 @@ test("the picked model is sent and shown", async ({ page }) => {
   // A review starts from a pull request (Review PRs in the sidebar), so the switch has no Review.
   await expect(mode.getByRole("button", { name: "Code" })).toHaveAttribute("aria-pressed", "true");
   await expect(mode.getByText("Review")).toHaveCount(0);
-  await expect(mode.getByRole("button", { name: "Task" })).toBeDisabled();
+  await expect(mode.getByRole("button", { name: "Task" })).toBeEnabled();
 
   await page.getByLabel("Task").fill("make the failing test pass");
   const [req] = await Promise.all([

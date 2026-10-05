@@ -17,6 +17,8 @@
 //   [stop]   the normal script up to the first test run after the patch, then a text-only reply
 //            instead of finish; finish and the rest play after the user's next message
 //   [md]     turn 0 is a text-only reply written in markdown (heading, list, code, table, link)
+//   [task]   writes one self-contained HTML deliverable and replies
+//   [task-network] / [offline-network] exercise local egress with scripted commands
 //   [html]   writes index.html (its script fills in the heading) and app.js, then replies with text
 // An auto-mode classifier request (system prompt of `classifyTask`) is answered "complex" for a task
 // with [complex], "daily" otherwise. A request with a reasoning effort other than "none" streams a
@@ -108,6 +110,22 @@ const STOP_TURN: Turn = { text: "Fixed the loop bound. Do you want anything else
 const MD_TURN: Turn = {
   text: ["## Two options", "", "I can fix this in **two** ways:", "", "- Fix the loop bound in `sum()`", "- Rewrite it with reduce", "", "```js", "values.reduce((a, b) => a + b, 0);", "```", "", "| Option | Lines |", "| - | - |", "| Loop bound | 1 |", "", "See the [docs](https://example.com/reduce)."].join("\n"),
 };
+const TASK_TURNS: Turn[] = [
+  { call: { name: "write_file", args: { path: "index.html", content: '<!doctype html><html><head><style>body{font-family:system-ui;margin:3rem}</style></head><body><h1>Hello from Task</h1></body></html>' } } },
+  { text: "Done: index.html" },
+];
+const NETWORK_COMMAND = [
+  'printf "GET=" > network.md',
+  'curl --max-time 30 -sS -o /dev/null -w "%{http_code}\\n" https://example.com >> network.md',
+  'printf "POST=" >> network.md',
+  'curl --max-time 30 -sS -o /dev/null -w "%{http_code}\\n" -X POST https://example.com >> network.md',
+  `node -e "fetch('https://example.com').then(r=>console.log('NODE='+r.status)).catch(e=>{console.error(e);process.exitCode=1})" >> network.md`,
+  'npm install left-pad',
+  'printf "NPM=%s\\n" "$?" >> network.md',
+  'if curl --max-time 15 -sS https://example.com:8443; then echo PORT_OPEN; else echo PORT_BLOCKED; fi >> network.md',
+].join("; ");
+const OFFLINE_COMMAND = 'if curl --max-time 15 -sS https://example.com; then echo OFFLINE_OPEN; else echo OFFLINE_BLOCKED; fi > network.md';
+
 const PAGE = ["<!doctype html>", "<title>Demo</title>", '<h1 id="title">Loading</h1>', '<script>document.getElementById("title").textContent = "Hello from the page";</script>', ""].join("\n");
 const HTML_TURNS: Turn[] = [
   { text: "Writing the page.", call: { name: "write_file", args: { path: "index.html", content: PAGE } } },
@@ -145,7 +163,7 @@ async function chat(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const system = messages.find((m) => m.role === "system")?.content ?? "";
   const classify = system.includes("You sort requests");
   const review = system.includes("code reviewer");
-  const script = review ? REVIEW_SCRIPT : task.includes("[md]") ? [MD_TURN, ...SCRIPT] : task.includes("[html]") ? HTML_TURNS : task.includes("[plan]") ? PLAN_SCRIPT : ask
+  const script = task.includes("[task]") ? TASK_TURNS : review ? REVIEW_SCRIPT : task.includes("[md]") ? [MD_TURN, ...SCRIPT] : task.includes("[html]") ? HTML_TURNS : task.includes("[plan]") ? PLAN_SCRIPT : ask
           ? [...ASK_TURNS, ...SCRIPT]
           : task.includes("[chat]")
             ? [CHAT_TURN, ...SCRIPT]
@@ -154,7 +172,11 @@ async function chat(req: IncomingMessage, res: ServerResponse): Promise<void> {
               : task.includes("[stop]")
                 ? [...SCRIPT.slice(0, 4), STOP_TURN, ...SCRIPT.slice(4)]
                 : SCRIPT;
-  const turn = classify ? { text: task.includes("[complex]") ? "complex" : "daily" } : (script[played] ?? LAST);
+  const network = task.includes("[task-network]") || task.includes("[offline-network]");
+  const runtimeTurn: Turn = played % 2 === 0
+    ? { call: { name: "run_command", args: { command: task.includes("[task-network]") ? NETWORK_COMMAND : OFFLINE_COMMAND } } }
+    : { text: "Done: network.md" };
+  const turn = network && !classify ? runtimeTurn : classify ? { text: task.includes("[complex]") ? "complex" : "daily" } : (script[played] ?? LAST);
   console.log(`[fake-model] turn ${played}: ${turn.call?.name ?? "text"}`);
 
   if (task.includes("[fail]")) {

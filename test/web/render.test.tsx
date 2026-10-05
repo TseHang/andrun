@@ -436,3 +436,107 @@ describe("Review UX: the pull request and the findings", () => {
     expect(count(html, /data-finding="/g)).toBe(0);
   });
 });
+
+// Task copy after switching modes is exercised by e2e/task.spec.ts (SSR cannot click).
+it("task sessions are tagged and Home's note follows the mode", async () => {
+  const { Home } = await import("../../web/src/components/Home");
+  const { Sidebar } = await import("../../web/src/components/Sidebar");
+  const sessions = [
+    { id: "task", mode: "task" as const, title: "A page", status: "awaiting_input" as const, created_at: 1, updated_at: 1 },
+    { id: "code", mode: "code" as const, title: "A fix", status: "awaiting_input" as const, created_at: 1, updated_at: 1 },
+  ];
+  for (const node of [<Home sessions={sessions} />, <Sidebar sessions={sessions} stale={false} path="/" live={null} pullCount={0} />]) {
+    const html = inApp(node);
+    expect(count(html, /data-tag="task"/g)).toBe(1);
+    expect(html).not.toContain('data-tag="code"');
+  }
+  const home = inApp(<Home sessions={sessions} />);
+  expect(home).toContain(CONFIG.repo);
+  expect(home).toContain("Runs in a sandbox with no network access");
+  const taskButton = /<button[^>]*>\s*Task\s*<\/button>/.exec(home)?.[0];
+  expect(taskButton).toBeTruthy();
+  expect(taskButton).not.toContain("disabled");
+});
+
+it("task: the Files panel lists .html, .md and .csv only and states the limit", async () => {
+  const { ChangesPanel } = await import("../../web/src/components/ChangesPanel");
+  const { isDeliverable } = await import("../../web/src/state/format");
+  for (const path of ["report.html", "notes.md", "data.csv", "page.htm", "PAGE.HTML"]) expect(isDeliverable(path)).toBe(true);
+  for (const path of ["build.js", "package.json", "chart.png", "report.html.js"]) expect(isDeliverable(path)).toBe(false);
+  const paths = ["report.html", "notes.md", "data.csv", "build.js", "package.json", "chart.png"];
+  const view = viewOf(...paths.map((path): EventBody => ({ type: "file_changed", path, diff: `--- /dev/null\n+++ b/${path}\n@@ -0,0 +1 @@\n+hello\n` })));
+  const task = renderToStaticMarkup(<ChangesPanel id="s" mode="task" view={view} sandboxRunning sha="" onHide={() => {}} />);
+  expect(task).toContain('aria-label="Files"');
+  expect(task).toContain("Task produces .html, .md and .csv files. Images, PDF and other binary files are not supported.");
+  expect(task).toContain("Web, read-only (GET)");
+  expect(task).not.toContain("Base commit");
+  for (const path of paths.slice(0, 3)) expect(task).toContain(`data-file="${path}"`);
+  for (const path of paths.slice(3)) expect(task).not.toContain(path);
+  expect(count(task, />Download<\/button>/g)).toBe(3);
+  expect(count(task, />Preview<\/button>/g)).toBe(1);
+  const code = renderToStaticMarkup(<ChangesPanel id="s" view={view} sandboxRunning sha="abcdef" onHide={() => {}} />);
+  expect(count(code, /data-file="/g)).toBe(6);
+  expect(code).toContain("Base commit");
+  expect(code).not.toContain("Download");
+});
+
+it("a file that was not saved has no download", async () => {
+  const { ChangesPanel } = await import("../../web/src/components/ChangesPanel");
+  const event = { type: "file_changed", path: "big.csv", diff: "", saved: false } as const;
+  const view = viewOf(event);
+  const html = renderToStaticMarkup(<ChangesPanel id="s" mode="task" view={view} sandboxRunning sha="" onHide={() => {}} />);
+  expect(html).toContain('data-file="big.csv"');
+  expect(html).toContain("Too large to save (over 1 MB)");
+  expect(html).not.toMatch(/>Download<\/button>/);
+});
+
+describe("A merged or closed pull request closes the session (A26)", () => {
+  it("lists show Merged or Closed with a grey dot in place of the status", async () => {
+    const { Home } = await import("../../web/src/components/Home");
+    const { Sidebar } = await import("../../web/src/components/Sidebar");
+    const base = { mode: "code" as const, status: "done" as const, created_at: 1, updated_at: 1 };
+    const sessions = [
+      { id: "m", ...base, title: "Merged fix", pr: 3, prState: "merged" as const },
+      { id: "c", ...base, title: "Closed review", mode: "review" as const, status: "awaiting_approval" as const, pr: 4, prState: "closed" as const },
+      { id: "o", ...base, title: "Open fix", pr: 5 },
+    ];
+    for (const node of [<Home sessions={sessions} />, <Sidebar sessions={sessions} stale={false} path="/" live={null} pullCount={0} />]) {
+      const html = inApp(node);
+      expect(count(html, />Merged</g)).toBe(1);
+      expect(count(html, />Closed</g)).toBe(1);
+      expect(count(html, />Done</g)).toBe(1);
+      expect(html).not.toContain("Awaiting approval");
+      expect(count(html, /bg-text-tertiary/g)).toBe(2);
+      expect(count(html, /bg-done/g)).toBe(1);
+    }
+    // A run that is still going shows as running.
+    const running = inApp(<Sidebar sessions={[{ id: "m", ...base, title: "t", status: "running", pr: 3, prState: "merged" }]} stale={false} path="/" live={null} pullCount={0} />);
+    expect(running).toContain("Running");
+    expect(running).not.toContain("Merged");
+  });
+
+  it("the header shows Merged, and the bar says why there is no composer", async () => {
+    const { SessionHeader } = await import("../../web/src/components/SessionHeader");
+    const { ClosedBar } = await import("../../web/src/components/Composer");
+    const header = (prState?: "merged" | "closed") =>
+      inApp(<SessionHeader title="t" status="done" prState={prState} header={initialView().header} review={false} onDelete={() => {}} moreRef={{ current: null }} />);
+    expect(header("merged")).toMatch(/data-testid="session-status"[^>]*>.*Merged/);
+    expect(header("merged")).not.toContain("Done");
+    expect(header()).toContain("Done");
+
+    const bar = renderToStaticMarkup(<ClosedBar pr={{ number: 3, state: "merged" }} />);
+    expect(bar).toContain("Pull request #3 was merged");
+    expect(bar).toContain('href="/"');
+    expect(bar).not.toContain("<input");
+    expect(renderToStaticMarkup(<ClosedBar pr={{ number: 3, state: "closed" }} />)).toContain("Pull request #3 was closed");
+  });
+
+  it("a posted review stops offering more once the pull request is merged", () => {
+    const view = viewOf({ type: "status", status: "running" }, { type: "review_posted", url: "https://github.com/x/y/pull/3#r1", verdict: "COMMENT" }, { type: "status", status: "done" });
+    expect(renderToStaticMarkup(<Timeline view={view} session={{ ...SESSION, pr: 3 }} />)).toContain("Review again");
+    const closed = renderToStaticMarkup(<Timeline view={view} session={{ ...SESSION, pr: 3, closed: true }} />);
+    expect(closed).toContain("Review posted");
+    expect(closed).not.toContain("Review again");
+    expect(closed).not.toContain("Keep asking");
+  });
+});

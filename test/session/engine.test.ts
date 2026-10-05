@@ -86,7 +86,7 @@ function world(opts: { tarball?: Uint8Array; config?: AgentConfig } = {}) {
 
   /** A new adapter each time, like a Durable Object that was evicted and woke up again. */
   const adapter = () =>
-    new CloudflareSandboxAdapter({ container, files: container.files, workdir: container.workdir, tmpDir: container.tmpDir });
+    new CloudflareSandboxAdapter({ container, files: container.files, workdir: container.workdir, tmpDir: container.tmpDir, egress: { fetch: async () => new Response("fake gate") } });
 
   const engine = (model: ModelClient, over: Partial<EngineDeps> = {}) =>
     new SessionEngine({
@@ -104,6 +104,7 @@ function world(opts: { tarball?: Uint8Array; config?: AgentConfig } = {}) {
         publish: async (input) => ({ number: 1, url: "https://github.com/TseHang/andrun-demo/pull/1", branch: `${input.branchPrefix}-1`, round: 1, updated: false }),
         postReview: async () => ({ url: "https://github.com/TseHang/andrun-demo/pull/1#pullrequestreview-1" }),
         defaultBranchHead: async () => ({ branch: "main", sha: REPO.sha }),
+        pullState: async () => "open",
       },
       guard: { githubWrite: async () => null },
       broadcast: (frame) => frames.push(frame),
@@ -1171,6 +1172,7 @@ describe("Harness improvement: repo context (HI-e)", () => {
         },
         postReview: async () => ({ url: "" }),
         defaultBranchHead: async () => ({ branch: "main", sha: REPO.sha }),
+        pullState: async () => "open",
       },
     });
     engine.create({ id: ID, mode: "code", task: TASK });
@@ -1725,6 +1727,7 @@ describe("Session UI: stop (UI-a, UI-b) and saved file content (UI-c)", () => {
         },
         postReview: async () => ({ url: "" }),
         defaultBranchHead: async () => ({ branch: "main", sha: REPO.sha }),
+        pullState: async () => "open",
       },
     });
     engine.handleFrame(JSON.stringify({ type: "approve", approvalId: w.approvalId }), () => {});
@@ -1780,5 +1783,75 @@ describe("Session UI: stop (UI-a, UI-b) and saved file content (UI-c)", () => {
     expect(await engine.fileContent("index.html")).toBe(PAGE);
     await until(() => model.waiting);
     await send(engine, { type: "stop" });
+  });
+});
+
+
+describe("Task sessions", () => {
+  it("task: empty sandbox, no tarball, no repo context", async () => {
+    const w = world();
+    const sandbox = w.adapter();
+    const setups: unknown[][] = [];
+    const original = sandbox.setup.bind(sandbox);
+    sandbox.setup = async (...args) => { setups.push(args); return original(...args); };
+    const model = new ScriptedModelClient([{ text: "Ready" }]);
+    const engine = w.engine(model, { sandbox, fetchTarball: async () => { throw new Error("no tarball"); } });
+    engine.create({ id: ID, mode: "task", task: "Make a page" });
+    await engine.idle();
+    expect(setups).toEqual([[null, { network: true }]]);
+    expect(engine.snapshot()).toMatchObject({ mode: "task", sha: "", baseBranch: null, pr: null, status: "awaiting_input" });
+    expect(w.store().meta()).toMatchObject({ mode: "task", repo: "", sha: "" });
+    expect(model.requests[0]!.messages).toEqual([{ role: "system", content: expect.any(String) }, { role: "user", content: "Make a page" }]);
+    expect(w.events()).toContainEqual(expect.objectContaining({ type: "tool_call", name: "sandbox_setup", args: {} }));
+    expect(w.events()).toContainEqual(expect.objectContaining({ type: "tool_output", chunk: expect.stringMatching(/^ready in /) }));
+  });
+
+  it("task: a rebuild restores the files into an empty sandbox", async () => {
+    const w = world();
+    const model = new ScriptedModelClient([call("write_file", { path: "index.html", content: "<h1>saved</h1>" }), call("write_file", { path: "build.js", content: "// helper" }), { text: "Done" }, call("read_file", { path: "index.html" }), { text: "Restored" }]);
+    const engine = w.engine(model, { fetchTarball: async () => { throw new Error("no tarball"); } });
+    engine.create({ id: ID, mode: "task", task: "Make a page" });
+    await engine.idle();
+    expect(engine.snapshot()?.status).toBe("awaiting_input");
+    await engine.killSandbox();
+    await send(engine, { type: "message", text: "Read it again" });
+    expect(engine.snapshot()?.status).toBe("awaiting_input");
+    expect(w.container.starts).toHaveLength(2);
+    expect(await w.adapter().readFile("index.html")).toBe("<h1>saved</h1>");
+    expect(await w.adapter().readFile("build.js")).toBe("// helper");
+    expect(w.events()).toContainEqual(expect.objectContaining({ type: "error", source: "sandbox", message: expect.stringContaining(RESTORED_NOTE) }));
+    expect(w.tarballRequests).toEqual([]);
+  });
+
+  it("task: auto routes the turn", async () => {
+    const w = world();
+    const model = new ScriptedModelClient([{ text: "daily" }, { text: "Done" }]);
+    const engine = w.engine(model);
+    engine.create({ id: ID, mode: "task", task: "[task] make a page", model: "auto" });
+    await engine.idle();
+    expect(engine.snapshot()?.status).toBe("awaiting_input");
+    expect(model.requests).toHaveLength(2);
+    expect(w.events()).toContainEqual(expect.objectContaining({ type: "model_routed", task: "daily" }));
+    expect(model.requests[1]!.tools.map((t) => t.name)).not.toContain("finish");
+  });
+
+  it("task: gate frames are refused", async () => {
+    const w = world();
+    const engine = w.engine(new ScriptedModelClient([{ text: "Done" }]));
+    engine.create({ id: ID, mode: "task", task: "Make a page" });
+    await engine.idle();
+    for (const frame of [{ type: "approve", approvalId: "none" }, { type: "reject", approvalId: "none", comment: "no" }]) {
+      expect(await send(engine, frame)).toEqual([{ type: "rejected", reason: "no such pending approval" }]);
+    }
+    expect(await send(engine, { type: "post_review", approvalId: "none", verdict: "COMMENT", comment: "hello" })).toEqual([{ type: "rejected", reason: "post_review is only for review sessions" }]);
+  });
+
+  it("task: an oversized command output file is announced as unsaved", async () => {
+    const w = world();
+    const engine = w.engine(new ScriptedModelClient([call("run_command", { command: "node -e \"require('fs').writeFileSync('big.csv', 'x'.repeat(1000001))\"" }), { text: "Done" }]));
+    engine.create({ id: ID, mode: "task", task: "Make a CSV" });
+    await engine.idle();
+    expect(await engine.fileContent("big.csv")).toBeNull();
+    expect(w.events()).toContainEqual(expect.objectContaining({ type: "file_changed", path: "big.csv", saved: false }));
   });
 });

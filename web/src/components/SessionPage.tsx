@@ -4,10 +4,10 @@ import { UUID, deleteSession, getSnapshot } from "../api";
 import { useApp } from "../context";
 import { useSession } from "../socket";
 import { ApprovalBar } from "./ApprovalBar";
-import { changeTotals } from "../state/format";
+import { changeTotals, isDeliverable } from "../state/format";
 import { usePanelHidden } from "../state/hidden";
 import { ChangesPanel } from "./ChangesPanel";
-import { Composer } from "./Composer";
+import { ClosedBar, Composer } from "./Composer";
 import { DeleteDialog } from "./DeleteDialog";
 import { PlanCard } from "./PlanCard";
 import { QuestionCard } from "./QuestionCard";
@@ -68,7 +68,10 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
   const more = useRef<HTMLButtonElement>(null);
   const status = view.status ?? snap.status;
   const review = snap.mode === "review";
-  const session = { id, code: snap.mode === "code", baseBranch: snap.baseBranch, pr: snap.pr?.number ?? null };
+  // Merged or closed on GitHub: nothing more is sent from here (A26). A run that is still going keeps its Stop button.
+  const closedPr = snap.pr && snap.pr.state !== "open" ? { number: snap.pr.number, state: snap.pr.state } : null;
+  const closed = closedPr !== null && status !== "running" ? closedPr : null;
+  const session = { id, code: snap.mode === "code", baseBranch: snap.baseBranch, pr: snap.pr?.number ?? null, closed: closed !== null };
 
   // Re-read the snapshot (sandboxRunning) and the list after each status change.
   const first = useRef(true);
@@ -79,6 +82,14 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
     refreshList();
   }, [status]);
   useEffect(() => () => reportStatus(id, null), [id]);
+
+  // The server refuses a frame once the pull request is merged or closed: the snapshot says so, and so does the list.
+  useEffect(() => {
+    if (view.refused) reload();
+  }, [view.refused]);
+  useEffect(() => {
+    if (closedPr) refreshList();
+  }, [closedPr?.state]);
 
   // A pull request opened or a review posted here changes the Pull requests list and its count.
   const published = view.items.filter((i) => i.kind === "pr" || i.kind === "review_posted").length;
@@ -142,7 +153,9 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
           <PlanCard plan={view.plan} active={status === "running"} />
         </div>
       )}
-      {view.gate && status === "awaiting_approval" ? (
+      {closed ? (
+        <ClosedBar pr={closed} />
+      ) : view.gate && status === "awaiting_approval" ? (
         review && view.gate.tool === "finish" ? (
           <PostBar view={view} gate={view.gate} send={send} update={update} />
         ) : (
@@ -166,21 +179,21 @@ function Live({ id, snap, reload }: { id: string; snap: SessionSnapshot; reload:
           Reconnecting
         </div>
       )}
-      <SessionHeader title={snap.title} status={status} header={view.header} review={review} onDelete={() => setConfirming(true)} moreRef={more} />
+      <SessionHeader title={snap.title} status={status} prState={closedPr?.state} header={view.header} review={review} onDelete={() => setConfirming(true)} moreRef={more} />
       <div className="relative flex min-h-0 grow">
         {review ? (
-          <ReviewBody view={view} status={status} session={session} pr={snap.pr?.number ?? null} send={send} bar={barEl} />
+          <ReviewBody view={view} status={closed && status === "awaiting_approval" ? "done" : status} session={session} pr={snap.pr?.number ?? null} send={send} bar={barEl} />
         ) : (
           <>
             <Timeline view={view} session={session} />
             {changesHidden ? (
               <div className="pointer-events-none absolute top-3 right-5 z-10">
                 <button type="button" onClick={() => setChangesHidden(false)} className="pointer-events-auto cursor-pointer rounded-full bg-fill px-3 py-1 text-xs font-medium">
-                  {view.changes.length > 0 ? `Show changes · ${changeTotals(view.changes).files}` : "Show changes"}
+                  {snap.mode === "task" ? `Show files · ${view.changes.filter((c) => isDeliverable(c.path)).length}` : view.changes.length > 0 ? `Show changes · ${changeTotals(view.changes).files}` : "Show changes"}
                 </button>
               </div>
             ) : (
-              <ChangesPanel id={id} view={view} sandboxRunning={snap.sandboxRunning} sha={snap.sha} onHide={() => setChangesHidden(true)} />
+              <ChangesPanel id={id} mode={snap.mode} view={view} sandboxRunning={snap.sandboxRunning} sha={snap.sha} onHide={() => setChangesHidden(true)} />
             )}
           </>
         )}

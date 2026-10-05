@@ -25,8 +25,20 @@ export interface Env {
   DEMO_REPO: string;
   DEMO_SHA: string;
   KILL_SWITCH: string;
+  TASK_NETWORK: string;
   DEBUG_ENDPOINTS: string;
 }
 
 /** The one WorkspaceDO (ADR D16). */
 export const WORKSPACE_NAME = "workspace";
+
+// Populate the platform's typed loopback bindings (`ctx.exports`).
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace -- augment the platform namespace
+  namespace Cloudflare {
+    interface GlobalProps {
+      mainModule: typeof import("./index");
+      durableNamespaces: "SessionDO" | "WorkspaceDO";
+    }
+  }
+}

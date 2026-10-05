@@ -5,6 +5,7 @@ import { SandboxLostError, type ExecOptions, type ExecResult } from "../core/typ
 import type { ChangedFile, SandboxHost } from "../session/ports";
 import type { CloudflareSandboxOptions, ContainerLike, ExecProcessLike, FilesLike } from "./container";
 
+const CA = "/etc/cloudflare/certs/cloudflare-containers-ca.crt";
 const GIT_IDENTITY = ["-c", "user.email=agent@andrun.local", "-c", "user.name=andrun", "-c", "commit.gpgsign=false"];
 const ZERO_SHA = /^0+$/;
 const READY_POLL_MS = 250;
@@ -34,11 +35,15 @@ export class CloudflareSandboxAdapter implements SandboxHost {
   private readonly tmpDir: string;
   private readonly inactivityMs: number;
   private readonly startTimeoutMs: number;
+  private readonly egress: CloudflareSandboxOptions["egress"];
+  private network = false;
   private baseline: string | undefined;
   private tail: Promise<unknown> = Promise.resolve();
 
   constructor(options: CloudflareSandboxOptions) {
     this.container = options.container;
+    this.egress = options.egress;
+    this.network = options.network ?? false;
     this.files = options.files;
     this.image = options.image;
     this.workdir = options.workdir ?? "/workspace";
@@ -107,6 +112,7 @@ export class CloudflareSandboxAdapter implements SandboxHost {
       try {
         proc = await this.container.exec(argv, {
           cwd: this.workdir,
+          ...(this.network && { env: { NODE_EXTRA_CA_CERTS: CA } }),
           stdout: "pipe",
           stderr: "pipe",
           signal: controller.signal,
@@ -215,31 +221,44 @@ export class CloudflareSandboxAdapter implements SandboxHost {
 
   // ---------- lifecycle ----------
 
-  setup(tarball: ReadableStream<Uint8Array>): Promise<{ readyMs: number }> {
+  setup(tarball: ReadableStream<Uint8Array> | null, opts?: { network: boolean }): Promise<{ readyMs: number }> {
     return this.enqueue(async () => {
       const t0 = Date.now();
       this.baseline = undefined;
+      this.network = opts?.network ?? false;
       const started = !this.container.running;
       if (started) {
         const image = typeof this.image === "function" ? this.image() : this.image;
         this.container.start({ ...(image !== undefined ? { image } : {}), enableInternet: false });
+      }
+      if (this.network) {
+        if (!this.egress) throw new Error("Task network requires an egress gate");
+        await this.container.interceptAllOutboundHttp(this.egress);
+        await this.container.interceptOutboundHttps("*", this.egress);
       }
       await this.waitUntilReady(t0, started);
       const readyMs = Date.now() - t0;
       // Set once the container answers: right after start() the platform may not know it yet.
       if (started) await this.guard("set idle timeout", () => this.container.setInactivityTimeout(this.inactivityMs));
 
-      const tarFile = `${this.tmpDir}/andrun-${crypto.randomUUID()}.tar.gz`;
       await this.guard("mkdir", () => this.files.mkdir(this.workdir, { recursive: true }));
-      await this.guard("mkdir", () => this.files.mkdir(this.tmpDir, { recursive: true }));
-      await this.guard("write tarball", () => this.files.writeFile(tarFile, tarball));
-      const tar = await this.run(["tar", "-xzf", tarFile, "-C", this.workdir, "--strip-components=1"], "tar");
-      await this.guard("remove tarball", () => this.files.remove(tarFile, { force: true }));
-      if (tar.exitCode !== 0) throw new Error(`tar failed: ${tar.stderr.trim()}`);
+      if (this.network) {
+        const trust = await this.run(["sh", "-c", `cp ${CA} /usr/local/share/ca-certificates/cloudflare-containers-ca.crt && update-ca-certificates && npm config set --global cafile ${CA}`], "trust egress CA");
+        if (trust.exitCode !== 0) throw new Error(`trust egress CA failed: ${trust.stderr.trim()}`);
+      }
+      if (tarball !== null) {
+        const tarFile = `${this.tmpDir}/andrun-${crypto.randomUUID()}.tar.gz`;
+        await this.guard("mkdir", () => this.files.mkdir(this.tmpDir, { recursive: true }));
+        await this.guard("write tarball", () => this.files.writeFile(tarFile, tarball));
+        const tar = await this.run(["tar", "-xzf", tarFile, "-C", this.workdir, "--strip-components=1"], "tar");
+        await this.guard("remove tarball", () => this.files.remove(tarFile, { force: true }));
+        if (tar.exitCode !== 0) throw new Error(`tar failed: ${tar.stderr.trim()}`);
+      }
 
       await this.gitOk(["init", "-q"], "git init");
+      if (tarball === null) await this.guard("exclude dependencies", () => this.files.writeFile(`${this.workdir}/.git/info/exclude`, "node_modules/\n"));
       await this.gitOk(["add", "-A"], "git add");
-      await this.gitOk(["commit", "-q", "-m", "baseline"], "git commit");
+      await this.gitOk(["commit", "--allow-empty", "-q", "-m", "baseline"], "git commit");
       const head = (await this.gitOk(["rev-parse", "HEAD"], "git rev-parse")).trim();
       if (!/^[0-9a-f]{40}$/.test(head)) throw new Error(`git rev-parse failed: unexpected output '${head}'`);
       this.baseline = head;

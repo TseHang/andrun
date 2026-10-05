@@ -347,3 +347,132 @@ describe("Harness improvement: finish handling is the profile's (HI-d)", () => {
     expect(await send(g.engine, { type: "post_review", approvalId: "x", verdict: "COMMENT" })).toEqual([{ type: "rejected", reason: "post_review is only for review sessions" }]);
   });
 });
+
+describe("A merged or closed pull request closes its sessions (A26)", () => {
+  const MERGED = "Pull request #12 was merged. Start a new session to continue.";
+
+  /** A Code session whose pull request #12 is open on GitHub. */
+  async function published() {
+    const g = await codeAtGate();
+    await send(g.engine, { type: "approve", approvalId: g.approvalId });
+    return g;
+  }
+
+  it("a Code session takes no more messages once its pull request is merged", async () => {
+    const g = await published();
+    await g.engine.refreshPr();
+    expect(g.engine.snapshot()).toMatchObject({ status: "done", pr: { number: 12, state: "open" } });
+    expect(g.upserts.at(-1)).not.toHaveProperty("prState");
+
+    Object.assign(g.fake.pulls[0]!, { state: "closed", merged: true });
+    await g.engine.refreshPr();
+    expect(g.engine.snapshot()).toMatchObject({ status: "done", pr: { number: 12, state: "merged" } });
+    expect(g.upserts.at(-1)).toMatchObject({ id: ID, status: "done", pr: 12, prState: "merged" });
+
+    const events = g.events().length;
+    const writes = g.fake.writes().length;
+    expect(await send(g.engine, { type: "message", text: "also add a test" })).toEqual([{ type: "rejected", reason: MERGED }]);
+    expect(g.events()).toHaveLength(events);
+    expect(g.fake.writes()).toHaveLength(writes);
+
+    // A merge is final: GitHub is not asked again.
+    const requests = g.fake.requests.length;
+    await g.engine.refreshPr();
+    expect(g.fake.requests).toHaveLength(requests);
+  });
+
+  it("receive asks GitHub before it handles the frame", async () => {
+    const g = await published();
+    Object.assign(g.fake.pulls[0]!, { state: "closed", merged: true });
+    const replies: unknown[] = [];
+    await g.engine.receive(JSON.stringify({ type: "message", text: "also add a test" }), (r) => replies.push(r), { ip: IP });
+    await g.engine.idle();
+    expect(replies).toEqual([{ type: "rejected", reason: MERGED }]);
+    expect(g.engine.snapshot()).toMatchObject({ status: "done", pr: { state: "merged" } });
+  });
+
+  it("many frames in a row ask GitHub once", async () => {
+    const g = await published();
+    const requests = () => g.fake.requests.filter((r) => r.path.endsWith("/pulls/12")).length;
+    const before = requests();
+    for (let i = 0; i < 5; i++) await g.engine.receive(JSON.stringify({ type: "approve", approvalId: "nope" }), () => {}, { ip: IP });
+    expect(requests()).toBe(before + 1);
+  });
+
+  it("a gate that waits when the pull request is merged cannot be approved", async () => {
+    const g = await codeAtGate(HAPPY(), {}, [
+      call("write_file", { path: "test/empty.test.js", content: "// empty\n" }),
+      call("finish", { summary: "Added a test.", title: "Add a test" }),
+    ]);
+    await send(g.engine, { type: "approve", approvalId: g.approvalId });
+    await send(g.engine, { type: "message", text: "also add a test" });
+    const approvalId = g.engine.snapshot()!.pending!.approvalId;
+    Object.assign(g.fake.pulls[0]!, { state: "closed", merged: true });
+    await g.engine.refreshPr();
+    const writes = g.fake.writes().length;
+    for (const frame of [{ type: "approve", approvalId }, { type: "reject", approvalId, comment: "no" }]) {
+      expect(await send(g.engine, frame)).toEqual([{ type: "rejected", reason: MERGED }]);
+    }
+    expect(g.fake.writes()).toHaveLength(writes);
+  });
+
+  it("a Review session posts nothing and takes no messages once the pull request is merged", async () => {
+    const r = await reviewAtGate();
+    Object.assign(r.pull, { state: "closed", merged: true });
+    await r.engine.refreshPr();
+    expect(r.engine.snapshot()).toMatchObject({ pr: { number: 14, state: "merged" } });
+    expect(r.upserts.at(-1)).toMatchObject({ mode: "review", pr: 14, prState: "merged" });
+    const reason = "Pull request #14 was merged. Start a new session to continue.";
+    expect(await send(r.engine, { type: "post_review", approvalId: r.approvalId, verdict: "COMMENT", comment: "Looks fine." })).toEqual([{ type: "rejected", reason }]);
+    expect(await send(r.engine, { type: "message", text: "look again" })).toEqual([{ type: "rejected", reason }]);
+    expect(await send(r.engine, { type: "finding", id: findings(r.events())[0]!.id, dismissed: true })).toEqual([{ type: "rejected", reason }]);
+    expect(r.fake.reviews).toHaveLength(0);
+  });
+
+  it("a closed pull request closes the session until it is reopened", async () => {
+    const g = await published();
+    Object.assign(g.fake.pulls[0]!, { state: "closed" });
+    await g.engine.refreshPr();
+    expect(g.engine.snapshot()).toMatchObject({ pr: { state: "closed" } });
+    expect(g.upserts.at(-1)).toMatchObject({ prState: "closed" });
+    expect(await send(g.engine, { type: "message", text: "more" })).toEqual([{ type: "rejected", reason: "Pull request #12 was closed. Start a new session to continue." }]);
+
+    Object.assign(g.fake.pulls[0]!, { state: "open" });
+    await g.engine.refreshPr();
+    expect(g.engine.snapshot()).toMatchObject({ pr: { state: "open" } });
+    expect(g.upserts.at(-1)).not.toHaveProperty("prState");
+  });
+
+  it("keeps what it knew when GitHub cannot be reached, and asks at most once per maxAge", async () => {
+    const g = await published();
+    g.fake.fail({ path: /\/pulls\/12$/, status: 502 });
+    await g.engine.refreshPr();
+    expect(g.engine.snapshot()).toMatchObject({ pr: { state: "open" } });
+
+    await g.engine.refreshPr();
+    const requests = g.fake.requests.length;
+    await g.engine.refreshPr(30_000);
+    expect(g.fake.requests).toHaveLength(requests);
+  });
+
+  it("a frame that arrives while GitHub is being asked waits for that answer", async () => {
+    const g = await published();
+    Object.assign(g.fake.pulls[0]!, { state: "closed", merged: true });
+    const requests = () => g.fake.requests.filter((r) => r.path.endsWith("/pulls/12")).length;
+    const before = requests();
+    const replies: unknown[] = [];
+    const frame = JSON.stringify({ type: "message", text: "also add a test" });
+    await Promise.all([g.engine.receive(frame, (r) => replies.push(r), { ip: IP }), g.engine.receive(frame, (r) => replies.push(r), { ip: IP })]);
+    await g.engine.idle();
+    expect(replies).toEqual([{ type: "rejected", reason: MERGED }, { type: "rejected", reason: MERGED }]);
+    expect(requests()).toBe(before + 1);
+  });
+
+  it("a session without a pull request never asks GitHub", async () => {
+    const g = await codeAtGate();
+    const requests = g.fake.requests.length;
+    await g.engine.refreshPr();
+    expect(g.fake.requests).toHaveLength(requests);
+    expect(g.engine.snapshot()!.pr).toBeNull();
+  });
+});

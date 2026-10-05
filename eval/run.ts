@@ -29,15 +29,15 @@ import { LocalSandbox } from "./local-sandbox";
 
 export interface EvalCase {
   id: string;
-  fixture: string;
-  mode: "code" | "review";
+  fixture?: string;
+  mode: "code" | "review" | "task";
   task: string;
   check?: { cmd: string; expect_exit: number };
   expect_finding?: { path: string; lines: number[] };
   expect_changes?: string[];
   expect_no_findings?: boolean;
   expect_reply?: boolean;
-  forbid_changes: string[];
+  forbid_changes?: string[];
   max_steps?: number;
 }
 
@@ -72,20 +72,23 @@ function invalid(file: string, why: string): Error {
 function validateCase(file: string, raw: unknown): EvalCase {
   if (!raw || typeof raw !== "object") throw invalid(file, "expected a YAML mapping");
   const c = raw as Record<string, unknown>;
-  for (const key of ["id", "fixture", "task"]) {
+  for (const key of ["id", "task"]) {
     if (typeof c[key] !== "string" || !c[key]) throw invalid(file, `"${key}" must be a non-empty string`);
   }
-  if (c["mode"] !== "code" && c["mode"] !== "review") throw invalid(file, `"mode" must be "code" or "review"`);
+  if (c["mode"] !== "code" && c["mode"] !== "review" && c["mode"] !== "task") throw invalid(file, `"mode" must be "code", "review" or "task"`);
+  if (c["mode"] === "task") {
+    if (c["fixture"] !== undefined || c["forbid_changes"] !== undefined) throw invalid(file, "task cases cannot have fixture or forbid_changes");
+  } else if (typeof c["fixture"] !== "string" || !c["fixture"]) throw invalid(file, '"fixture" must be a non-empty string');
   if (c["expect_reply"] !== undefined) {
     if (c["mode"] !== "code") throw invalid(file, `"expect_reply" is only for code cases`);
     if (c["expect_reply"] !== true) throw invalid(file, `"expect_reply" must be true`);
   }
   const check = c["check"] as Record<string, unknown> | null | undefined;
-  if (check === undefined || check === null ? c["mode"] === "code" && c["expect_reply"] !== true : typeof check["cmd"] !== "string" || typeof check["expect_exit"] !== "number") {
+  if (check === undefined || check === null ? c["mode"] !== "review" && c["expect_reply"] !== true : typeof check["cmd"] !== "string" || typeof check["expect_exit"] !== "number") {
     throw invalid(file, `"check" needs a string "cmd" and a number "expect_exit"`);
   }
   const expect = c["expect_finding"] as Record<string, unknown> | null | undefined;
-  if (c["mode"] === "code") {
+  if (c["mode"] !== "review") {
     if (expect !== undefined) throw invalid(file, `"expect_finding" is only for review cases`);
     if (c["expect_no_findings"] !== undefined) throw invalid(file, `"expect_no_findings" is only for review cases`);
   } else {
@@ -103,7 +106,7 @@ function validateCase(file: string, raw: unknown): EvalCase {
     throw invalid(file, `"expect_changes" must be a list of glob strings`);
   }
   const forbid = c["forbid_changes"];
-  if (!Array.isArray(forbid) || !forbid.every((g) => typeof g === "string")) {
+  if (c["mode"] !== "task" && (!Array.isArray(forbid) || !forbid.every((g) => typeof g === "string"))) {
     throw invalid(file, `"forbid_changes" must be a list of glob strings`);
   }
   if (c["max_steps"] !== undefined && typeof c["max_steps"] !== "number") throw invalid(file, `"max_steps" must be a number`);
@@ -208,7 +211,7 @@ async function runOne(
 
   let sandbox: LocalSandbox | undefined;
   try {
-    sandbox = await LocalSandbox.fromFixture(join(opts.fixturesDir, c.fixture));
+    sandbox = await LocalSandbox.fromFixture(c.mode === "task" ? null : join(opts.fixturesDir, c.fixture!));
     const config: AgentConfig = { ...opts.config, maxSteps: c.max_steps ?? opts.config.maxSteps };
     const profile = getProfile(c.mode, config);
     const budget = new AbortController();
@@ -239,7 +242,7 @@ async function runOne(
     };
 
     const state0 = createSession({ sessionId: `${c.id}-${run}`, mode: c.mode, task: c.task }, profile);
-    state0.messages.push({ role: "user", content: await buildRepoContext(sandbox, { agentsMd: profile.sandboxSetup !== "pr-head@sha" }) });
+    if (profile.sandboxSetup !== "empty") state0.messages.push({ role: "user", content: await buildRepoContext(sandbox, { agentsMd: profile.sandboxSetup !== "pr-head@sha" }) });
     let { state, outcome } = await runAgent(state0, profile, deps);
     // A human approves everything in eval (slice decision S-a): strikes and implicit finishes too.
     // A question is answered with a fixed text, unless the case expects the agent to stop and ask.
@@ -259,7 +262,7 @@ async function runOne(
       timeoutMs: config.commandTimeoutMs,
     });
     const changed = diff.stdout.split("\0").filter(Boolean);
-    const isForbidden = picomatch(c.forbid_changes);
+    const isForbidden = picomatch(c.forbid_changes ?? []);
     // If the baseline is gone (history rewritten), we can't prove the tests are untouched.
     const editedTests = diff.exitCode !== 0 || changed.some((f) => isForbidden(f));
     const check = c.check ? await sandbox.exec(c.check.cmd, { timeoutMs: config.commandTimeoutMs }) : undefined;
@@ -272,7 +275,7 @@ async function runOne(
 
     const pass = c.expect_reply
       ? outcome.kind === "awaiting_input" && changed.length === 0 && diff.exitCode === 0
-      : (outcome.kind === "finished" || (outcome.kind === "awaiting_input" && c.mode === "code")) &&
+      : (outcome.kind === "finished" || (outcome.kind === "awaiting_input" && c.mode !== "review")) &&
         checkOk && found && noFindings && wantChanges && untouched && !editedTests;
 
     return result({
@@ -362,7 +365,7 @@ async function main(argv: string[]): Promise<number> {
     outDir,
     fixturesDir: join(here, "fixtures"),
     // Sessions have no step limit (the turn's cost limit stops them); an eval run gets one, so a stuck case ends early.
-    config: { ...defaultConfig, maxSteps: EVAL_MAX_STEPS, models: { ...defaultConfig.models, code: model, review: model } },
+    config: { ...defaultConfig, maxSteps: EVAL_MAX_STEPS, models: { ...defaultConfig.models, code: model, review: model, task: model } },
     maxCost,
     log: (l) => console.log(l),
   });

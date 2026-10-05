@@ -5,6 +5,7 @@ import { WORKSPACE_NAME, type Env } from "./env";
 import { handle } from "./router";
 import type { RouterEnv, SessionStub } from "./types";
 
+export { EgressGate } from "./egress-gate";
 export { SessionDO } from "./session-do";
 export { WorkspaceDO } from "./workspace-do";
 

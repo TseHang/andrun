@@ -40,7 +40,7 @@ async function createSession(request: Request, env: RouterEnv): Promise<Response
   }
   if (typeof body !== "object" || body === null || Array.isArray(body)) return error(400, "body must be a JSON object");
   const { mode, task, model, reasoning, pr } = body as Record<string, unknown>;
-  if (mode !== "code" && mode !== "review") return error(400, 'mode must be "code" or "review"');
+  if (mode !== "code" && mode !== "review" && mode !== "task") return error(400, 'mode must be "code", "review" or "task"');
   const trimmed = typeof task === "string" ? task.trim() : "";
   if (trimmed === "" || trimmed.length > MAX_TASK_CHARS) {
     return error(400, `task must be a non-empty string of at most ${MAX_TASK_CHARS} characters`);
@@ -62,7 +62,9 @@ async function createSession(request: Request, env: RouterEnv): Promise<Response
   const id = env.newId();
   const common = { id, task: trimmed, ...(model !== undefined && { model: model as string }), ...(effort !== undefined && { reasoning: effort }) };
   try {
-    if (mode === "code") {
+    if (mode === "task") {
+      await env.session(id).create({ ...common, mode });
+    } else if (mode === "code") {
       if (env.repo.sha !== null) {
         await env.session(id).create({ ...common, mode });
       } else {

@@ -13,6 +13,8 @@ export interface SessionInfo {
   code: boolean;
   baseBranch: string | null;
   pr: number | null;
+  /** The pull request was merged or closed: the session takes no more messages (A26). */
+  closed?: boolean;
 }
 
 const GITHUB_LINK = (url: string) => (
@@ -96,7 +98,7 @@ function Item({ item, session, latest }: { item: TimelineItem; session: SessionI
           <div className="text-[13px] font-semibold">Review posted · {VERDICT[item.verdict]}</div>
           <div className="mt-1 text-xs">{GITHUB_LINK(item.url)}</div>
           {/* This session reads the commit it started on; a newer one needs a new review. */}
-          {latest && (
+          {latest && !session.closed && (
             <div className="mt-1 text-xs text-text-secondary">
               Keep asking &run here. New commits on the pull request?{" "}
               <a href={session.pr === null ? "/prs" : `/prs/${session.pr}`} className="text-accent-text">

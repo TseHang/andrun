@@ -9,7 +9,7 @@ import { ScriptedModelClient, call } from "../support/scripted-model";
 
 const ROOT = join(import.meta.dirname, "../..");
 const FIX_THE_TEST = ["cli-flag", "empty-array", "multi-file", "slugify", "sum-off-by-one"];
-const ALL_CASES = [...FIX_THE_TEST, "add-tests", "discuss-first", "feature-clamp", "refactor-format", "review-clean", "review-slugify", "static-page"].sort();
+const ALL_CASES = [...FIX_THE_TEST, "add-tests", "discuss-first", "feature-clamp", "refactor-format", "review-clean", "review-slugify", "static-page", "task-page"].sort();
 const FIXTURES = join(ROOT, "eval/fixtures");
 const CASES = join(ROOT, "eval/cases");
 
@@ -89,7 +89,7 @@ describe("S12: eval runner writes a trajectory and scores honestly", () => {
     for (const c of cases) {
       // The review case (Phase 4) is checked in the S20 describe below, the cases of HI-i in the last one.
       if (FIX_THE_TEST.includes(c.id)) expect(c).toMatchObject({ check: { cmd: "npm test", expect_exit: 0 }, forbid_changes: ["test/**", "package.json"] });
-      expect(existsSync(join(FIXTURES, c.fixture))).toBe(true);
+      if (c.mode !== "task") expect(existsSync(join(FIXTURES, c.fixture!))).toBe(true);
     }
     expect(await loadCases(CASES, "sum-off-by-one")).toHaveLength(1);
   });
@@ -314,7 +314,7 @@ describe("HI-i: cases beyond 'fix the test'", () => {
   it("scores feature, refactor, add-tests, static-page and clean-review cases", async () => {
     const cases = await loadCases(CASES);
     expect(cases.map((c) => c.id).sort()).toEqual(ALL_CASES);
-    expect(cases).toHaveLength(12);
+    expect(cases).toHaveLength(13);
     expect(cases.find((c) => c.id === "add-tests")).toMatchObject({ mode: "code", expect_changes: ["test/**"], forbid_changes: ["src/**", "package.json"] });
     expect(cases.find((c) => c.id === "review-clean")).toMatchObject({ mode: "review", expect_no_findings: true });
     expect(cases.find((c) => c.id === "static-page")!.max_steps).toBeUndefined();
@@ -367,11 +367,11 @@ describe("HI-i: cases beyond 'fix the test'", () => {
 
   it("all cases load", async () => {
     const cases = await loadCases(CASES);
-    expect(cases).toHaveLength(12);
+    expect(cases).toHaveLength(13);
     const discuss = cases.find((c) => c.id === "discuss-first")!;
     expect(discuss).toMatchObject({ mode: "code", expect_reply: true, task: "I want to add a small game to this repo. What would you suggest?" });
     expect(discuss.check).toBeUndefined();
-    expect(existsSync(join(FIXTURES, discuss.fixture))).toBe(true);
+    expect(existsSync(join(FIXTURES, discuss.fixture!))).toBe(true);
   });
 
   it("runs that end waiting for the user are scored", async () => {
@@ -430,4 +430,22 @@ describe("HI-i: cases beyond 'fix the test'", () => {
     writeFileSync(join(dir, "bad.yaml"), `${base}mode: review\nexpect_no_findings: true\n`);
     expect(await loadCases(dir)).toHaveLength(1);
   });
+});
+
+it("a task case runs in an empty workspace", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "andrun-task-case-"));
+  const outDir = mkdtempSync(join(tmpdir(), "andrun-task-run-"));
+  dirs.push(dir, outDir);
+  const yaml = 'id: task-test\nmode: task\ntask: Make a page\ncheck:\n  cmd: "test -f index.html && git rev-list --max-parents=0 HEAD"\n  expect_exit: 0\n';
+  writeFileSync(join(dir, "case.yaml"), yaml);
+  const cases = await loadCases(dir);
+  const model = new ScriptedModelClient([call("list_files", {}), call("write_file", { path: "index.html", content: "<h1>Done</h1>" }), { text: "Done: index.html" }]);
+  const results = await runEval({ cases, runs: 1, makeModel: () => model, outDir, fixturesDir: "/does-not-exist", config: defaultConfig });
+  expect(results[0]).toMatchObject({ pass: true, outcome: "awaiting_input", changed_files: ["index.html"], auto_approved: 0 });
+  expect(model.requests[0]!.messages).toHaveLength(2);
+  expect(model.requests[1]!.messages.at(-1)).toMatchObject({ role: "tool", content: "" });
+  for (const extra of ["fixture: something\n", "forbid_changes: []\n"]) {
+    writeFileSync(join(dir, "case.yaml"), yaml + extra);
+    await expect(loadCases(dir)).rejects.toThrow(/task/i);
+  }
 });

@@ -4,6 +4,8 @@
 
 import { Files } from "@cloudflare/sandbox";
 import { DurableObject } from "cloudflare:workers";
+import { getProfile } from "../core/modes";
+import { SessionStore } from "../session/store";
 import { defaultConfig } from "../core/config";
 import { OpenAICompatModelClient } from "../core/model";
 import { CloudflareSandboxAdapter } from "../sandbox/cloudflare-sandbox";
@@ -17,6 +19,8 @@ import { fetchTarball } from "./repo";
 
 /** Container idle timeout (ADR D10). */
 const INACTIVITY_MS = 15 * 60_000;
+/** How old the pull request's state may be when a snapshot is read (A26); a frame always asks again. */
+const PR_STATE_MAX_AGE_MS = 30_000;
 
 export class SessionDO extends DurableObject<Env> {
   private readonly engine: SessionEngine;
@@ -43,11 +47,14 @@ export class SessionDO extends DurableObject<Env> {
     const sql: SqlStore = {
       exec: <T>(query: string, ...bindings: SqlValue[]) => ctx.storage.sql.exec(query, ...bindings).toArray() as T[],
     };
+    const mode = new SessionStore(sql).meta()?.mode;
     this.engine = new SessionEngine({
       sql,
       sandbox: new CloudflareSandboxAdapter({
         container: container as unknown as ContainerLike,
         files: new Files(container),
+        network: mode !== undefined && getProfile(mode, defaultConfig).network === "get",
+        egress: ctx.exports.EgressGate({ props: { enabled: env.TASK_NETWORK !== "0", killSwitch: env.KILL_SWITCH === "1" } }),
         image: () => {
           const image = container.images["sandbox"];
           if (!image) throw new Error(`no "sandbox" image on the container binding (found: ${Object.keys(container.images).join(", ") || "none"})`);
@@ -59,7 +66,7 @@ export class SessionDO extends DurableObject<Env> {
       model: new OpenAICompatModelClient({ baseUrl: env.AIAND_BASE_URL, apiKey: env.AIAND_API_KEY }),
       config: defaultConfig,
       repo: { name: env.DEMO_REPO, sha: env.DEMO_SHA },
-      github: githubFor(env, "sessions"),
+      github: { ...githubFor(env, "sessions"), pullState: (n) => githubFor(env, "state").pullState(n) },
       guard: {
         githubWrite: async (ip) => {
           if (env.GITHUB_WRITES !== "1" || env.KILL_SWITCH === "1") return "GitHub writes are disabled";
@@ -96,6 +103,8 @@ export class SessionDO extends DurableObject<Env> {
   }
 
   async snapshot(): Promise<(SessionSnapshot & { debug: { bootId: string; containerRunning: boolean; sockets: number } }) | null> {
+    // The page re-reads the snapshot often while a sandbox winds down; GitHub is asked at most twice a minute.
+    await this.engine.refreshPr(PR_STATE_MAX_AGE_MS);
     const snapshot = this.engine.snapshot();
     if (!snapshot) return null;
     const debug = { bootId: this.bootId, containerRunning: this.ctx.container?.running ?? false, sockets: this.ctx.getWebSockets().length };
@@ -132,7 +141,7 @@ export class SessionDO extends DurableObject<Env> {
 
   override async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
     const attachment = ws.deserializeAttachment() as { ip?: string } | null;
-    this.engine.handleFrame(message, (frame) => ws.send(JSON.stringify(frame)), { ip: attachment?.ip ?? "unknown" });
+    await this.engine.receive(message, (frame) => ws.send(JSON.stringify(frame)), { ip: attachment?.ip ?? "unknown" });
     this.ctx.waitUntil(this.engine.idle());
   }
 

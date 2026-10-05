@@ -37,6 +37,7 @@ function session(model: ModelClient, upsert: (row: SessionSummary) => Promise<vo
       publish: async (input) => ({ number: 1, url: "https://github.com/TseHang/andrun-demo/pull/1", branch: `${input.branchPrefix}-1`, round: 1, updated: false }),
       postReview: async () => ({ url: "" }),
       defaultBranchHead: async () => ({ branch: "main", sha: "0df6f53ec8a51785899d574c43db212513347537" }),
+      pullState: async () => "open",
     },
     guard: { githubWrite: async () => null },
     broadcast: () => {},
@@ -114,6 +115,18 @@ describe("the index knows a session's pull request (Phase 4, P4-k)", () => {
     ]);
     index.upsert({ id: FIRST, ...base, pr: 12 }); // a Code session gets its pull request when it is approved
     expect(index.list()[1]).toMatchObject({ id: FIRST, pr: 12 });
+  });
+
+  it("stores a merged or closed pull request, and leaves an open one out (A26)", () => {
+    const index = new WorkspaceIndex(nodeSql().sql);
+    index.upsert({ id: FIRST, ...base, pr: 12, prState: "merged" });
+    index.upsert({ id: SECOND, ...base, created_at: 2, pr: 13, prState: "closed" });
+    expect(index.list()).toEqual([
+      { id: SECOND, ...base, created_at: 2, pr: 13, prState: "closed" },
+      { id: FIRST, ...base, pr: 12, prState: "merged" },
+    ]);
+    index.upsert({ id: SECOND, ...base, created_at: 2, pr: 13 }); // reopened
+    expect(index.list()[0]).toEqual({ id: SECOND, ...base, created_at: 2, pr: 13 });
   });
 
   it("a table created before Phase 4 gets the column", () => {

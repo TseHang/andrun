@@ -53,7 +53,7 @@ export type EventBody =
       /** On the final `result` of `read_file` (`bytes`, UTF-8 size of the whole file) and `list_files` (`files`, paths returned), before any cut. */
       meta?: { bytes?: number; files?: number };
     }
-  | { type: "file_changed"; path: string; diff: string }
+  | { type: "file_changed"; path: string; diff: string; saved?: boolean; unavailableReason?: string }
   | {
       type: "approval_required";
       approvalId: string;

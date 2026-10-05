@@ -349,3 +349,46 @@ describe("sandbox loss is a SandboxLostError (P2-d)", () => {
     expect(Date.now() - started).toBeLessThan(5000);
   });
 });
+
+
+it("empty setup: a baseline with no files, node_modules left out", async () => {
+  await sandbox.setup(null);
+  expect(container.calls.some((c) => c.argv[0] === "tar")).toBe(false);
+  expect((await sandbox.exec("git rev-parse HEAD")).stdout.trim()).toMatch(/^[0-9a-f]{40}$/);
+  expect(await sandbox.listFiles()).toEqual([]);
+  await sandbox.writeFile("index.html", "<h1>x</h1>");
+  await sandbox.writeFile("node_modules/a/index.js", "x");
+  expect(await sandbox.changedFiles()).toEqual([expect.objectContaining({ path: "index.html", status: "added" })]);
+});
+
+it("network: intercepts are registered for a task sandbox only, again after a restart", async () => {
+  const gate = { fetch: async () => new Response("ok") };
+  const task = new CloudflareSandboxAdapter({ container, files: container.files, workdir: container.workdir, tmpDir: container.tmpDir, egress: gate });
+  await task.setup(null, { network: true });
+  expect(container.starts).toEqual([{ enableInternet: false }]);
+  expect(container.intercepts).toEqual([{ protocol: "http", handler: gate }, { protocol: "https", hostname: "*", handler: gate }]);
+  expect(container.log.indexOf("start")).toBeLessThan(container.log.indexOf("intercept:http"));
+  const trust = container.calls.find((c) => c.argv.join(" ").includes("update-ca-certificates"));
+  expect(trust).toBeDefined();
+  expect(trust!.argv.join(" ")).toContain("/etc/cloudflare/certs/cloudflare-containers-ca.crt");
+  await task.exec("node -e 'console.log(1)'");
+  expect(container.calls.at(-1)!.options?.env).toMatchObject({ NODE_EXTRA_CA_CERTS: "/etc/cloudflare/certs/cloudflare-containers-ca.crt" });
+  await task.destroy();
+  await task.setup(null, { network: true });
+  expect(container.intercepts).toHaveLength(4);
+  await task.destroy();
+  await task.setup(streamOf(TARBALL));
+  expect(container.intercepts).toHaveLength(4);
+  await task.exec("node -e 'console.log(1)'");
+  expect(container.calls.at(-1)!.options?.env?.["NODE_EXTRA_CA_CERTS"]).toBeUndefined();
+});
+
+it("network: a new adapter over a live Task container keeps Node's CA", async () => {
+  const gate = { fetch: async () => new Response("ok") };
+  const first = new CloudflareSandboxAdapter({ container, files: container.files, workdir: container.workdir, tmpDir: container.tmpDir, egress: gate });
+  await first.setup(null, { network: true });
+  const resumed = new CloudflareSandboxAdapter({ container, files: container.files, workdir: container.workdir, tmpDir: container.tmpDir, egress: gate, network: true });
+  await resumed.exec("node -e 'console.log(1)'");
+  expect(container.starts).toHaveLength(1);
+  expect(container.calls.at(-1)!.options?.env).toMatchObject({ NODE_EXTRA_CA_CERTS: "/etc/cloudflare/certs/cloudflare-containers-ca.crt" });
+});

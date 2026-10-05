@@ -1,0 +1,8 @@
+id: task-page
+mode: task
+task: Make a self-contained HTML page explaining the water cycle, with inline CSS and an inline SVG diagram. Save it as index.html, check it once, then summarize.
+check:
+  cmd: >-
+    node -e "const s=require('fs').readFileSync('index.html','utf8'); if(!/<html[ >]/i.test(s)||!/<svg[ >]/i.test(s)||!/<style[ >]/i.test(s)||!/<h1[ >]/i.test(s)) process.exit(1)"
+  expect_exit: 0
+max_steps: 15

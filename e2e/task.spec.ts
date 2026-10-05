@@ -1,0 +1,78 @@
+import { readFile } from "node:fs/promises";
+import { test, expect } from "@playwright/test";
+
+const NOTE = "Task produces .html, .md and .csv files. Images, PDF and other binary files are not supported.";
+
+test("task: a page is written, previewed and downloaded", async ({ page, request }, testInfo) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("/");
+  await page.getByRole("group", { name: "Mode", exact: true }).getByRole("button", { name: "Task", exact: true }).click();
+  await expect(page.getByText("Runs in an empty sandbox that can read the web (GET only)")).toBeVisible();
+  await expect(page.getByText(NOTE)).toBeVisible();
+  await page.getByLabel("Task", { exact: true }).fill("[task] make a page");
+  await page.screenshot({ path: testInfo.outputPath("task-home.png"), fullPage: true });
+  await page.getByRole("button", { name: "Run", exact: true }).click();
+  await expect(page).toHaveURL(/\/s\//);
+  const files = page.getByRole("complementary", { name: "Files", exact: true });
+  const card = files.locator('[data-file="index.html"]');
+  await expect(page.getByLabel("Message to the agent")).toHaveAttribute("placeholder", "Reply to the agent", { timeout: 120_000 });
+  await expect(files.getByText(NOTE)).toBeVisible();
+  await expect(files.getByText("Web, read-only (GET)")).toBeVisible();
+  await expect(files.getByText("Base commit")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Approve and open PR" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Open pull request", exact: true })).toHaveCount(0);
+  await card.getByRole("button", { name: "Preview", exact: true }).click();
+  await expect(card.frameLocator("iframe").getByRole("heading")).toHaveText("Hello from Task");
+  await expect(card.locator("iframe")).toHaveAttribute("sandbox", "allow-scripts");
+  const downloaded = page.waitForEvent("download");
+  await card.getByRole("button", { name: "Download", exact: true }).click();
+  const download = await downloaded;
+  expect(download.suggestedFilename()).toBe("index.html");
+  const id = page.url().split("/").at(-1)!;
+  const response = await request.get(`/sessions/${id}/files?path=index.html`);
+  expect(response.headers()["content-type"]).toMatch(/^application\/json/);
+  expect(await readFile((await download.path())!, "utf8")).toBe((await response.json()).content);
+  await page.screenshot({ path: testInfo.outputPath("task-files.png"), fullPage: true });
+  await page.reload();
+  await expect(files.locator('[data-file="index.html"]')).toBeVisible();
+  expect(await (await request.get(`/sessions/${id}`)).json()).toMatchObject({ mode: "task", sha: "", baseBranch: null, pr: null });
+  await expect(page.getByRole("navigation", { name: "Workspace" }).locator('[data-tag="task"]').first()).toBeVisible();
+  expect(errors).toEqual([]);
+  await request.delete(`/sessions/${id}`);
+});
+
+test("task: local runtime egress survives a sandbox rebuild and Code stays offline", async ({ page, request }) => {
+  const response = await request.post("/sessions", { data: { mode: "task", task: "[task-network] check egress" }, headers: { "cf-connecting-ip": "198.51.100.231" } });
+  expect(response.status()).toBe(201);
+  const { id } = await response.json();
+  await page.goto(`/s/${id}`);
+  const status = page.getByTestId("session-status");
+  const verify = async () => {
+    await expect(status).toHaveText("Waiting for you", { timeout: 120_000 });
+    const res = await request.get(`/sessions/${id}/files?path=network.md`);
+    expect(res.status()).toBe(200);
+    const { content } = await res.json();
+    expect(content).toMatch(/GET=200/);
+    expect(content).toMatch(/POST=405/);
+    expect(content).toMatch(/NODE=200/);
+    expect(content).toMatch(/NPM=0/);
+    expect(content).toMatch(/PORT_BLOCKED/);
+  };
+  await verify();
+  expect((await request.post(`/sessions/${id}/debug/kill-sandbox`)).status()).toBe(200);
+  await page.getByLabel("Message to the agent").fill("Run the network checks again after the restart");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(status).toHaveText("Running");
+  await verify();
+  await expect(page.getByText(/The sandbox was restarted and the workspace was restored from saved changes/)).toBeVisible();
+  await request.delete(`/sessions/${id}`);
+  const code = await request.post("/sessions", { data: { mode: "code", task: "[offline-network] check blocked network" }, headers: { "cf-connecting-ip": "198.51.100.232" } });
+  expect(code.status()).toBe(201);
+  const codeId = (await code.json()).id;
+  await page.goto(`/s/${codeId}`);
+  await expect(status).toHaveText("Waiting for you", { timeout: 120_000 });
+  const offline = await request.get(`/sessions/${codeId}/files?path=network.md`);
+  expect((await offline.json()).content).toContain("OFFLINE_BLOCKED");
+  await request.delete(`/sessions/${codeId}`);
+});

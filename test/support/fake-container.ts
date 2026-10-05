@@ -4,7 +4,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
-import type { ContainerLike, ExecOptionsLike, ExecProcessLike, FilesLike } from "../../src/sandbox/container";
+import type { ContainerLike, EgressHandler, ExecOptionsLike, ExecProcessLike, FilesLike } from "../../src/sandbox/container";
 
 class FileError extends Error {
   readonly name = "SandboxFileError";
@@ -32,6 +32,7 @@ export class FakeContainer implements ContainerLike {
   readonly workdir = join(this.root, "workspace");
   readonly tmpDir = join(this.root, "tmp");
 
+  readonly intercepts: { protocol: string; hostname?: string; handler: EgressHandler }[] = [];
   readonly starts: { image?: string; enableInternet: boolean }[] = [];
   readonly calls: { argv: string[]; options?: ExecOptionsLike }[] = [];
   /** Order of lifecycle calls, to check sequencing. */
@@ -53,12 +54,23 @@ export class FakeContainer implements ContainerLike {
   private readonly children = new Set<ChildProcess>();
 
   start(options: { image?: string; enableInternet: boolean }): void {
+    this.log.push("start");
     this.starts.push(options);
     this.exit = new Promise<void>((resolve) => (this.exited = resolve));
     if (this.failStart !== null) return; // accepted, but it never runs
     this.running = true;
     this.readyAt = Date.now() + this.startDelayMs;
     mkdirSync(this.tmpDir, { recursive: true });
+  }
+
+  async interceptAllOutboundHttp(handler: EgressHandler): Promise<void> {
+    this.log.push("intercept:http");
+    this.intercepts.push({ protocol: "http", handler });
+  }
+
+  async interceptOutboundHttps(hostname: string, handler: EgressHandler): Promise<void> {
+    this.log.push("intercept:https");
+    this.intercepts.push({ protocol: "https", hostname, handler });
   }
 
   async destroy(): Promise<void> {
@@ -87,6 +99,9 @@ export class FakeContainer implements ContainerLike {
     if (!this.running) throw new Error("cannot exec in a container that is not running");
     if (this.neverReady || Date.now() < this.readyAt) throw new Error("container is not ready");
 
+    if (argv[0] === "sh" && argv[2]?.includes("update-ca-certificates")) {
+      return { stdout: null, stderr: null, exitCode: Promise.resolve(0), kill: () => {} };
+    }
     const child = spawn(argv[0]!, argv.slice(1), {
       cwd: options.cwd,
       env: { ...process.env, ...options.env },

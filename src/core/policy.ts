@@ -42,7 +42,7 @@ function isAllowlisted(command: string): boolean {
 export const READ_ONLY_COMMANDS_NOTE = `Only these commands run in this mode: ${COMMAND_ALLOWLIST.join(", ")} (with arguments). No pipes, redirects or other shell operators; a trailing 2>&1 is fine.`;
 
 function decideCommand(mode: PolicyInput["mode"], command: string): Decision {
-  if (mode === "code" || isAllowlisted(command)) return { kind: "allow" };
+  if (mode !== "review" || isAllowlisted(command)) return { kind: "allow" };
   const reason = SHELL_OPERATORS.test(command.trim().replace(MERGE_STDERR, ""))
     ? "command uses shell operators"
     : `command not in allowlist: ${command.trim().split(/\s+/)[0] ?? ""}`;

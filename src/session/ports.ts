@@ -27,8 +27,8 @@ export interface ChangedFile {
 export interface SandboxHost extends SandboxAdapter {
   /** True when the container is running. A running container always holds a set-up workspace. */
   isRunning(): boolean;
-  /** Starts the container (egress off), unpacks the repo tarball and commits the baseline. */
-  setup(tarball: ReadableStream<Uint8Array>): Promise<{ readyMs: number }>;
+  /** Starts a container and commits an empty or unpacked baseline; network is opt-in for Task. */
+  setup(source: ReadableStream<Uint8Array> | null, opts?: { network: boolean }): Promise<{ readyMs: number }>;
   /** Every path that differs from the baseline, including untracked and deleted files. */
   changedFiles(): Promise<ChangedFile[]>;
   removeFile(path: string): Promise<void>;
@@ -44,8 +44,8 @@ export interface EngineDeps {
   config: AgentConfig;
   /** The configured repo (P2-h); copied into the session row at create. */
   repo: { name: string; sha: string };
-  /** The configured repo's GitHub client: publishing on approve, posting a review. */
-  github: Pick<GitHub, "publish" | "postReview" | "defaultBranchHead">;
+  /** The configured repo's GitHub client: publishing on approve, posting a review, asking whether the pull request is still open. */
+  github: Pick<GitHub, "publish" | "postReview" | "defaultBranchHead" | "pullState">;
   /** Checked before every GitHub write (kill switch, rate limit). `null` allows it; a string is the refusal shown to the user. */
   guard: { githubWrite(ip: string): Promise<string | null> };
   /** Sends a frame to every connected socket. */

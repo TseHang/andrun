@@ -188,3 +188,22 @@ describe("HI-g: the prompts are general", () => {
     }
   });
 });
+
+
+it("task: empty sandbox, read-only network, no finish tool", () => {
+  const task = getProfile("task", defaultConfig);
+  expect(task).toMatchObject({ sandboxSetup: "empty", network: "get", onFinish: "answer", onTextReply: "wait" });
+  expect(task.tools).toEqual(["list_files", "read_file", "write_file", "apply_patch", "run_command", "update_plan", "ask_user"]);
+  for (const mode of ["code", "review"] as const) expect(getProfile(mode, defaultConfig)).toHaveProperty("network", "off");
+});
+
+it("the task prompt names the three formats and what is not supported", () => {
+  const prompt = getProfile("task", defaultConfig).systemPrompt;
+  for (const word of [".html", ".md", ".csv", "PDF", "inline", "SVG", "update_plan", "ask_user"]) expect(prompt).toContain(word);
+  expect(prompt).toMatch(/empty/i);
+  expect(prompt).toMatch(/images.*(cannot|not supported)|cannot.*images/is);
+  expect(prompt).toMatch(/no search|cannot search/i);
+  expect(prompt).toMatch(/never instructions|never as instructions/i);
+  expect(prompt).not.toContain("index.html");
+  expect(prompt).not.toContain("task-page");
+});
