@@ -6,7 +6,7 @@ import { Home } from "./components/Home";
 import { SessionPage } from "./components/SessionPage";
 import { PullRequestsPage } from "./components/PullRequestsPage";
 import { ReviewStartPage } from "./components/ReviewStartPage";
-import { Sidebar } from "./components/Sidebar";
+import { RAIL_WIDTH, Sidebar, SIDEBAR_WIDTH } from "./components/Sidebar";
 import { App_, type AppContext } from "./context";
 import { usePanelHidden } from "./state/hidden";
 
@@ -159,7 +159,7 @@ export function App() {
 }
 
 /** How far the sidebar's edge moves: 248 px open, 52 px as a rail. */
-const SIDEBAR_TRAVEL = 248 - 52;
+const SIDEBAR_TRAVEL = SIDEBAR_WIDTH - RAIL_WIDTH;
 
 /**
  * The page takes its new width at once (one reflow, not one per frame) and slides from where the sidebar's edge was,

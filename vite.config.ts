@@ -12,6 +12,7 @@ export default defineConfig({
     proxy: {
       "/sessions": { target: "http://localhost:8787", ws: true },
       "/config": "http://localhost:8787",
+      "/repo": "http://localhost:8787",
       "/pulls": "http://localhost:8787",
     },
   },

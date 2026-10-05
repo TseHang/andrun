@@ -24,6 +24,10 @@ const SIDEBAR_ICON = (
   </svg>
 );
 
+/** The sidebar's width open and as a rail; the page slides by the difference (app.tsx). */
+export const SIDEBAR_WIDTH = 248;
+export const RAIL_WIDTH = 52;
+
 const ICON_BUTTON = "press flex size-8 cursor-pointer items-center justify-center rounded-lg";
 const SHORTCUT = "⌘\\";
 /** A nav row: an icon and a label, as in Claude's sidebar; the rail keeps the icon alone. */
@@ -36,9 +40,10 @@ export function Sidebar({ sessions, stale, path, live, pullCount, collapsed = fa
   const onPrs = /^\/prs(\/|$)/.test(path);
   return (
     <div
-      className={`relative shrink-0 overflow-hidden border-r border-black/8 bg-sidebar ${instant ? "" : "transition-[width] duration-240 ease-drawer motion-reduce:transition-none"} ${collapsed ? "w-[52px]" : "w-[248px]"}`}
+      className={`relative shrink-0 overflow-hidden border-r border-black/8 bg-sidebar ${instant ? "" : "transition-[width] duration-240 ease-drawer motion-reduce:transition-none"}`}
+      style={{ width: collapsed ? RAIL_WIDTH : SIDEBAR_WIDTH }}
     >
-      <nav aria-label="Workspace" inert={collapsed} className={`flex h-full w-[248px] flex-col gap-[18px] px-2.5 py-3.5 ${instant ? "" : "transition-opacity duration-150"} ${collapsed ? "opacity-0" : ""}`}>
+      <nav aria-label="Workspace" inert={collapsed} style={{ width: SIDEBAR_WIDTH }} className={`flex h-full flex-col gap-[18px] px-2.5 py-3.5 ${instant ? "" : "transition-opacity duration-150"} ${collapsed ? "opacity-0" : ""}`}>
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between pl-2.5 pt-0.5">
             <a href="/" aria-label="&run home" className="rounded-md">
@@ -90,7 +95,7 @@ export function Sidebar({ sessions, stale, path, live, pullCount, collapsed = fa
         {stale && <div className="px-2.5 text-[11px] text-text-secondary">Could not refresh</div>}
       </nav>
       {/* Collapsed: a rail with the two things still needed, the way back and a new session. */}
-      <div inert={!collapsed} className={`absolute inset-y-0 left-0 flex w-[52px] flex-col items-center gap-1 pt-4 pb-3.5 ${instant ? "" : "transition-opacity duration-150"} ${collapsed ? "" : "opacity-0"}`}>
+      <div inert={!collapsed} style={{ width: RAIL_WIDTH }} className={`absolute inset-y-0 left-0 flex flex-col items-center gap-1 pt-4 pb-3.5 ${instant ? "" : "transition-opacity duration-150"} ${collapsed ? "" : "opacity-0"}`}>
         <button type="button" aria-label="Show sidebar" title={`Show sidebar (${SHORTCUT})`} onClick={onToggle} className={`${ICON_BUTTON} text-text-secondary`}>
           {SIDEBAR_ICON}
         </button>

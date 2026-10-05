@@ -17,9 +17,9 @@ describe("S15: client frames are validated", () => {
     });
     // Unknown fields are dropped, not passed on.
     expect(parse({ type: "approve", approvalId: "a1", admin: true })).toEqual({ ok: true, frame: { type: "approve", approvalId: "a1" } });
-    // The pull request title and summary the human edited: trimmed, and dropped when empty.
+    // The pull request title and summary the human edited: trimmed; an empty title is dropped, an empty summary kept (no description).
     expect(parse({ type: "approve", approvalId: "a1", title: "  Fix   sum ", summary: " Adds every value. \n" })).toEqual({ ok: true, frame: { type: "approve", approvalId: "a1", title: "Fix sum", summary: "Adds every value." } });
-    expect(parse({ type: "approve", approvalId: "a1", title: " ", summary: "" })).toEqual({ ok: true, frame: { type: "approve", approvalId: "a1" } });
+    expect(parse({ type: "approve", approvalId: "a1", title: " ", summary: " " })).toEqual({ ok: true, frame: { type: "approve", approvalId: "a1", summary: "" } });
     expect(parse({ type: "approve", approvalId: "a1", title: "x".repeat(101) })).toMatchObject({ ok: false });
     expect(parse({ type: "approve", approvalId: "a1", summary: 3 })).toMatchObject({ ok: false });
 

@@ -6,6 +6,9 @@ import { BranchIcon } from "./Icons";
 import { Spinner } from "./Spinner";
 import { ModelMenu } from "./ModelMenu";
 
+/** Run's shortcut as this platform writes it: the handler takes ⌘ or Ctrl. */
+const RUN_SHORTCUT = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘↵" : "Ctrl ↵";
+
 /** Home: one question and the composer, nothing else; recent sessions live in the sidebar. */
 export function Home() {
   const { config, navigate, refreshList } = useApp();
@@ -126,7 +129,7 @@ export function Home() {
               Run
               {!busy && (
                 <span aria-hidden="true" className="text-xs font-medium text-white/75">
-                  ⌘↵
+                  {RUN_SHORTCUT}
                 </span>
               )}
             </button>

@@ -55,6 +55,7 @@ function reviewTask(brief: string, pr: { number: number; title: string; files: P
 }
 
 /** The `title` argument of a pending finish call, trimmed and cut; null when there is none. */
+/** A gate saved before `pending.title` existed: read the title from the call itself. */
 function finishTitle(pending: Extract<PendingApproval, { kind: "tool" }>): string | null {
   try {
     const title = (JSON.parse(pending.call.function.arguments) as { title?: unknown }).title;
@@ -449,9 +450,9 @@ export class SessionEngine {
     // The human's edits at the gate win over what the agent wrote.
     const summary = edits.summary ?? (pending.kind === "strikes" || pending.kind === "question" ? "" : (pending.summary ?? ""));
     const task = state.messages.find((m) => m.role === "user")?.content ?? "";
-    const title = edits.title ?? (pending.kind === "tool" ? finishTitle(pending) : null) ?? meta.title;
+    const title = edits.title ?? (pending.kind === "tool" ? (pending.title ?? finishTitle(pending)) : null) ?? meta.title;
     const body = [
-      summary,
+      ...(summary.trim() ? [summary] : []),
       `**Task:** ${task}`,
       `**Changed files:**\n${changes.map((c) => `- \`${c.path}\` (${c.deleted ? "deleted" : c.beforeSha === null ? "added" : "modified"})`).join("\n")}`,
       "Opened by &run after a human approved it.",

@@ -90,6 +90,11 @@ describe("publish (D9, P4-f)", () => {
     // The open pull request takes the new round's title and description.
     expect(fake.pulls[0]).toMatchObject({ title: "Add a test", body: "The loop stopped one element early." });
 
+    // Only the description changes: still an update of the open pull request.
+    const third0 = await github.publish(input(fake, { files: more, title: "Add a test", body: "Now with a test." }));
+    expect(third0).toMatchObject({ number: first.number, updated: true });
+    expect(fake.pulls[0]!.body).toBe("Now with a test.");
+
     fake.pulls[0]!.state = "closed";
     const third = await github.publish(input(fake, { files: more, title: "Add a test" }));
     expect(third).toMatchObject({ number: 13, branch: "agent/1a2b3c4d-2", round: 2, updated: false });

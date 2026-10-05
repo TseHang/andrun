@@ -24,7 +24,7 @@ export function parseClientFrame(raw: string | ArrayBuffer): ParsedFrame {
       const summary = f.summary?.trim() ?? "";
       if (title.length > MAX_PR_TITLE_CHARS) return bad(`title is longer than ${MAX_PR_TITLE_CHARS} characters`);
       if (summary.length > MAX_PR_SUMMARY_CHARS) return bad(`summary is longer than ${MAX_PR_SUMMARY_CHARS} characters`);
-      return { ok: true, frame: { type: "approve", approvalId: f.approvalId, ...(title && { title }), ...(summary && { summary }) } };
+      return { ok: true, frame: { type: "approve", approvalId: f.approvalId, ...(title && { title }), ...(f.summary !== undefined && { summary }) } };
     }
     case "reject":
       if (!nonEmpty(f.approvalId)) return bad("reject needs an approvalId");

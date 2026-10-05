@@ -69,6 +69,11 @@ interface RawFile {
   patch?: string;
 }
 
+/** Opened by &run: this App's bot as author, on an `agent/` branch. */
+function openedByAndrun(p: RawPull, botLogin: string): boolean {
+  return p.user.login === botLogin && p.head.ref.startsWith("agent/");
+}
+
 export async function listPulls(request: Request, repo: string, token: string, botLogin: string): Promise<PullSummary[]> {
   const raw = (await request("GET", `/repos/${repo}/pulls?state=open&per_page=50`, token)) as RawPull[];
   return raw.map((p) => ({
@@ -78,7 +83,7 @@ export async function listPulls(request: Request, repo: string, token: string, b
     headRef: p.head.ref,
     updatedAt: p.updated_at,
     url: p.html_url,
-    mine: p.user.login === botLogin && p.head.ref.startsWith("agent/"),
+    mine: openedByAndrun(p, botLogin),
   }));
 }
 
@@ -91,7 +96,7 @@ export async function getPull(request: Request, repo: string, token: string, bot
     body: p.body ?? "",
     author: p.user.login,
     authorAvatar: p.user.avatar_url ?? null,
-    mine: p.user.login === botLogin && p.head.ref.startsWith("agent/"),
+    mine: openedByAndrun(p, botLogin),
     headRef: p.head.ref,
     baseRef: p.base.ref,
     headSha: p.head.sha,

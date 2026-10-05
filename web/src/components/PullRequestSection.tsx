@@ -89,7 +89,8 @@ function FinishGate({ gate, view, session, target, send, update }: { gate: GateV
       type: "approve",
       approvalId: gate.approvalId,
       ...(session.code && title.trim() && title.trim() !== agentTitle.trim() && { title: title.trim() }),
-      ...(session.code && summary.trim() && summary.trim() !== agentSummary.trim() && { summary: summary.trim() }),
+      // An emptied description is sent too: the pull request then has none of the agent's text.
+      ...(session.code && summary.trim() !== agentSummary.trim() && { summary: summary.trim() }),
     });
     setOffline(!sent);
     if (sent) update(markSending);
@@ -130,10 +131,12 @@ function FinishGate({ gate, view, session, target, send, update }: { gate: GateV
             ) : (
               <>
                 <div className="mt-1.5 text-[13px] font-semibold break-words">{title.trim() || agentTitle}</div>
-                {(summary.trim() || agentSummary) && (
+                {summary.trim() ? (
                   <div className="mt-1 max-h-40 overflow-y-auto">
-                    <Markdown text={summary.trim() || agentSummary} className="text-xs leading-relaxed" />
+                    <Markdown text={summary.trim()} className="text-xs leading-relaxed" />
                   </div>
+                ) : (
+                  <div className="mt-1 text-xs text-text-secondary">No description.</div>
                 )}
               </>
             )}

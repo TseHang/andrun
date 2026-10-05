@@ -76,6 +76,14 @@ describe("Code: approve opens the pull request (S4–S7, S9)", () => {
     expect(pull.body).toContain("Opened by &run after a human approved it.");
   });
 
+  it("an emptied description leaves out the agent's summary", async () => {
+    const g = await codeAtGate();
+    await send(g.engine, { type: "approve", approvalId: g.approvalId, summary: "" });
+    const body = g.fake.pulls[0]!.body;
+    expect(body).not.toContain("Fixed the loop bound in sum()");
+    expect(body.startsWith(`**Task:** ${TASK}`)).toBe(true);
+  });
+
   it("a later approve adds a commit to the same pull request", async () => {
     const g = await codeAtGate(HAPPY(), {}, [
       call("write_file", { path: "test/empty.test.js", content: "// empty\n" }),
